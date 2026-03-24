@@ -6,6 +6,7 @@
 //   nb remove <formula> ...    # Uninstall packages
 //   nb list                    # List installed packages
 //   nb info <formula>          # Show formula info from Homebrew API
+//   nb info --cask <app>       # Show cask info from Homebrew API
 //   nb search <query>          # Search for formulas and casks
 //   nb upgrade [formula]       # Upgrade packages
 //   nb update                  # Self-update nanobrew
@@ -656,27 +657,92 @@ fn runList(alloc: std.mem.Allocator) void {
 
 // ── nb info ──
 
-fn runInfo(alloc: std.mem.Allocator, formulae: []const []const u8) void {
+fn runInfo(alloc: std.mem.Allocator, args: []const []const u8) void {
     const stdout = std.fs.File.stdout().deprecatedWriter();
     const stderr = std.fs.File.stderr().deprecatedWriter();
 
-    if (formulae.len == 0) {
-        stderr.print("nb: no formula specified\n", .{}) catch {};
+    // Parse --cask flag
+    var is_cask = false;
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(alloc);
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--cask")) {
+            is_cask = true;
+        } else {
+            names.append(alloc, arg) catch {};
+        }
+    }
+
+    if (names.items.len == 0) {
+        stderr.print("nb: no package specified\n", .{}) catch {};
         std.process.exit(1);
     }
 
-    for (formulae) |name| {
-        const f = nb.api_client.fetchFormula(alloc, name) catch {
-            stderr.print("nb: formula '{s}' not found\n", .{name}) catch {};
-            continue;
-        };
-        stdout.print("{s} {s}\n", .{ f.name, f.version }) catch {};
-        stdout.print("  deps: ", .{}) catch {};
-        for (f.dependencies, 0..) |dep, i| {
-            if (i > 0) stdout.print(", ", .{}) catch {};
-            stdout.print("{s}", .{dep}) catch {};
+    for (names.items) |name| {
+        if (is_cask) {
+            showCaskInfo(alloc, stdout, stderr, name);
+        } else {
+            // Try formula first; on failure, try cask as fallback for a hint
+            const f = nb.api_client.fetchFormula(alloc, name) catch {
+                // Formula not found — try cask API to give a helpful hint
+                if (nb.api_client.fetchCask(alloc, name)) |cask| {
+                    defer cask.deinit(alloc);
+                    stderr.print("nb: formula '{s}' not found\n", .{name}) catch {};
+                    stderr.print("    Did you mean: nb info --cask {s}?\n", .{name}) catch {};
+                } else |_| {
+                    stderr.print("nb: formula '{s}' not found\n", .{name}) catch {};
+                }
+                continue;
+            };
+            stdout.print("{s} {s}\n", .{ f.name, f.version }) catch {};
+            stdout.print("  deps: ", .{}) catch {};
+            for (f.dependencies, 0..) |dep, i| {
+                if (i > 0) stdout.print(", ", .{}) catch {};
+                stdout.print("{s}", .{dep}) catch {};
+            }
+            stdout.print("\n", .{}) catch {};
         }
-        stdout.print("\n", .{}) catch {};
+    }
+}
+
+fn showCaskInfo(alloc: std.mem.Allocator, stdout: anytype, stderr: anytype, name: []const u8) void {
+    const cask = nb.api_client.fetchCask(alloc, name) catch {
+        stderr.print("nb: cask '{s}' not found\n", .{name}) catch {};
+        return;
+    };
+    defer cask.deinit(alloc);
+
+    // Name and description
+    stdout.print("{s} {s}\n", .{ cask.name, cask.version }) catch {};
+    if (cask.desc.len > 0) {
+        stdout.print("  {s}\n", .{cask.desc}) catch {};
+    }
+
+    // Homepage
+    if (cask.homepage.len > 0) {
+        stdout.print("  homepage: {s}\n", .{cask.homepage}) catch {};
+    }
+
+    // Download URL
+    stdout.print("  url: {s}\n", .{cask.url}) catch {};
+
+    // SHA256
+    stdout.print("  sha256: {s}\n", .{cask.sha256}) catch {};
+
+    // Artifacts
+    if (cask.artifacts.len > 0) {
+        stdout.print("  artifacts:\n", .{}) catch {};
+        for (cask.artifacts) |art| {
+            switch (art) {
+                .app => |a| stdout.print("    app: {s}\n", .{a}) catch {},
+                .binary => |b| stdout.print("    binary: {s} -> {s}\n", .{ b.source, b.target }) catch {},
+                .pkg => |p| stdout.print("    pkg: {s}\n", .{p}) catch {},
+                .uninstall => |u| {
+                    if (u.quit.len > 0) stdout.print("    uninstall quit: {s}\n", .{u.quit}) catch {};
+                    if (u.pkgutil.len > 0) stdout.print("    uninstall pkgutil: {s}\n", .{u.pkgutil}) catch {};
+                },
+            }
+        }
     }
 }
 
@@ -1084,6 +1150,7 @@ fn printUsage() void {
         \\  remove --deb <pkg>       Uninstall .deb packages (Linux)
         \\  list                     List installed packages, casks, and debs
         \\  info <formula>           Show formula info from Homebrew API
+        \\  info --cask <app>        Show cask info from Homebrew API
         \\  search <query>           Search for formulas and casks
         \\  upgrade [formula]        Upgrade packages (or all if none specified)
         \\  upgrade --cask [app]     Upgrade casks (or all if none specified)

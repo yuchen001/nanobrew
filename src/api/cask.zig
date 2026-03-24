@@ -26,6 +26,7 @@ pub const Cask = struct {
     version: []const u8, // "147.0.3"
     url: []const u8, // direct download URL
     sha256: []const u8, // or "no_check" for auto-updating apps
+    homepage: []const u8, // e.g. "https://www.mozilla.org/firefox/"
     desc: []const u8,
     auto_updates: bool,
     artifacts: []const Artifact,
@@ -54,6 +55,7 @@ pub const Cask = struct {
         alloc.free(self.version);
         alloc.free(self.url);
         alloc.free(self.sha256);
+        alloc.free(self.homepage);
         alloc.free(self.desc);
         for (self.artifacts) |art| {
             switch (art) {
@@ -83,6 +85,7 @@ test "downloadFormat - detects dmg" {
         .version = "147.0.3",
         .url = "https://example.com/Firefox.dmg",
         .sha256 = "abc123",
+        .homepage = "",
         .desc = "Browser",
         .auto_updates = true,
         .artifacts = &.{},
@@ -98,6 +101,7 @@ test "downloadFormat - detects zip" {
         .version = "1.90",
         .url = "https://example.com/VSCode.zip",
         .sha256 = "abc123",
+        .homepage = "",
         .desc = "Editor",
         .auto_updates = true,
         .artifacts = &.{},
@@ -113,6 +117,7 @@ test "downloadFormat - detects pkg" {
         .version = "4.30",
         .url = "https://example.com/Docker.pkg",
         .sha256 = "abc123",
+        .homepage = "",
         .desc = "Container runtime",
         .auto_updates = false,
         .artifacts = &.{},
@@ -128,6 +133,7 @@ test "shouldVerifySha - returns true for normal sha" {
         .version = "1.0",
         .url = "https://example.com/test.dmg",
         .sha256 = "deadbeef",
+        .homepage = "",
         .desc = "",
         .auto_updates = false,
         .artifacts = &.{},
@@ -143,6 +149,7 @@ test "shouldVerifySha - returns false for no_check" {
         .version = "1.0",
         .url = "https://example.com/test.dmg",
         .sha256 = "no_check",
+        .homepage = "",
         .desc = "",
         .auto_updates = true,
         .artifacts = &.{},
@@ -158,6 +165,7 @@ test "caskroomPath - formats token and version" {
         .version = "147.0.3",
         .url = "",
         .sha256 = "",
+        .homepage = "",
         .desc = "",
         .auto_updates = false,
         .artifacts = &.{},
