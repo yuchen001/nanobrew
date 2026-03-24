@@ -107,7 +107,7 @@ const LANDING_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#050505">
+<meta name="theme-color" content="#FFFFFF">
 <title>nanobrew — the fastest macOS package manager</title>
 <meta name="description" content="Install macOS packages 7,000x faster than Homebrew. APFS clonefile, parallel deps, native Mach-O parsing. Written in Zig.">
 <meta property="og:title" content="nanobrew">
@@ -123,17 +123,17 @@ const LANDING_HTML = `<!DOCTYPE html>
     --gold: #FFB800;
     --gold-soft: rgba(255, 184, 0, 0.12);
     --gold-glow: rgba(255, 184, 0, 0.06);
-    --bg: #050505;
-    --surface: #0A0A0A;
-    --surface-raised: #0F0F0F;
-    --border: #1A1A1A;
-    --border-bright: #282828;
-    --text: #D4D4D4;
-    --bright: #FAFAFA;
+    --bg: #FFFFFF;
+    --surface: #F7F7F7;
+    --surface-raised: #F0F0F0;
+    --border: #E5E5E5;
+    --border-bright: #D0D0D0;
+    --text: #404040;
+    --bright: #111111;
     --muted: #777;
-    --dim: #444;
-    --dim-2: #2A2A2A;
-    --brew-bar: #181818;
+    --dim: #AAAAAA;
+    --dim-2: #D5D5D5;
+    --brew-bar: #E8E8E8;
     --fd: 'Syne', system-ui, sans-serif;
     --fm: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
   }
@@ -157,7 +157,7 @@ const LANDING_HTML = `<!DOCTYPE html>
     content: '';
     position: fixed;
     inset: 0;
-    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
     pointer-events: none;
     z-index: 9999;
   }
