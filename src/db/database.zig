@@ -408,7 +408,10 @@ pub const Database = struct {
 
     fn save(self: *Database) !void {
         const file = try std.fs.createFileAbsolute(DB_PATH, .{});
-        defer file.close();
+        defer {
+            file.sync() catch {};
+            file.close();
+        }
 
         const writer = file.deprecatedWriter();
         writer.writeAll("{\"kegs\":[") catch return;

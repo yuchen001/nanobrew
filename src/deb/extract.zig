@@ -76,7 +76,8 @@ pub fn extractDebToPrefixWithFiles(alloc: std.mem.Allocator, deb_path: []const u
 
 /// Extract the control.tar from a .deb to a temp directory and run postinst if present.
 /// Non-fatal — returns void and prints warnings on failure.
-pub fn runPostinst(alloc: std.mem.Allocator, deb_path: []const u8, pkg_name: []const u8) void {
+/// If skip_postinst is true, logs a message and skips execution.
+pub fn runPostinst(alloc: std.mem.Allocator, deb_path: []const u8, pkg_name: []const u8, skip_postinst: bool) void {
     const stderr_writer = std.fs.File.stderr().deprecatedWriter();
 
     // Extract control.tar to temp dir
@@ -106,6 +107,17 @@ pub fn runPostinst(alloc: std.mem.Allocator, deb_path: []const u8, pkg_name: []c
 
     // Make it executable and run it
     if (std.fs.accessAbsolute(postinst_path, .{})) |_| {
+        if (skip_postinst) {
+            stderr_writer.print("    skipped: postinst for {s} (--skip-postinst)\n", .{pkg_name}) catch {};
+            return;
+        }
+
+        stderr_writer.print("    running: postinst for {s}\n", .{pkg_name}) catch {};
+
+        _ = std.process.Child.run(.{
+            .allocator = alloc,
+            .argv = &.{ "chmod", "+x", postinst_path },
+        }) catch {};
         _ = std.process.Child.run(.{
             .allocator = alloc,
             .argv = &.{ "chmod", "+x", postinst_path },

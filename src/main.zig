@@ -190,10 +190,12 @@ fn runInit() void {
 fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
     const stderr = std.fs.File.stderr().deprecatedWriter();
 
-    // Check for --cask, --deb, and --repo flags
+    // Check for --cask, --deb, --repo, --skip-postinst, and --no-verify flags
     var is_cask = false;
     var is_deb = false;
     var repo_spec: ?[]const u8 = null;
+    var skip_postinst = false;
+    var no_verify = false;
     var formulae: std.ArrayList([]const u8) = .empty;
     defer formulae.deinit(alloc);
     var arg_idx: usize = 0;
@@ -208,6 +210,10 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
                 arg_idx += 1;
                 repo_spec = args[arg_idx];
             }
+        } else if (std.mem.eql(u8, arg, "--skip-postinst")) {
+            skip_postinst = true;
+        } else if (std.mem.eql(u8, arg, "--no-verify")) {
+            no_verify = true;
         } else {
             formulae.append(alloc, arg) catch {};
         }
@@ -219,7 +225,10 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
     }
 
     if (is_deb) {
-        runDebInstall(alloc, formulae.items, repo_spec);
+        runDebInstall(alloc, formulae.items, repo_spec, .{
+            .skip_postinst = skip_postinst,
+            .no_verify = no_verify,
+        });
         return;
     }
 
@@ -1902,7 +1911,12 @@ fn runCompletions(args: []const []const u8) void {
 // ── Version update check ──
 
 /// Install .deb packages from Ubuntu/Debian repositories (Linux only).
-fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_spec: ?[]const u8) void {
+const DebInstallOptions = struct {
+    skip_postinst: bool = false,
+    no_verify: bool = false,
+};
+
+fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_spec: ?[]const u8, opts: DebInstallOptions) void {
     const stdout = std.fs.File.stdout().deprecatedWriter();
     const stderr = std.fs.File.stderr().deprecatedWriter();
 
@@ -1944,6 +1958,22 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
         mirror = distro.mirror;
         dist = distro.codename;
         components = nb.deb_distro.getComponents(distro.id);
+    }
+
+    // Validate mirror URL
+    if (!std.mem.startsWith(u8, mirror, "http://") and !std.mem.startsWith(u8, mirror, "https://")) {
+        stderr.print("nb: invalid mirror URL (must start with http:// or https://): {s}\n", .{mirror}) catch {};
+        return;
+    }
+    for (mirror) |c| {
+        if (c < 0x20 or c == 0x7f) {
+            stderr.print("nb: invalid mirror URL (contains control characters)\n", .{}) catch {};
+            return;
+        }
+    }
+    // Strip trailing slashes
+    while (mirror.len > 0 and mirror[mirror.len - 1] == '/') {
+        mirror = mirror[0 .. mirror.len - 1];
     }
 
     stdout.print("    mirror={s} codename={s} arch={s}\n", .{ mirror, dist, arch }) catch {};
@@ -2079,8 +2109,12 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
                 installed += 1;
             }
         } else {
-            // No SHA256 — download to tmp and extract
-            stdout.print("    {s} (no checksum)...\n", .{pkg.name}) catch {};
+            // No SHA256 — refuse unless --no-verify is set
+            if (!opts.no_verify) {
+                stderr.print("nb: refusing to install {s} without checksum (use --no-verify to override)\n", .{pkg.name}) catch {};
+                continue;
+            }
+            stderr.print("    warning: installing {s} WITHOUT checksum verification\n", .{pkg.name}) catch {};
             var tmp_buf: [512]u8 = undefined;
             const tmp_path = std.fmt.bufPrint(&tmp_buf, "{s}/{s}.deb", .{ paths.TMP_DIR, pkg.name }) catch continue;
 
@@ -2107,7 +2141,7 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
 
         // Run postinst script if available (non-fatal)
         if (deb_path_for_postinst) |deb_path| {
-            nb.deb_extract.runPostinst(alloc, deb_path, pkg.name);
+            nb.deb_extract.runPostinst(alloc, deb_path, pkg.name, opts.skip_postinst);
             // Clean up tmp file after postinst (cache files are kept)
             if (!std.mem.startsWith(u8, deb_path, paths.BLOBS_DIR)) {
                 std.fs.deleteFileAbsolute(deb_path) catch {};
@@ -2279,7 +2313,7 @@ fn runDebUpgrade(alloc: std.mem.Allocator) void {
         names.append(alloc, pkg.name) catch {};
     }
 
-    runDebInstall(alloc, names.items, null);
+    runDebInstall(alloc, names.items, null, .{});
 }
 
 /// Download a URL to memory using Zig's native HTTP client.
@@ -2357,7 +2391,11 @@ fn downloadDebWithSha256(
             hex[idx * 2] = charset[byte >> 4];
             hex[idx * 2 + 1] = charset[byte & 0x0f];
         }
-        if (expected_sha256.len >= 64 and !std.mem.eql(u8, &hex, expected_sha256[0..64])) {
+        if (expected_sha256.len < 64) {
+            std.fs.deleteFileAbsolute(tmp_path) catch {};
+            return error.ChecksumMissing;
+        }
+        if (!std.mem.eql(u8, &hex, expected_sha256[0..64])) {
             std.fs.deleteFileAbsolute(tmp_path) catch {};
             return error.ChecksumMismatch;
         }
