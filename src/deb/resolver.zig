@@ -114,6 +114,8 @@ pub fn resolveAll(
     return order.toOwnedSlice(alloc);
 }
 
+const MAX_RESOLVE_DEPTH = 64;
+
 fn resolveOne(
     alloc: std.mem.Allocator,
     name: []const u8,
@@ -122,6 +124,19 @@ fn resolveOne(
     visited: *std.StringHashMap(void),
     order: *std.ArrayList(DebPackage),
 ) !void {
+    return resolveOneDepth(alloc, name, index, provides_map, visited, order, 0);
+}
+
+fn resolveOneDepth(
+    alloc: std.mem.Allocator,
+    name: []const u8,
+    index: std.StringHashMap(DebPackage),
+    provides_map: ?std.StringHashMap([]const u8),
+    visited: *std.StringHashMap(void),
+    order: *std.ArrayList(DebPackage),
+    depth: usize,
+) !void {
+    if (depth > MAX_RESOLVE_DEPTH) return; // Prevent stack overflow from deep chains
     if (visited.contains(name)) return;
     visited.put(name, {}) catch return;
 
@@ -143,7 +158,7 @@ fn resolveOne(
     }
 
     for (deps) |dep| {
-        resolveOne(alloc, dep, index, provides_map, visited, order) catch continue;
+        resolveOneDepth(alloc, dep, index, provides_map, visited, order, depth + 1) catch continue;
     }
 
     order.append(alloc, pkg) catch {};

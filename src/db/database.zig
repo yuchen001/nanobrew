@@ -373,6 +373,36 @@ pub const Database = struct {
         return result;
     }
 
+    /// Write a JSON-escaped string to the writer (escapes \, ", control chars).
+    fn writeJsonEscaped(writer: anytype, s: []const u8) void {
+        for (s) |c| {
+            switch (c) {
+                '"' => writer.writeAll("\\\"") catch {},
+                '\\' => writer.writeAll("\\\\") catch {},
+                '\n' => writer.writeAll("\\n") catch {},
+                '\r' => writer.writeAll("\\r") catch {},
+                '\t' => writer.writeAll("\\t") catch {},
+                else => {
+                    if (c < 0x20) {
+                        // Escape other control characters as \u00XX
+                        const hex = "0123456789abcdef";
+                        writer.writeAll("\\u00") catch {};
+                        writer.writeAll(&.{ hex[c >> 4], hex[c & 0x0f] }) catch {};
+                    } else {
+                        writer.writeAll(&.{c}) catch {};
+                    }
+                },
+            }
+        }
+    }
+
+    /// Write a JSON-quoted string: "escaped_value"
+    fn writeJsonString(writer: anytype, s: []const u8) void {
+        writer.writeAll("\"") catch {};
+        writeJsonEscaped(writer, s);
+        writer.writeAll("\"") catch {};
+    }
+
     fn save(self: *Database) !void {
         const file = try std.fs.createFileAbsolute(DB_PATH, .{});
         defer file.close();
@@ -381,24 +411,32 @@ pub const Database = struct {
         writer.writeAll("{\"kegs\":[") catch return;
         for (self.kegs.items, 0..) |keg, i| {
             if (i > 0) writer.writeAll(",") catch {};
-            writer.print("{{\"name\":\"{s}\",\"version\":\"{s}\",\"sha256\":\"{s}\",\"pinned\":{s},\"installed_at\":{d}}}", .{
-                keg.name, keg.version, keg.sha256, if (keg.pinned) "true" else "false", keg.installed_at,
+            writer.writeAll("{\"name\":") catch {};
+            writeJsonString(writer, keg.name);
+            writer.writeAll(",\"version\":") catch {};
+            writeJsonString(writer, keg.version);
+            writer.writeAll(",\"sha256\":") catch {};
+            writeJsonString(writer, keg.sha256);
+            writer.print(",\"pinned\":{s},\"installed_at\":{d}}}", .{
+                if (keg.pinned) "true" else "false", keg.installed_at,
             }) catch {};
         }
         writer.writeAll("],\"casks\":[") catch return;
         for (self.casks.items, 0..) |c, i| {
             if (i > 0) writer.writeAll(",") catch {};
-            writer.print("{{\"token\":\"{s}\",\"version\":\"{s}\",\"apps\":[", .{
-                c.token, c.version,
-            }) catch {};
+            writer.writeAll("{\"token\":") catch {};
+            writeJsonString(writer, c.token);
+            writer.writeAll(",\"version\":") catch {};
+            writeJsonString(writer, c.version);
+            writer.writeAll(",\"apps\":[") catch {};
             for (c.apps, 0..) |a, j| {
                 if (j > 0) writer.writeAll(",") catch {};
-                writer.print("\"{s}\"", .{a}) catch {};
+                writeJsonString(writer, a);
             }
             writer.writeAll("],\"binaries\":[") catch {};
             for (c.binaries, 0..) |b, j| {
                 if (j > 0) writer.writeAll(",") catch {};
-                writer.print("\"{s}\"", .{b}) catch {};
+                writeJsonString(writer, b);
             }
             writer.writeAll("]}") catch {};
         }
@@ -409,12 +447,15 @@ pub const Database = struct {
         while (hist_iter.next()) |entry| {
             if (!hist_first) writer.writeAll(",") catch {};
             hist_first = false;
-            writer.print("\"{s}\":[", .{entry.key_ptr.*}) catch {};
+            writeJsonString(writer, entry.key_ptr.*);
+            writer.writeAll(":[") catch {};
             for (entry.value_ptr.items, 0..) |h, hi| {
                 if (hi > 0) writer.writeAll(",") catch {};
-                writer.print("{{\"version\":\"{s}\",\"sha256\":\"{s}\",\"installed_at\":{d}}}", .{
-                    h.version, h.sha256, h.installed_at,
-                }) catch {};
+                writer.writeAll("{\"version\":") catch {};
+                writeJsonString(writer, h.version);
+                writer.writeAll(",\"sha256\":") catch {};
+                writeJsonString(writer, h.sha256);
+                writer.print(",\"installed_at\":{d}}}", .{h.installed_at}) catch {};
             }
             writer.writeAll("]") catch {};
         }
@@ -422,12 +463,16 @@ pub const Database = struct {
         writer.writeAll("},\"deb_packages\":[") catch return;
         for (self.debs.items, 0..) |d, i| {
             if (i > 0) writer.writeAll(",") catch {};
-            writer.print("{{\"name\":\"{s}\",\"version\":\"{s}\",\"sha256\":\"{s}\",\"installed_at\":{d},\"files\":[", .{
-                d.name, d.version, d.sha256, d.installed_at,
-            }) catch {};
+            writer.writeAll("{\"name\":") catch {};
+            writeJsonString(writer, d.name);
+            writer.writeAll(",\"version\":") catch {};
+            writeJsonString(writer, d.version);
+            writer.writeAll(",\"sha256\":") catch {};
+            writeJsonString(writer, d.sha256);
+            writer.print(",\"installed_at\":{d},\"files\":[", .{d.installed_at}) catch {};
             for (d.files, 0..) |f, j| {
                 if (j > 0) writer.writeAll(",") catch {};
-                writer.print("\"{s}\"", .{f}) catch {};
+                writeJsonString(writer, f);
             }
             writer.writeAll("]}") catch {};
         }

@@ -2025,6 +2025,18 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     defer if (db) |*d| d.close();
 
     for (resolved) |pkg| {
+        // Validate package name — reject path traversal characters
+        for (pkg.name) |c| {
+            if (c == '/' or c == 0) {
+                stderr.print("nb: refusing to install package with unsafe name: {s}\n", .{pkg.name}) catch {};
+                continue;
+            }
+        }
+        if (std.mem.indexOf(u8, pkg.name, "..") != null) {
+            stderr.print("nb: refusing to install package with unsafe name: {s}\n", .{pkg.name}) catch {};
+            continue;
+        }
+
         var cache_buf: [512]u8 = undefined;
         var deb_path_for_postinst: ?[]const u8 = null;
         var file_list: [][]const u8 = &.{};

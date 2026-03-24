@@ -275,24 +275,55 @@ pub fn decompressGzip(alloc: std.mem.Allocator, compressed: []const u8) ![]u8 {
 }
 
 /// For xz, fall back to the system xz command since Zig's xz may need LZMA2.
+/// Uses direct subprocess invocation (no shell) to prevent injection attacks.
 fn decompressXzFallback(alloc: std.mem.Allocator, deb_path: []const u8, member_prefix: []const u8) ![]u8 {
-    // Extract via shell: ar p pkg.deb <member>.xz | xz -d
-    var cmd_buf: [1024]u8 = undefined;
-    const cmd = std.fmt.bufPrint(&cmd_buf, "ar p '{s}' {s}.xz | xz -d", .{ deb_path, member_prefix }) catch
+    // Build the member name (e.g., "data.tar.xz")
+    var member_buf: [128]u8 = undefined;
+    const member_name = std.fmt.bufPrint(&member_buf, "{s}.xz", .{member_prefix}) catch
         return error.PathTooLong;
 
-    const result = std.process.Child.run(.{
+    // Step 1: Extract the compressed member with `ar p` (no shell)
+    const ar_result = std.process.Child.run(.{
         .allocator = alloc,
-        .argv = &.{ "/bin/sh", "-c", cmd },
+        .argv = &.{ "ar", "p", deb_path, member_name },
         .max_output_bytes = 512 * 1024 * 1024,
     }) catch return error.DecompressFailed;
-    alloc.free(result.stderr);
+    alloc.free(ar_result.stderr);
 
-    if (result.term.Exited != 0) {
-        alloc.free(result.stdout);
+    if (ar_result.term.Exited != 0) {
+        alloc.free(ar_result.stdout);
         return error.DecompressFailed;
     }
-    return result.stdout;
+
+    // Step 2: Decompress with `xz -d` via stdin (no shell)
+    var xz_buf: [512]u8 = undefined;
+    const xz_tmp = std.fmt.bufPrint(&xz_buf, "{s}/xz_input.tmp", .{paths.TMP_DIR}) catch
+        return error.PathTooLong;
+
+    // Write ar output to temp file, then decompress
+    {
+        var tmp_file = std.fs.createFileAbsolute(xz_tmp, .{}) catch return error.DecompressFailed;
+        tmp_file.writeAll(ar_result.stdout) catch {
+            tmp_file.close();
+            return error.DecompressFailed;
+        };
+        tmp_file.close();
+    }
+    alloc.free(ar_result.stdout);
+    defer std.fs.deleteFileAbsolute(xz_tmp) catch {};
+
+    const xz_result = std.process.Child.run(.{
+        .allocator = alloc,
+        .argv = &.{ "xz", "-d", "--stdout", xz_tmp },
+        .max_output_bytes = 512 * 1024 * 1024,
+    }) catch return error.DecompressFailed;
+    alloc.free(xz_result.stderr);
+
+    if (xz_result.term.Exited != 0) {
+        alloc.free(xz_result.stdout);
+        return error.DecompressFailed;
+    }
+    return xz_result.stdout;
 }
 
 const testing = std.testing;
