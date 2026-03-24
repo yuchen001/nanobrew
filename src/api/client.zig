@@ -93,6 +93,7 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
     const version = try allocDupe(alloc, getStr(root, "version") orelse return error.MissingField);
     const url = try allocDupe(alloc, getStr(root, "url") orelse return error.MissingField);
     const sha256 = try allocDupe(alloc, getStr(root, "sha256") orelse "no_check");
+    const homepage = try allocDupe(alloc, getStr(root, "homepage") orelse "");
     const desc = try allocDupe(alloc, getStr(root, "desc") orelse "");
 
     // name is an array, take first element
@@ -196,6 +197,7 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
         .version = version,
         .url = url,
         .sha256 = sha256,
+        .homepage = homepage,
         .desc = desc,
         .auto_updates = auto_updates,
         .artifacts = try artifacts.toOwnedSlice(alloc),
@@ -500,6 +502,7 @@ test "parseCaskJson - parses complete cask" {
     const json =
         \\{"token":"firefox","name":["Mozilla Firefox"],"version":"147.0.3",
         \\"url":"https://example.com/Firefox.dmg","sha256":"deadbeef",
+        \\"homepage":"https://www.mozilla.org/firefox/",
         \\"desc":"Web browser","auto_updates":true,
         \\"artifacts":[{"app":["Firefox.app"]},{"binary":[{"source":"firefox","target":"firefox"}]}],
         \\"depends_on":{"macos":{">=":["ventura"]}}}
@@ -511,6 +514,7 @@ test "parseCaskJson - parses complete cask" {
     try testing.expectEqualStrings("147.0.3", c.version);
     try testing.expectEqualStrings("https://example.com/Firefox.dmg", c.url);
     try testing.expectEqualStrings("deadbeef", c.sha256);
+    try testing.expectEqualStrings("https://www.mozilla.org/firefox/", c.homepage);
     try testing.expectEqualStrings("Web browser", c.desc);
     try testing.expect(c.auto_updates);
     try testing.expectEqual(@as(usize, 2), c.artifacts.len);
