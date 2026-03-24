@@ -6,10 +6,10 @@ class Nanobrew < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/justrach/nanobrew/releases/download/v0.1.069/nb-arm64-apple-darwin.tar.gz"
-      sha256 "acb64143c295f2ef6fac821d76f6210d770f65cd83847f01d6b9d5054cff168a"
+      sha256 "a39860fddace47a7dd7d41958e4bc201774860c63b47d42c4c2edaa1d305b512"
     else
       url "https://github.com/justrach/nanobrew/releases/download/v0.1.069/nb-x86_64-apple-darwin.tar.gz"
-      sha256 "07119f57f63588d9e78be46a5930f560e775db7d5de0d7c1092d4062bf20134c"
+      sha256 "c2878db3529cf3664c6474e8544cdd561d8dc7ee2b1c64c72a8a2be21bb1ae4f"
     end
   end
 
