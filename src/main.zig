@@ -832,7 +832,7 @@ fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filt
             }
             const latest = nb.api_client.fetchCask(alloc, c.token) catch continue;
             defer latest.deinit(alloc);
-            if (!std.mem.eql(u8, c.version, latest.version)) {
+            if (nb.version.isNewer(latest.version, c.version)) {
                 result.append(alloc, .{
                     .name = alloc.dupe(u8, c.token) catch continue,
                     .old_ver = alloc.dupe(u8, c.version) catch continue,
@@ -857,7 +857,7 @@ fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filt
             }
             const latest = nb.api_client.fetchFormula(alloc, k.name) catch continue;
             defer latest.deinit(alloc);
-            if (!std.mem.eql(u8, k.version, latest.version)) {
+            if (nb.version.isNewer(latest.version, k.version)) {
                 result.append(alloc, .{
                     .name = alloc.dupe(u8, k.name) catch continue,
                     .old_ver = alloc.dupe(u8, k.version) catch continue,
@@ -1699,7 +1699,7 @@ fn runOutdated(alloc: std.mem.Allocator) void {
 
         for (installed_debs) |deb| {
             if (idx.get(deb.name)) |idx_pkg| {
-                if (!std.mem.eql(u8, deb.version, idx_pkg.version)) {
+                if (nb.version.isNewer(idx_pkg.version, deb.version)) {
                     stdout.print("{s} ({s} -> {s}) (deb)\n", .{ deb.name, deb.version, idx_pkg.version }) catch {};
                     deb_outdated += 1;
                 }
@@ -2354,7 +2354,7 @@ fn runDebUpgrade(alloc: std.mem.Allocator) void {
 
     for (installed_debs) |deb| {
         if (index_map.get(deb.name)) |idx_pkg| {
-            if (!std.mem.eql(u8, deb.version, idx_pkg.version)) {
+            if (nb.version.isNewer(idx_pkg.version, deb.version)) {
                 outdated.append(alloc, .{
                     .name = deb.name,
                     .old_ver = deb.version,
