@@ -43,7 +43,7 @@ pub fn extractDebToPrefix(alloc: std.mem.Allocator, deb_path: []const u8) !void 
 
     const result = std.process.Child.run(.{
         .allocator = alloc,
-        .argv = &.{ "tar", "xf", plain_path, "--exclude=*../*", "--exclude=../*", "--skip-old-files", "-C", "/" },
+        .argv = &.{ "tar", "xf", plain_path, "--exclude=*../*", "--exclude=../*", "--no-absolute-filenames", "--skip-old-files", "-C", "/" },
     }) catch return error.ExtractFailed;
     alloc.free(result.stdout);
     alloc.free(result.stderr);
@@ -65,7 +65,7 @@ pub fn extractDebToPrefixWithFiles(alloc: std.mem.Allocator, deb_path: []const u
     // Extract with path traversal protection
     const result = std.process.Child.run(.{
         .allocator = alloc,
-        .argv = &.{ "tar", "xf", plain_path, "--exclude=*../*", "--exclude=../*", "--skip-old-files", "-C", "/" },
+        .argv = &.{ "tar", "xf", plain_path, "--exclude=*../*", "--exclude=../*", "--no-absolute-filenames", "--skip-old-files", "-C", "/" },
     }) catch return error.ExtractFailed;
     alloc.free(result.stdout);
     alloc.free(result.stderr);

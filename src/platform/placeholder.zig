@@ -148,6 +148,17 @@ fn walkAndReplaceText(dir_path: []const u8) void {
                 if (probe_n == 0) continue;
                 if (std.mem.indexOf(u8, probe[0..probe_n], &[_]u8{0}) != null) continue;
 
+                // Check for ELF/Mach-O magic bytes (#47) — skip binaries even without nulls
+                if (probe_n >= 4) {
+                    const magic = probe[0..4];
+                    if (std.mem.eql(u8, magic, "\x7fELF") or // ELF
+                        std.mem.eql(u8, magic, "\xfe\xed\xfa\xce") or // Mach-O 32
+                        std.mem.eql(u8, magic, "\xfe\xed\xfa\xcf") or // Mach-O 64
+                        std.mem.eql(u8, magic, "\xca\xfe\xba\xbe") or // Mach-O fat
+                        std.mem.eql(u8, magic, "\xcf\xfa\xed\xfe")) // Mach-O 64 LE
+                        continue;
+                }
+
                 // Text file — attempt placeholder replacement
                 _ = relocateTextFile(child_path);
             },

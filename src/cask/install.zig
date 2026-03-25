@@ -96,6 +96,13 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
     for (cask.artifacts) |art| {
         switch (art) {
             .app => |app_name| {
+                // Validate app name: must end with .app, no path traversal (#45)
+                if (std.mem.indexOf(u8, app_name, "..") != null or
+                    !std.mem.endsWith(u8, app_name, ".app"))
+                {
+                    stderr.print("nb: skipping unsafe app artifact: {s}\n", .{app_name}) catch {};
+                    continue;
+                }
                 var src_buf: [1024]u8 = undefined;
                 const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, app_name }) catch continue;
                 var dst_buf: [512]u8 = undefined;
@@ -127,6 +134,13 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                 }
             },
             .binary => |bin| {
+                // Validate bin.target: no path traversal, no slashes (#45)
+                if (std.mem.indexOf(u8, bin.target, "..") != null or
+                    std.mem.indexOf(u8, bin.target, "/") != null)
+                {
+                    stderr.print("nb: skipping unsafe binary target: {s}\n", .{bin.target}) catch {};
+                    continue;
+                }
                 var resolved_buf: [1024]u8 = undefined;
                 var source: []const u8 = undefined;
 

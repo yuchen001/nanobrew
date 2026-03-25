@@ -197,6 +197,23 @@ fn runInit() void {
     stdout.print("Add to your shell: export PATH=\"{s}/bin:$PATH\"\n", .{PREFIX}) catch {};
 }
 
+/// Validate a package name is safe (no path traversal, no control chars, no null bytes).
+fn isPackageNameSafe(name: []const u8) bool {
+    if (name.len == 0 or name.len > 256) return false;
+    if (std.mem.indexOf(u8, name, "..") != null) return false;
+    var slash_count: usize = 0;
+    for (name) |c| {
+        if (c == '/') {
+            slash_count += 1;
+        } else if (c < 0x20 or c == 0x7f or c == 0) {
+            return false;
+        } else if (!std.ascii.isAlphanumeric(c) and c != '-' and c != '_' and c != '@' and c != '.' and c != '+') {
+            return false;
+        }
+    }
+    return slash_count == 0 or slash_count == 2;
+}
+
 // ── nb install ──
 
 fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
@@ -234,6 +251,14 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
     if (formulae.items.len == 0) {
         stderr.print("nb: no formulae specified\n", .{}) catch {};
         std.process.exit(1);
+    }
+
+    // Validate all package names before proceeding (#44)
+    for (formulae.items) |name| {
+        if (!isPackageNameSafe(name)) {
+            stderr.print("nb: refusing to install package with unsafe name: {s}\n", .{name}) catch {};
+            std.process.exit(1);
+        }
     }
 
     if (is_deb) {
@@ -1878,7 +1903,13 @@ fn runBundleInstall(alloc: std.mem.Allocator, file_path: []const u8, stdout: any
         if (std.mem.startsWith(u8, trimmed, "brew \"")) {
             const after_q = trimmed[6..];
             if (std.mem.indexOf(u8, after_q, "\"")) |end| {
-                formulas.append(alloc, after_q[0..end]) catch {};
+                const pkg_name = after_q[0..end];
+                if (!isPackageNameSafe(pkg_name)) {
+                    stderr.print("nb: skipping unsafe package name in Brewfile: {s}\n", .{pkg_name}) catch {};
+                    skipped += 1;
+                    continue;
+                }
+                formulas.append(alloc, pkg_name) catch {};
                 // Check for args after the closing quote (e.g. brew "pkg", args: [...])
                 const rest = after_q[end + 1 ..];
                 const rest_trimmed = std.mem.trim(u8, rest, " \t\r");
@@ -1889,7 +1920,13 @@ fn runBundleInstall(alloc: std.mem.Allocator, file_path: []const u8, stdout: any
         } else if (std.mem.startsWith(u8, trimmed, "cask \"")) {
             const after_q = trimmed[6..];
             if (std.mem.indexOf(u8, after_q, "\"")) |end| {
-                cask_tokens.append(alloc, after_q[0..end]) catch {};
+                const cask_name = after_q[0..end];
+                if (!isPackageNameSafe(cask_name)) {
+                    stderr.print("nb: skipping unsafe cask name in Brewfile: {s}\n", .{cask_name}) catch {};
+                    skipped += 1;
+                    continue;
+                }
+                cask_tokens.append(alloc, cask_name) catch {};
             }
         } else if (std.mem.startsWith(u8, trimmed, "tap \"")) {
             const after_q = trimmed[5..];
