@@ -329,7 +329,16 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
         var had_error = std.atomic.Value(bool).init(false);
         var threads: std.ArrayList(std.Thread) = .empty;
         defer threads.deinit(alloc);
+
+        // Cap concurrent threads to avoid FD exhaustion (#32)
+        const max_concurrent: usize = 16;
+
         for (install_order, 0..) |f, pi| {
+            // If at capacity, wait for all current threads before spawning more
+            if (threads.items.len >= max_concurrent) {
+                for (threads.items) |t| t.join();
+                threads.clearRetainingCapacity();
+            }
             const t = std.Thread.spawn(.{}, fullInstallOne, .{ alloc, f, &had_error, &phases[pi] }) catch {
                 had_error.store(true, .release);
                 phases[pi].store(@intFromEnum(Phase.failed), .release);

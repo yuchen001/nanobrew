@@ -45,7 +45,6 @@ pub const deb_index = @import("deb/index.zig");
 pub const deb_resolver = @import("deb/resolver.zig");
 pub const deb_extract = @import("deb/extract.zig");
 pub const deb_distro = @import("deb/distro.zig");
-pub const version = @import("version.zig");
 
 // Reused from zigrep
 pub const simd_scanner = @import("kernel/simd_scanner.zig");
@@ -59,4 +58,6 @@ comptime {
     _ = deb_resolver;
     _ = deb_distro;
     _ = version;
+    _ = tar;
+    _ = @import("platform/copy.zig");
 }

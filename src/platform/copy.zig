@@ -25,6 +25,7 @@ pub fn cpFallbackArgs(src: []const u8, dst: []const u8) [4][]const u8 {
 }
 
 /// Run the cp fallback for the current platform.
+/// Run the cp fallback for the current platform.
 pub fn cpFallback(src: []const u8, dst: []const u8) !void {
     if (comptime builtin.os.tag == .linux) {
         const result = std.process.Child.run(.{
@@ -33,6 +34,7 @@ pub fn cpFallback(src: []const u8, dst: []const u8) !void {
         }) catch return error.CopyFailed;
         std.heap.page_allocator.free(result.stdout);
         std.heap.page_allocator.free(result.stderr);
+        if (result.term.Exited != 0) return error.CopyFailed;
     } else {
         const result = std.process.Child.run(.{
             .allocator = std.heap.page_allocator,
@@ -40,6 +42,7 @@ pub fn cpFallback(src: []const u8, dst: []const u8) !void {
         }) catch return error.CopyFailed;
         std.heap.page_allocator.free(result.stdout);
         std.heap.page_allocator.free(result.stderr);
+        if (result.term.Exited != 0) return error.CopyFailed;
     }
 }
 
@@ -48,3 +51,21 @@ const CLONE_NOFOLLOW: c_uint = 0x0001;
 const CLONE_NOOWNERCOPY: c_uint = 0x0002;
 
 extern "c" fn clonefile(src: [*:0]const u8, dst: [*:0]const u8, flags: c_uint) c_int;
+
+const testing = std.testing;
+
+test "cpFallback returns error on bad source path" {
+    // cp with a non-existent source should fail and we should get CopyFailed
+    const err = cpFallback("/nonexistent/source/path", "/tmp/dst");
+    try testing.expectError(error.CopyFailed, err);
+}
+
+test "cpFallbackArgs returns correct platform args" {
+    const args = cpFallbackArgs("/src", "/dst");
+    try testing.expectEqualStrings("cp", args[0]);
+    if (comptime builtin.os.tag == .linux) {
+        try testing.expectEqualStrings("--reflink=auto", args[1]);
+    } else {
+        try testing.expectEqualStrings("-R", args[1]);
+    }
+}
