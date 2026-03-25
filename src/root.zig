@@ -53,6 +53,7 @@ pub const arena = @import("mem/arena.zig");
 pub const thread_pool = @import("exec/thread_pool.zig");
 
 // Force Zig to discover tests in all imported modules
+pub const security_test = @import("security_test.zig");
 comptime {
     _ = deb_index;
     _ = deb_resolver;
@@ -60,4 +61,5 @@ comptime {
     _ = version;
     _ = tar;
     _ = @import("platform/copy.zig");
+    _ = security_test;
 }
