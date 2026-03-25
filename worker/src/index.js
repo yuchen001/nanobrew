@@ -592,9 +592,9 @@ const LANDING_HTML = `<!DOCTYPE html>
   </section>
 
   <section class="stat">
-    <span class="stat-num">3.5ms</span>
+    <span class="stat-num">0.2ms</span>
     <span class="stat-label">warm install time</span>
-    <p class="stat-ctx"><em>7,000x</em> faster than Homebrew &middot; faster than <code>echo</code></p>
+    <p class="stat-ctx"><em>45,000x</em> faster than Homebrew &middot; faster than <code>echo</code></p>
   </section>
 
   <section class="bench">
@@ -641,6 +641,62 @@ const LANDING_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <section class="bench">
+    <h2>v0.1.069 → v0.1.073</h2>
+    <p class="bench-sub">Same machine, same packages. Cache TTL optimization + placeholder fix + parallel improvements.</p>
+
+    <div class="bg">
+      <div class="bg-title">tree <span>/ warm install</span></div>
+      <div class="br">
+        <span class="br-l">v0.1.069</span>
+        <div class="br-t"><div class="br-b brew" data-w="100%">507ms</div></div>
+      </div>
+      <div class="br">
+        <span class="br-l">v0.1.073</span>
+        <div class="br-t"><div class="br-b nb" data-w="0.1%">0.4ms</div></div>
+      </div>
+      <div class="bg-note">1,268x faster</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">jq <span>/ 1 dep, warm install</span></div>
+      <div class="br">
+        <span class="br-l">v0.1.069</span>
+        <div class="br-t"><div class="br-b brew" data-w="100%">935ms</div></div>
+      </div>
+      <div class="br">
+        <span class="br-l">v0.1.073</span>
+        <div class="br-t"><div class="br-b nb" data-w="6.1%">57ms</div></div>
+      </div>
+      <div class="bg-note">16x faster</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">ffmpeg <span>/ 11 deps, warm install</span></div>
+      <div class="br">
+        <span class="br-l">v0.1.069</span>
+        <div class="br-t"><div class="br-b brew" data-w="100%">1,624ms</div></div>
+      </div>
+      <div class="br">
+        <span class="br-l">v0.1.073</span>
+        <div class="br-t"><div class="br-b nb" data-w="43.6%">709ms</div></div>
+      </div>
+      <div class="bg-note">2.3x faster</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">no-op <span>/ already installed</span></div>
+      <div class="br">
+        <span class="br-l">v0.1.069</span>
+        <div class="br-t"><div class="br-b brew" data-w="100%">9ms</div></div>
+      </div>
+      <div class="br">
+        <span class="br-l">v0.1.073</span>
+        <div class="br-t"><div class="br-b nb" data-w="2.2%">0.2ms</div></div>
+      </div>
+      <div class="bg-note">45x faster</div>
+    </div>
+  </section>
   <section class="demo">
     <h2>Quick start</h2>
     <div class="term">
