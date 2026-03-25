@@ -23,6 +23,7 @@ echo "--- Test 1: nb install --deb curl (32/32 packages) ---"
 INSTALL_OUTPUT=$(docker run --rm --platform "$PLATFORM" \
   --mount type=bind,source="$NB_BIN_ABS",target=/opt/nb \
   "$IMAGE" bash -c "
+  apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq ca-certificates >/dev/null 2>&1
   /opt/nb init >/dev/null 2>&1
   /opt/nb install --deb curl 2>&1
 ")
@@ -42,6 +43,7 @@ echo "--- Test 2: curl --version works ---"
 CURL_VER=$(docker run --rm --platform "$PLATFORM" \
   --mount type=bind,source="$NB_BIN_ABS",target=/opt/nb \
   "$IMAGE" bash -c "
+  apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq ca-certificates >/dev/null 2>&1
   /opt/nb init >/dev/null 2>&1
   /opt/nb install --deb curl >/dev/null 2>&1
   curl --version 2>&1 | head -1
@@ -59,6 +61,7 @@ echo "--- Test 3: key files exist ---"
 FILE_CHECK=$(docker run --rm --platform "$PLATFORM" \
   --mount type=bind,source="$NB_BIN_ABS",target=/opt/nb \
   "$IMAGE" bash -c "
+  apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq ca-certificates >/dev/null 2>&1
   /opt/nb init >/dev/null 2>&1
   /opt/nb install --deb curl >/dev/null 2>&1
   for f in /usr/bin/curl \
@@ -92,6 +95,7 @@ echo "--- Test 4: nb extraction matches dpkg-deb for same .deb ---"
 DEB_COMPARE=$(docker run --rm --platform "$PLATFORM" \
   --mount type=bind,source="$NB_BIN_ABS",target=/opt/nb \
   "$IMAGE" bash -c "
+  apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq ca-certificates >/dev/null 2>&1
   /opt/nb init >/dev/null 2>&1
   /opt/nb install --deb curl >/dev/null 2>&1
 
@@ -154,6 +158,7 @@ echo "--- Test 5: nb install --deb wget git ---"
 MULTI_OUTPUT=$(docker run --rm --platform "$PLATFORM" \
   --mount type=bind,source="$NB_BIN_ABS",target=/opt/nb \
   "$IMAGE" bash -c "
+  apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq ca-certificates >/dev/null 2>&1
   /opt/nb init >/dev/null 2>&1
   /opt/nb install --deb wget git >/dev/null 2>&1
   wget --version 2>&1 | head -1
