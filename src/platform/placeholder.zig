@@ -70,6 +70,17 @@ pub fn relocateTextFile(path: []const u8) bool {
     if (n == 0) return false;
     const content = buf[0..n];
 
+    // Defense-in-depth: check for binary content even though walker should have filtered
+    if (n >= 4) {
+        const magic = buf[0..4];
+        if (std.mem.eql(u8, magic, "\x7fELF") or
+            std.mem.eql(u8, magic, "\xfe\xed\xfa\xce") or
+            std.mem.eql(u8, magic, "\xfe\xed\xfa\xcf") or
+            std.mem.eql(u8, magic, "\xca\xfe\xba\xbe") or
+            std.mem.eql(u8, magic, "\xcf\xfa\xed\xfe"))
+            return false;
+    }
+    if (std.mem.indexOf(u8, content[0..@min(n, 512)], &[_]u8{0}) != null) return false;
     if (std.mem.indexOf(u8, content, "@@HOMEBREW") == null) return false;
 
     // Replace in-place
