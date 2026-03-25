@@ -377,7 +377,7 @@ pub const Database = struct {
     }
 
     /// Write a JSON-escaped string to the writer (escapes \, ", control chars).
-    fn writeJsonEscaped(writer: anytype, s: []const u8) void {
+    pub fn writeJsonEscaped(writer: anytype, s: []const u8) void {
         for (s) |c| {
             switch (c) {
                 '"' => writer.writeAll("\\\"") catch {},
@@ -400,7 +400,7 @@ pub const Database = struct {
     }
 
     /// Write a JSON-quoted string: "escaped_value"
-    fn writeJsonString(writer: anytype, s: []const u8) void {
+    pub fn writeJsonString(writer: anytype, s: []const u8) void {
         writer.writeAll("\"") catch {};
         writeJsonEscaped(writer, s);
         writer.writeAll("\"") catch {};

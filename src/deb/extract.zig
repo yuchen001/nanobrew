@@ -145,7 +145,7 @@ pub fn runPostinst(alloc: std.mem.Allocator, deb_path: []const u8, pkg_name: []c
 }
 
 /// Validate that a tar file path is safe (no traversal, no absolute escape).
-fn isPathSafe(path: []const u8) bool {
+pub fn isPathSafe(path: []const u8) bool {
     if (path.len == 0) return false;
     // Check for ".." components that could traverse outside prefix
     var components = std.mem.splitScalar(u8, path, '/');

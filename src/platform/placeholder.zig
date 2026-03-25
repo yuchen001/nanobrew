@@ -206,7 +206,7 @@ test "replacePlaceholders - REPOSITORY" {
 
 test "relocateTextFile - replaces shebangs in text files" {
     // Create a temp file with a placeholder shebang
-    const tmp_dir = testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
     const tmp_file = tmp_dir.dir.createFile("test_script", .{}) catch unreachable;
     const content = "#!@@HOMEBREW_CELLAR@@/awscli/2.34.16/libexec/bin/python\nimport sys\n";

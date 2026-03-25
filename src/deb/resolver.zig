@@ -114,7 +114,7 @@ pub fn resolveAll(
     return order.toOwnedSlice(alloc);
 }
 
-const MAX_RESOLVE_DEPTH = 64;
+pub const MAX_RESOLVE_DEPTH = 64;
 
 fn resolveOne(
     alloc: std.mem.Allocator,
