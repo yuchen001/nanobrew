@@ -239,18 +239,49 @@ Zig's cross-compilation produces a statically-linked binary that runs directly i
     state.json  # installed package state
 ```
 
-## Relationship with Homebrew
+## Homebrew Compatibility
 
-nanobrew uses Homebrew's formulas, bottles, and cask definitions. It's a faster client for the same ecosystem — not a fork. We recommend running it alongside Homebrew. Source builds work for formulae without pre-built bottles.
+nanobrew uses Homebrew's formulas, bottles, and cask definitions. It's a faster client for the same ecosystem — not a fork.
+
+### What works
+
+- **Bottle installs** — all pre-built Homebrew bottles install correctly
+- **Cask installs** — `.dmg`, `.zip`, `.pkg`, and `.tar.gz` casks
+- **Dependency resolution** — same transitive deps as Homebrew
+- **Third-party taps** — `nb install user/tap/formula` fetches from GitHub
+- **Shared Cellar** — packages install to `/opt/nanobrew/prefix/Cellar/` (same layout as Homebrew)
+- **Bundle/Brewfile** — `nb bundle dump` and `nb bundle install` for common `brew "pkg"` and `cask "pkg"` lines
+
+### What doesn't work (yet)
+
+- **Ruby `post_install` hooks** — Homebrew formulae with Ruby `post_install` blocks won't run those hooks. Most bottles don't need them.
+- **Build from source with custom options** — `args: ["with-feature"]` in Brewfiles is ignored
+- **`tap` command** — nanobrew auto-fetches taps inline; standalone `brew tap` is not needed
+- **Mac App Store (`mas`)** — not supported
+- **Complex Ruby DSL in Brewfiles** — conditional blocks, custom Ruby code
+
+### Migration from Homebrew
+
+```bash
+nb migrate    # scan /opt/homebrew/Cellar and Caskroom, import into nanobrew's DB
+```
+
+After migration, `nb list`, `nb outdated`, and `nb upgrade` will see your existing packages.
+
+### Switching back to Homebrew
+
+Packages installed by nanobrew live in `/opt/nanobrew/prefix/Cellar/` — they don't interfere with Homebrew's `/opt/homebrew/Cellar/`. You can safely remove nanobrew with `nb nuke` without affecting Homebrew.
 
 ## Project status
 
 **Experimental** — works well for common packages. If something breaks, [open an issue](https://github.com/justrach/nanobrew/issues).
 
 License: [Apache 2.0](./LICENSE)
+License: [Apache 2.0](./LICENSE)
 
 ## All commands
-
+| `nb info --cask <app>` | | Show cask details |
+| `nb migrate` | | Import packages from Homebrew |
 | Command | Short | What it does |
 |---------|-------|-------------|
 | `nb install <pkg>` | `nb i` | Install packages |
