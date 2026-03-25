@@ -69,7 +69,10 @@ pub const DepResolver = struct {
                         results[i] = api.fetchFormulaWithClient(self.alloc, client_ptr, dep_name) catch null;
                         continue;
                     };
-                    threads.append(self.alloc, t) catch continue;
+                    threads.append(self.alloc, t) catch {
+                        t.join();
+                        continue;
+                    };
                 }
                 for (threads.items) |t| t.join();
             }

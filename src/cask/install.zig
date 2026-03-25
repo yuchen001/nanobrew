@@ -144,7 +144,10 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                     const chmod_result = std.process.Child.run(.{
                         .allocator = alloc,
                         .argv = &.{ "chmod", "+x", caskroom_bin },
-                    }) catch continue;
+                    }) catch {
+                        stderr.print("nb: failed to chmod binary {s}\n", .{bin.source}) catch {};
+                        continue;
+                    };
                     alloc.free(chmod_result.stdout);
                     alloc.free(chmod_result.stderr);
 

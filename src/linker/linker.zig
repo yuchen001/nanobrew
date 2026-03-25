@@ -43,7 +43,9 @@ pub fn linkKeg(name: []const u8, version: []const u8) !void {
 
             std.fs.deleteFileAbsolute(dest) catch {};
 
-            std.fs.symLinkAbsolute(src, dest, .{}) catch {};
+            std.fs.symLinkAbsolute(src, dest, .{}) catch |err| {
+                std.fs.File.stderr().deprecatedWriter().print("warning: failed to link {s}: {}\n", .{ entry.name, err }) catch {};
+            };
         }
     } else |_| {}
 
@@ -65,7 +67,9 @@ pub fn linkKeg(name: []const u8, version: []const u8) !void {
             const dest = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ BIN_DIR, entry.name }) catch continue;
 
             std.fs.deleteFileAbsolute(dest) catch {};
-            std.fs.symLinkAbsolute(src, dest, .{}) catch {};
+            std.fs.symLinkAbsolute(src, dest, .{}) catch |err| {
+                std.fs.File.stderr().deprecatedWriter().print("warning: failed to link {s}: {}\n", .{ entry.name, err }) catch {};
+            };
         }
     } else |_| {}
 
@@ -74,7 +78,9 @@ pub fn linkKeg(name: []const u8, version: []const u8) !void {
     var opt_buf: [512]u8 = undefined;
     const opt_link = std.fmt.bufPrint(&opt_buf, "{s}/{s}", .{ OPT_DIR, name }) catch return error.PathTooLong;
     std.fs.deleteFileAbsolute(opt_link) catch {};
-    std.fs.symLinkAbsolute(keg_dir, opt_link, .{}) catch {};
+    std.fs.symLinkAbsolute(keg_dir, opt_link, .{}) catch |err| {
+        std.fs.File.stderr().deprecatedWriter().print("warning: failed to link {s}: {}\n", .{ name, err }) catch {};
+    };
 }
 
 /// Unlink a keg's binaries and remove opt/ symlink.

@@ -11,15 +11,13 @@ const paths = @import("../platform/paths.zig");
 const BLOBS_DIR = paths.BLOBS_DIR;
 
 /// Get the full path for a cached blob by SHA256.
+/// NOTE: Returns a slice into a threadlocal buffer — copy if you need to keep it.
 pub fn blobPath(sha256: []const u8) []const u8 {
-    return blobPathBuf(sha256) catch "";
+    const p = std.fmt.bufPrint(&path_buf_tls, "{s}/{s}", .{ BLOBS_DIR, sha256 }) catch return "";
+    return p;
 }
 
-var path_buf: [512]u8 = undefined;
-
-fn blobPathBuf(sha256: []const u8) ![]const u8 {
-    return std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ BLOBS_DIR, sha256 });
-}
+threadlocal var path_buf_tls: [512]u8 = undefined;
 
 /// Check if a blob exists in the cache.
 pub fn has(sha256: []const u8) bool {

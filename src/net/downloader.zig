@@ -87,7 +87,10 @@ pub const StreamingInstaller = struct {
                 had_error.store(true, .release);
                 continue;
             };
-            threads.append(self.alloc, t) catch continue;
+            threads.append(self.alloc, t) catch {
+                t.join(); // Don't leak the thread handle
+                continue;
+            };
         }
         for (threads.items) |t| {
             t.join();

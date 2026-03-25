@@ -2239,6 +2239,9 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
                 .argv = &.{"ldconfig"},
             }) catch null;
             if (ld_result) |r| {
+                if (r.term.Exited != 0) {
+                    std.fs.File.stderr().deprecatedWriter().print("warning: ldconfig exited with code {d}\n", .{r.term.Exited}) catch {};
+                }
                 alloc.free(r.stdout);
                 alloc.free(r.stderr);
             }
