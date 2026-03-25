@@ -23,3 +23,5 @@ pub const PLACEHOLDER_REPOSITORY = "@@HOMEBREW_REPOSITORY@@";
 pub const REAL_PREFIX = PREFIX;
 pub const REAL_CELLAR = PREFIX ++ "/Cellar";
 pub const REAL_REPOSITORY = ROOT;
+pub const PLACEHOLDER_LIBRARY = "@@HOMEBREW_LIBRARY@@";
+pub const REAL_LIBRARY = ROOT ++ "/Library";

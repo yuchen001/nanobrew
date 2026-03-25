@@ -41,8 +41,30 @@ pub fn fileContainsPlaceholder(path: []const u8) bool {
 
 /// Replace placeholders in text config files (.pc, .cmake, .la, etc.)
 pub fn relocateTextFile(path: []const u8) bool {
-    const file = std.fs.openFileAbsolute(path, .{ .mode = .read_write }) catch return false;
-    defer file.close();
+    // Check if file is writable; if not, temporarily make it writable
+    // (Homebrew bottles ship scripts with 0o555 / r-xr-xr-x permissions)
+    const probe = std.fs.openFileAbsolute(path, .{ .mode = .read_only }) catch return false;
+    const stat = probe.stat() catch { probe.close(); return false; };
+    probe.close();
+    const orig_mode = stat.mode;
+    const needs_chmod = (orig_mode & 0o200) == 0;
+    if (needs_chmod) {
+        const tmp = std.fs.openFileAbsolute(path, .{ .mode = .read_only }) catch return false;
+        std.posix.fchmod(tmp.handle, orig_mode | 0o200) catch { tmp.close(); return false; };
+        tmp.close();
+    }
+    const file = std.fs.openFileAbsolute(path, .{ .mode = .read_write }) catch {
+        if (needs_chmod) {
+            const r = std.fs.openFileAbsolute(path, .{ .mode = .read_only }) catch return false;
+            std.posix.fchmod(r.handle, orig_mode) catch {};
+            r.close();
+        }
+        return false;
+    };
+    defer {
+        if (needs_chmod) std.posix.fchmod(file.handle, orig_mode) catch {};
+        file.close();
+    }
     var buf: [1024 * 1024]u8 = undefined;
     const n = file.readAll(&buf) catch return false;
     if (n == 0) return false;
@@ -73,6 +95,12 @@ pub fn relocateTextFile(path: []const u8) bool {
             @memcpy(result[out_len..][0..paths.REAL_REPOSITORY.len], paths.REAL_REPOSITORY);
             out_len += paths.REAL_REPOSITORY.len;
             i += paths.PLACEHOLDER_REPOSITORY.len;
+        } else if (i + paths.PLACEHOLDER_LIBRARY.len <= n and
+            std.mem.eql(u8, content[i..][0..paths.PLACEHOLDER_LIBRARY.len], paths.PLACEHOLDER_LIBRARY))
+        {
+            @memcpy(result[out_len..][0..paths.REAL_LIBRARY.len], paths.REAL_LIBRARY);
+            out_len += paths.REAL_LIBRARY.len;
+            i += paths.PLACEHOLDER_LIBRARY.len;
         } else {
             result[out_len] = content[i];
             out_len += 1;
