@@ -1619,8 +1619,8 @@ fn runBundleDump(alloc: std.mem.Allocator, stdout: anytype, stderr: anytype) voi
 }
 
 fn runBundleInstall(alloc: std.mem.Allocator, file_path: []const u8, stdout: anytype, stderr: anytype) void {
-    _ = stderr;
     const file_content = std.fs.cwd().readFileAlloc(alloc, file_path, 1024 * 1024) catch {
+        stderr.print("nb: could not read '{s}'\n", .{file_path}) catch {};
         return;
     };
     defer alloc.free(file_content);
@@ -1629,6 +1629,7 @@ fn runBundleInstall(alloc: std.mem.Allocator, file_path: []const u8, stdout: any
     defer formulas.deinit(alloc);
     var cask_tokens: std.ArrayList([]const u8) = .empty;
     defer cask_tokens.deinit(alloc);
+    var skipped: usize = 0;
 
     var lines = std.mem.splitScalar(u8, file_content, '\n');
     while (lines.next()) |line| {
@@ -1639,16 +1640,47 @@ fn runBundleInstall(alloc: std.mem.Allocator, file_path: []const u8, stdout: any
             const after_q = trimmed[6..];
             if (std.mem.indexOf(u8, after_q, "\"")) |end| {
                 formulas.append(alloc, after_q[0..end]) catch {};
+                // Check for args after the closing quote (e.g. brew "pkg", args: [...])
+                const rest = after_q[end + 1 ..];
+                const rest_trimmed = std.mem.trim(u8, rest, " \t\r");
+                if (rest_trimmed.len > 0 and rest_trimmed[0] == ',') {
+                    stderr.print("nb: warning: ignoring unsupported args for '{s}'\n", .{after_q[0..end]}) catch {};
+                }
             }
         } else if (std.mem.startsWith(u8, trimmed, "cask \"")) {
             const after_q = trimmed[6..];
             if (std.mem.indexOf(u8, after_q, "\"")) |end| {
                 cask_tokens.append(alloc, after_q[0..end]) catch {};
             }
+        } else if (std.mem.startsWith(u8, trimmed, "tap \"")) {
+            const after_q = trimmed[5..];
+            if (std.mem.indexOf(u8, after_q, "\"")) |end| {
+                stderr.print("nb: warning: taps not yet supported: {s}\n", .{after_q[0..end]}) catch {};
+            }
+            skipped += 1;
+        } else if (std.mem.startsWith(u8, trimmed, "mas \"")) {
+            stderr.print("nb: warning: Mac App Store not supported\n", .{}) catch {};
+            skipped += 1;
+        } else if (std.mem.startsWith(u8, trimmed, "vscode \"")) {
+            stderr.print("nb: warning: VS Code extensions not supported\n", .{}) catch {};
+            skipped += 1;
+        } else {
+            // Bare word: treat as formula name (backwards compat)
+            // Validate it looks like a package name (alphanumeric, hyphens, underscores, @)
+            var valid = trimmed.len > 0;
+            for (trimmed) |ch| {
+                if (!std.ascii.isAlphanumeric(ch) and ch != '-' and ch != '_' and ch != '@' and ch != '/') {
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid) {
+                formulas.append(alloc, trimmed) catch {};
+            }
         }
     }
 
-    stdout.print("==> Installing from bundle: {d} formulas, {d} casks\n", .{ formulas.items.len, cask_tokens.items.len }) catch {};
+    stdout.print("==> Installing from bundle: {d} formulae, {d} casks\n", .{ formulas.items.len, cask_tokens.items.len }) catch {};
 
     if (formulas.items.len > 0) {
         runInstall(alloc, formulas.items);
@@ -1656,6 +1688,8 @@ fn runBundleInstall(alloc: std.mem.Allocator, file_path: []const u8, stdout: any
     if (cask_tokens.items.len > 0) {
         runCaskInstall(alloc, cask_tokens.items);
     }
+
+    stdout.print("Installed {d} formulae, {d} casks. Skipped {d} unsupported entries.\n", .{ formulas.items.len, cask_tokens.items.len, skipped }) catch {};
 }
 
 // ── nb outdated ──
