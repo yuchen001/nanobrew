@@ -160,6 +160,18 @@ fn walkAndReplaceText(dir_path: []const u8) void {
 
         switch (entry.kind) {
             .directory => walkAndReplaceText(child_path),
+            .sym_link => {
+                // Resolve symlink target and process if it's a regular file
+                var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+                const target = std.fs.readLinkAbsolute(child_path, &target_buf) catch continue;
+                // Only process symlinks that point to files within the same keg
+                // (avoid processing targets outside the tree or dangling links)
+                const file = std.fs.openFileAbsolute(target, .{}) catch continue;
+                const file_stat = file.stat() catch { file.close(); continue; };
+                file.close();
+                if (file_stat.kind != .file) continue;
+                _ = relocateTextFile(target);
+            },
             .file => {
                 // Fast skip: known binary extensions (no syscalls needed)
                 const name = entry.name;
@@ -199,8 +211,8 @@ fn walkAndReplaceText(dir_path: []const u8) void {
                         continue;
                 }
 
-                // Early exit: small files without @@HOMEBREW in first 512 bytes
-                if (file_stat.size <= 512 and std.mem.indexOf(u8, probe[0..probe_n], "@@HOMEBREW") == null) continue;
+                // Only skip if we read the entire file and found no placeholder
+                if (file_stat.size <= probe_n and std.mem.indexOf(u8, probe[0..probe_n], "@@HOMEBREW") == null) continue;
 
                 _ = relocateTextFile(child_path);
             },

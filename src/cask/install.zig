@@ -93,6 +93,8 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
     // 4. Process artifacts in order
     const source_dir: []const u8 = mount_point orelse temp_extract_dir orelse CACHE_TMP;
 
+    var any_artifact_failed = false;
+
     for (cask.artifacts) |art| {
         switch (art) {
             .app => |app_name| {
@@ -108,6 +110,13 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                 var dst_buf: [512]u8 = undefined;
                 const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{app_name}) catch continue;
 
+                // Verify source app exists before attempting copy (#60)
+                std.fs.accessAbsolute(src, .{}) catch {
+                    stderr.print("nb: error: {s} not found in {s} — DMG may not have mounted correctly\n", .{ app_name, source_dir }) catch {};
+                    any_artifact_failed = true;
+                    continue;
+                };
+
                 // Remove existing app first
                 std.fs.deleteTreeAbsolute(dst) catch {};
 
@@ -117,12 +126,15 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                     .argv = &.{ "cp", "-R", src, dst },
                 }) catch {
                     stderr.print("nb: failed to copy {s} to /Applications/\n", .{app_name}) catch {};
+                    any_artifact_failed = true;
                     continue;
                 };
                 alloc.free(cp_result.stdout);
                 alloc.free(cp_result.stderr);
                 if (cp_result.term.Exited != 0) {
-                    stderr.print("nb: cp failed for {s}\n", .{app_name}) catch {};
+                    stderr.print("nb: cp failed for {s} (exit code {d})\n", .{ app_name, cp_result.term.Exited }) catch {};
+                    any_artifact_failed = true;
+                    continue;
                 }
 
                 // Remove Gatekeeper quarantine so the app can launch without warning
@@ -237,6 +249,8 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
             .uninstall => {}, // only used during removal
         }
     }
+
+    if (any_artifact_failed) return error.ArtifactFailed;
 }
 
 pub fn removeCask(
