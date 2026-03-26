@@ -2,6 +2,13 @@
 
 All notable changes to nanobrew are documented here.
 
+## [0.1.075] - 2026-03-26
+
+### Fixed
+- **`nb install r` broken** — placeholder walker skipped symlinked scripts (e.g. `bin/r` → `bin/R`), leaving `@@HOMEBREW_CELLAR@@` unreplaced. Walker now resolves and processes symlink targets. (#62)
+- **Cask install silent failure** — `nb install --cask firefox` reported success but left empty directories. Installer now validates the `.app` exists in the mounted DMG before copying and returns `error.ArtifactFailed` instead of silently continuing. (#60)
+- **Placeholder early-exit bug** — probe check used fixed `512` instead of actual bytes read, risking skipped files on short reads.
+
 ## [0.1.067] - 2026-02-16
 
 ### Added

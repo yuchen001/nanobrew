@@ -79,5 +79,6 @@ We take security seriously — in v0.1.073 alone we found and fixed 21 vulnerabi
 | 2026-03-24 | v0.1.070 | Round 2: 9 vulnerabilities + test suite | All 9 |
 | 2026-03-25 | v0.1.072 | Round 3: 8 vulnerabilities (HN feedback) | All 8 |
 | 2026-03-25 | v0.1.073 | Round 4: 5 vulnerabilities (adversarial agents) + binary corruption | All 5 + #50 |
+| 2026-03-26 | v0.1.075 | Cask silent failure (#60), placeholder symlink skip (#62) | Both fixed |
 
-Total: **34 vulnerabilities found and fixed** across 4 audit rounds.
+Total: **34 vulnerabilities found and fixed** across 4 audit rounds, plus 2 correctness bugs fixed in v0.1.075.
