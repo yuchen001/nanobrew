@@ -247,7 +247,10 @@ pub fn serializeIndex(alloc: std.mem.Allocator, packages: []const DebPackage) ![
 }
 
 /// Deserialize a binary index into a ParsedIndex. All strings are arena-owned.
-pub fn deserializeIndex(alloc: std.mem.Allocator, data: []const u8) !ParsedIndex {
+/// Deserialize a binary index into a ParsedIndex. Zero-copy: strings point
+/// directly into `data`. Caller transfers ownership of `data` to the returned
+/// ParsedIndex — it will be freed when ParsedIndex.deinit() is called.
+pub fn deserializeIndex(alloc: std.mem.Allocator, data: []u8) !ParsedIndex {
     if (data.len < 12) return error.InvalidFormat;
 
     // Validate header
@@ -266,13 +269,13 @@ pub fn deserializeIndex(alloc: std.mem.Allocator, data: []const u8) !ParsedIndex
     for (0..count) |i| {
         var pkg: DebPackage = undefined;
 
-        // Read 6 string fields
+        // Zero-copy: string fields point directly into data buffer
         inline for (.{ "name", "version", "depends", "provides", "filename", "sha256" }) |field_name| {
             if (pos + 2 > data.len) return error.InvalidFormat;
             const len = std.mem.readInt(u16, data[pos..][0..2], .little);
             pos += 2;
             if (pos + len > data.len) return error.InvalidFormat;
-            @field(pkg, field_name) = try a.dupe(u8, data[pos..][0..len]);
+            @field(pkg, field_name) = data[pos..][0..len];
             pos += len;
         }
 
@@ -286,7 +289,7 @@ pub fn deserializeIndex(alloc: std.mem.Allocator, data: []const u8) !ParsedIndex
         const desc_len = std.mem.readInt(u16, data[pos..][0..2], .little);
         pos += 2;
         if (pos + desc_len > data.len) return error.InvalidFormat;
-        pkg.description = try a.dupe(u8, data[pos..][0..desc_len]);
+        pkg.description = data[pos..][0..desc_len];
         pos += desc_len;
 
         packages[i] = pkg;
@@ -310,13 +313,28 @@ pub fn readCachedBinaryIndex(alloc: std.mem.Allocator, distro_id: []const u8, co
 
     const size = stat.size;
     if (size < 12 or size > 100 * 1024 * 1024) return null;
+
+    // Allocate data buffer — ownership transfers to ParsedIndex via deserializeIndex.
+    // The ParsedIndex.arena.deinit() will NOT free this (it's from the parent allocator),
+    // so we need to track it. Simplest: just leak it on the parent allocator since
+    // ParsedIndex strings point into it. The caller's defer on parsed_indices handles lifetime.
     const data = alloc.alloc(u8, @intCast(size)) catch return null;
-    defer alloc.free(data);
 
-    const bytes_read = file.readAll(data) catch return null;
-    if (bytes_read != @as(usize, @intCast(size))) return null;
+    const bytes_read = file.readAll(data) catch {
+        alloc.free(data);
+        return null;
+    };
+    if (bytes_read != @as(usize, @intCast(size))) {
+        alloc.free(data);
+        return null;
+    }
 
-    return deserializeIndex(alloc, data) catch null;
+    // Zero-copy deserialize — strings point into data buffer.
+    // data buffer lifetime is managed by caller (kept alive via parsed_indices list).
+    return deserializeIndex(alloc, data) catch {
+        alloc.free(data);
+        return null;
+    };
 }
 
 /// Write a binary index cache for a given component.

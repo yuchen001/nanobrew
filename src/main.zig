@@ -2403,6 +2403,7 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     var timer = std.time.Timer.start() catch null;
 
     // --- Step 1: Fetch + decompress package index natively ---
+    const t_start = std.time.milliTimestamp();
     stdout.print("==> Fetching package index...\n", .{}) catch {};
 
     // Use --repo override or auto-detect distro
@@ -2522,8 +2523,8 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
         return;
     }
 
-    stdout.print("==> Parsing package index ({d} packages)...\n", .{all_pkgs_list.items.len}) catch {};
-
+    const t_index = std.time.milliTimestamp();
+    stdout.print("==> Fetched index ({d} packages) in {d}ms\n", .{ all_pkgs_list.items.len, t_index - t_start }) catch {};
     // --- Step 2: Parse index + resolve deps ---
     var index_map = nb.deb_index.buildIndex(alloc, all_pkgs_list.items) catch {
         stderr.print("nb: failed to build package index\n", .{}) catch {};
@@ -2538,18 +2539,19 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     };
     defer provides_map.deinit();
 
-    stdout.print("==> Resolving dependencies for {d} package(s)...\n", .{packages.len}) catch {};
-
+    const t_resolve = std.time.milliTimestamp();
+    stdout.print("==> Resolving deps for {d} package(s)... (index built in {d}ms)\n", .{ packages.len, t_resolve - t_index }) catch {};
     const resolved = nb.deb_resolver.resolveAll(alloc, packages, index_map, provides_map) catch {
         stderr.print("nb: dependency resolution failed\n", .{}) catch {};
         return;
     };
     defer alloc.free(resolved);
 
+    const t_resolved = std.time.milliTimestamp();
     // --- Step 3: Download + extract (streaming SHA256 verification) ---
-    stdout.print("==> Installing {d} package(s)...\n", .{resolved.len}) catch {};
+    stdout.print("==> Installing {d} package(s)... (resolved in {d}ms)\n", .{ resolved.len, t_resolved - t_resolve }) catch {};
     var installed: usize = 0;
-    var cached: usize = 0;
+    const cached: usize = 0;
 
     // --- Step 3a: Parallel download of uncached packages ---
     {
@@ -2611,6 +2613,10 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
 
             const debWorkerFn = struct {
                 fn run(ctx: DebWorkerCtx) void {
+                    // One HTTP client per thread — reuses TCP+TLS connections
+                    var dl_client: std.http.Client = .{ .allocator = ctx.alloc_ };
+                    defer dl_client.deinit();
+
                     while (true) {
                         const idx = ctx.next_idx.fetchAdd(1, .monotonic);
                         if (idx >= ctx.items.len) break;
@@ -2618,12 +2624,8 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
                         const url = item.url_storage[0..item.url_len];
                         const dest = item.cache_path_storage[0..item.cache_path_len];
 
-                        // Each thread gets its own HTTP client (not thread-safe)
-                        var dl_client: std.http.Client = .{ .allocator = ctx.alloc_ };
-                        defer dl_client.deinit();
-
                         downloadDebWithSha256(&dl_client, url, item.sha256, dest) catch {
-                            // Retry once with fresh client
+                            // Retry once with fresh client (connection may have been reset)
                             var retry_client: std.http.Client = .{ .allocator = ctx.alloc_ };
                             defer retry_client.deinit();
                             downloadDebWithSha256(&retry_client, url, item.sha256, dest) catch {
@@ -2665,6 +2667,9 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
             }
         }
     }
+
+    const t_downloaded = std.time.milliTimestamp();
+    stdout.print("    download phase: {d}ms\n", .{t_downloaded - t_resolved}) catch {};
 
     // Open database for tracking installed debs
     var db: ?nb.database.Database = nb.database.Database.open(alloc) catch null;
@@ -2755,7 +2760,8 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     }
 
     installed = installed_atomic.load(.acquire);
-    cached = installed; // all were from cache at this point
+    const t_extracted = std.time.milliTimestamp();
+    stdout.print("    extract phase: {d}ms ({d} packages)\n", .{ t_extracted - t_downloaded, installed }) catch {};
 
     // Run postinst scripts sequentially (must be sequential — they modify global state)
     if (!opts.skip_postinst) {
