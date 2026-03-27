@@ -126,10 +126,10 @@ pub const TarListResult = struct {
 /// Skips directories. Normalizes paths (strips "./").
 /// Rejects paths with ".." traversal components.
 pub fn listFiles(alloc: std.mem.Allocator, tar_data: []const u8) !TarListResult {
-    var files = std.ArrayList([]const u8).init(alloc);
+    var files: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (files.items) |f| alloc.free(f);
-        files.deinit();
+        files.deinit(alloc);
     }
     var rejected: usize = 0;
     var pos: usize = 0;
@@ -188,7 +188,7 @@ pub fn listFiles(alloc: std.mem.Allocator, tar_data: []const u8) !TarListResult 
         switch (typeflag) {
             TypeFlag.regular, TypeFlag.regular_alt, TypeFlag.symlink, TypeFlag.hardlink => {
                 if (isPathSafe(entry_name)) {
-                    try files.append(try alloc.dupe(u8, entry_name));
+                    try files.append(alloc, try alloc.dupe(u8, entry_name));
                 } else {
                     rejected += 1;
                 }
@@ -201,7 +201,7 @@ pub fn listFiles(alloc: std.mem.Allocator, tar_data: []const u8) !TarListResult 
     }
 
     return .{
-        .files = try files.toOwnedSlice(),
+        .files = try files.toOwnedSlice(alloc),
         .rejected = rejected,
     };
 }
@@ -210,10 +210,10 @@ pub fn listFiles(alloc: std.mem.Allocator, tar_data: []const u8) !TarListResult 
 /// Returns list of extracted file paths (relative, without leading /).
 /// The tar data must already be decompressed.
 pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []const u8) ![][]const u8 {
-    var files = std.ArrayList([]const u8).init(alloc);
+    var files: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (files.items) |f| alloc.free(f);
-        files.deinit();
+        files.deinit(alloc);
     }
     var rejected: usize = 0;
     var pos: usize = 0;
@@ -320,14 +320,13 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
                 const mode_val = parseOctal(&header.mode);
                 const mode: std.posix.mode_t = @intCast(mode_val & 0o7777);
 
-                writeFile(abs_path, tar_data[pos..data_end], mode) catch |err| {
+                writeFile(abs_path, tar_data[pos..data_end], mode) catch {
                     // Skip files we can't write (permission errors, etc.)
-                    _ = err;
                     pos += alignToBlock(file_size);
                     continue;
                 };
 
-                try files.append(try alloc.dupe(u8, entry_name));
+                try files.append(alloc, try alloc.dupe(u8, entry_name));
             },
             TypeFlag.symlink => {
                 if (std.fs.path.dirname(abs_path)) |parent| {
@@ -341,7 +340,7 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
                     pos += alignToBlock(file_size);
                     continue;
                 };
-                try files.append(try alloc.dupe(u8, entry_name));
+                try files.append(alloc, try alloc.dupe(u8, entry_name));
             },
             TypeFlag.hardlink => {
                 if (std.fs.path.dirname(abs_path)) |parent| {
@@ -361,7 +360,7 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
                     pos += alignToBlock(file_size);
                     continue;
                 };
-                try files.append(try alloc.dupe(u8, entry_name));
+                try files.append(alloc, try alloc.dupe(u8, entry_name));
             },
             else => {
                 // Unknown type flag — skip
@@ -372,11 +371,11 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
     }
 
     if (rejected > 0) {
-        const stderr_writer = std.io.getStdErr().writer();
+        const stderr_writer = std.fs.File.stderr().deprecatedWriter();
         stderr_writer.print("    warning: rejected {d} unsafe paths from archive\n", .{rejected}) catch {};
     }
 
-    return try files.toOwnedSlice();
+    return try files.toOwnedSlice(alloc);
 }
 
 /// Create a file with the given content and mode.

@@ -50,7 +50,7 @@ pub fn extractDebToPrefixWithFiles(alloc: std.mem.Allocator, deb_path: []const u
 /// Non-fatal — returns void and prints warnings on failure.
 /// If skip_postinst is true, logs a message and skips execution.
 pub fn runPostinst(alloc: std.mem.Allocator, deb_path: []const u8, pkg_name: []const u8, skip_postinst: bool) void {
-    const stderr_writer = std.io.getStdErr().writer();
+    const stderr_writer = std.fs.File.stderr().deprecatedWriter();
 
     // Decompress control.tar in memory
     const ctrl_tar_data = decompressControlTar(alloc, deb_path) catch return;
@@ -224,7 +224,6 @@ fn decompressZstd(alloc: std.mem.Allocator, compressed: []const u8) ![]u8 {
 
     var zstd_stream: std.compress.zstd.Decompress = .init(&in, window_buf, .{});
     var out: std.Io.Writer.Allocating = .init(alloc);
-    defer out.deinit();
 
     _ = zstd_stream.reader.streamRemaining(&out.writer) catch return error.DecompressFailed;
 
@@ -237,7 +236,6 @@ pub fn decompressGzip(alloc: std.mem.Allocator, compressed: []const u8) ![]u8 {
     var in: std.Io.Reader = .fixed(compressed);
     var decomp: std.compress.flate.Decompress = .init(&in, .gzip, &.{});
     var out: std.Io.Writer.Allocating = .init(alloc);
-    defer out.deinit();
 
     _ = decomp.reader.streamRemaining(&out.writer) catch return error.DecompressFailed;
 
@@ -331,7 +329,6 @@ test "gzip decompression round-trips" {
     const input = "hello nanobrew deb extract test\n";
 
     var compressed: std.Io.Writer.Allocating = .init(alloc);
-    defer compressed.deinit();
     var compress_buf: [65536]u8 = undefined;
     var compressor: std.compress.flate.Compress = .init(&compressed.writer, &compress_buf, .{ .container = .gzip });
     compressor.writer.writeAll(input) catch unreachable;

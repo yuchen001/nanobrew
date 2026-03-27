@@ -2458,7 +2458,7 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     var client: std.http.Client = .{ .allocator = alloc };
     defer client.deinit();
 
-    // Fetch and merge package indices from all components in parallel
+    // Fetch and merge package indices from all components
     var all_pkgs_list: std.ArrayList(nb.deb_index.DebPackage) = .empty;
     defer all_pkgs_list.deinit(alloc);
 
@@ -2469,82 +2469,35 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
         parsed_indices.deinit(alloc);
     }
 
-    // --- Parallel component index fetch ---
-    const ComponentResult = struct {
-        parsed: ?nb.deb_index.ParsedIndex = null,
-        failed: bool = false,
-    };
+    for (components) |component| {
+        var url_buf: [512]u8 = undefined;
+        const index_url = std.fmt.bufPrint(&url_buf, "{s}/dists/{s}/{s}/binary-{s}/Packages.gz", .{
+            mirror, dist, component, arch,
+        }) catch continue;
 
-    const max_components = 8; // practical upper bound
-    const n_components: usize = @min(components.len, max_components);
-    var comp_results: [max_components]ComponentResult = .{.{}} ** max_components;
+        const index_gz = httpGetToMemory(alloc, &client, index_url) orelse {
+            stderr.print("nb: warning: failed to fetch {s} index\n", .{component}) catch {};
+            continue;
+        };
+        defer alloc.free(index_gz);
 
-    const Worker = struct {
-        fn fetch(
-            a: std.mem.Allocator,
-            m: []const u8,
-            di: []const u8,
-            ar: []const u8,
-            component: []const u8,
-            out: *ComponentResult,
-        ) void {
-            const err_w = std.fs.File.stderr().deprecatedWriter();
+        const index_data = nb.deb_extract.decompressGzip(alloc, index_gz) catch {
+            stderr.print("nb: warning: failed to decompress {s} index\n", .{component}) catch {};
+            continue;
+        };
+        defer alloc.free(index_data);
 
-            var url_buf: [512]u8 = undefined;
-            const index_url = std.fmt.bufPrint(&url_buf, "{s}/dists/{s}/{s}/binary-{s}/Packages.gz", .{
-                m, di, component, ar,
-            }) catch return;
+        var parsed = nb.deb_index.parsePackagesIndex(alloc, index_data) catch continue;
 
-            var thread_client: std.http.Client = .{ .allocator = a };
-            defer thread_client.deinit();
-
-            const index_gz = httpGetToMemory(a, &thread_client, index_url) orelse {
-                err_w.print("nb: warning: failed to fetch {s} index\n", .{component}) catch {};
-                out.failed = true;
-                return;
-            };
-            defer a.free(index_gz);
-
-            const index_data = nb.deb_extract.decompressGzip(a, index_gz) catch {
-                err_w.print("nb: warning: failed to decompress {s} index\n", .{component}) catch {};
-                out.failed = true;
-                return;
-            };
-            defer a.free(index_data);
-
-            const parsed = nb.deb_index.parsePackagesIndex(a, index_data) catch {
-                out.failed = true;
-                return;
-            };
-            out.parsed = parsed;
+        for (parsed.packages) |pkg| {
+            all_pkgs_list.append(alloc, pkg) catch continue;
         }
-    };
 
-    var threads: [max_components]?std.Thread = .{null} ** max_components;
-    for (0..n_components) |i| {
-        threads[i] = std.Thread.spawn(.{}, Worker.fetch, .{
-            alloc, mirror, dist, arch, components[i], &comp_results[i],
-        }) catch null;
+        parsed_indices.append(alloc, parsed) catch {
+            parsed.deinit();
+            continue;
+        };
     }
-
-    for (0..n_components) |i| {
-        if (threads[i]) |t| t.join();
-    }
-
-    for (0..n_components) |i| {
-        if (comp_results[i].parsed) |parsed| {
-            const p = parsed;
-            for (p.packages) |pkg| {
-                all_pkgs_list.append(alloc, pkg) catch continue;
-            }
-            parsed_indices.append(alloc, p) catch {
-                var mp = p;
-                mp.deinit();
-                continue;
-            };
-        }
-    }
-
     if (all_pkgs_list.items.len == 0) {
         stderr.print("nb: failed to fetch any package index\n", .{}) catch {};
         return;
@@ -2986,7 +2939,6 @@ fn httpGetToMemory(alloc: std.mem.Allocator, client: *std.http.Client, url: []co
 
     // Stream response body to memory
     var out: std.Io.Writer.Allocating = .init(alloc);
-    defer out.deinit();
     var reader = response.reader(&.{});
     _ = reader.streamRemaining(&out.writer) catch return null;
     return out.toOwnedSlice() catch return null;
