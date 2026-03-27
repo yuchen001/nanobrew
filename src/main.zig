@@ -2091,7 +2091,12 @@ fn runOutdated(alloc: std.mem.Allocator) void {
             distro_info.mirror, distro_info.codename, deb_arch,
         }) catch break :deb_check;
 
-        const index_gz = httpGetToMemory(alloc, &client, index_url) orelse break :deb_check;
+        // Try APT index cache first
+        const index_gz = nb.deb_index.readCachedIndex(alloc, distro_info.id, distro_info.codename, "main", deb_arch) orelse blk: {
+            const fetched = httpGetToMemory(alloc, &client, index_url) orelse break :deb_check;
+            nb.deb_index.writeCachedIndex(distro_info.id, distro_info.codename, "main", deb_arch, fetched);
+            break :blk fetched;
+        };
         defer alloc.free(index_gz);
 
         const index_data = nb.deb_extract.decompressGzip(alloc, index_gz) catch break :deb_check;
@@ -2411,6 +2416,8 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     const arch = platform.deb_arch;
     var components: []const []const u8 = undefined;
 
+    var distro_id: []const u8 = undefined;
+
     if (repo_spec) |spec| {
         // Parse repo spec: "http://mirror/path codename comp1 comp2"
         var parts = std.mem.splitScalar(u8, spec, ' ');
@@ -2428,11 +2435,13 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
             (comp_list.toOwnedSlice(alloc) catch &.{ "main", "universe" })
         else
             &.{ "main", "universe" };
+        distro_id = "custom";
     } else {
         const distro = nb.deb_distro.detect(alloc);
         mirror = distro.mirror;
         dist = distro.codename;
         components = nb.deb_distro.getComponents(distro.id);
+        distro_id = distro.id;
     }
 
     // Validate mirror URL
@@ -2474,10 +2483,16 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
             mirror, dist, component, arch,
         }) catch continue;
 
-        const index_gz = httpGetToMemory(alloc, &client, index_url) orelse {
-            // universe may not exist on all mirrors — warn but continue
-            stderr.print("nb: warning: failed to fetch {s} index\n", .{component}) catch {};
-            continue;
+        // Try APT index cache first (avoids re-downloading within 1 hour)
+        const index_gz = nb.deb_index.readCachedIndex(alloc, distro_id, dist, component, arch) orelse blk: {
+            const fetched = httpGetToMemory(alloc, &client, index_url) orelse {
+                // universe may not exist on all mirrors — warn but continue
+                stderr.print("nb: warning: failed to fetch {s} index\n", .{component}) catch {};
+                continue;
+            };
+            // Save to cache for next time
+            nb.deb_index.writeCachedIndex(distro_id, dist, component, arch, fetched);
+            break :blk fetched;
         };
         defer alloc.free(index_gz);
 
@@ -2750,7 +2765,12 @@ fn runDebUpgrade(alloc: std.mem.Allocator) void {
             mirror, dist, component, arch,
         }) catch continue;
 
-        const index_gz = httpGetToMemory(alloc, &client, index_url) orelse continue;
+        // Try APT index cache first
+        const index_gz = nb.deb_index.readCachedIndex(alloc, distro.id, dist, component, arch) orelse blk: {
+            const fetched = httpGetToMemory(alloc, &client, index_url) orelse continue;
+            nb.deb_index.writeCachedIndex(distro.id, dist, component, arch, fetched);
+            break :blk fetched;
+        };
         defer alloc.free(index_gz);
 
         const index_data = nb.deb_extract.decompressGzip(alloc, index_gz) catch continue;
