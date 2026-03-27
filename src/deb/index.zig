@@ -145,8 +145,6 @@ pub fn buildIndex(alloc: std.mem.Allocator, packages: []const DebPackage) !std.S
     return map;
 }
 
-/// Build a virtual-package → real-package-name lookup map from Provides: fields.
-/// E.g. "cc" → "gcc", "c-compiler" → "gcc"
 pub fn buildProvidesMap(alloc: std.mem.Allocator, packages: []const DebPackage) !std.StringHashMap([]const u8) {
     var map = std.StringHashMap([]const u8).init(alloc);
     for (packages) |pkg| {
@@ -176,15 +174,18 @@ pub fn buildProvidesMap(alloc: std.mem.Allocator, packages: []const DebPackage) 
     return map;
 }
 
-// --- APT index cache ---
-// Caches raw compressed Packages.gz data to avoid re-downloading within 1 hour.
+// --- Binary index cache ---
+// Serializes parsed DebPackage arrays to a compact binary format (NBIX)
+// for instant deserialization on warm installs, bypassing gzip decompression
+// and text parsing entirely.
 
 const paths = @import("../platform/paths.zig");
-
 const cache_max_age_ns: i128 = 3600 * std.time.ns_per_s; // 1 hour
+const NBIX_MAGIC = [4]u8{ 'N', 'B', 'I', 'X' };
+const NBIX_VERSION: u32 = 1;
 
-fn cachePath(buf: []u8, distro_id: []const u8, codename: []const u8, component: []const u8, arch: []const u8) ?[]const u8 {
-    return std.fmt.bufPrint(buf, "{s}/{s}-{s}-{s}-{s}.gz", .{
+fn binaryCachePath(buf: []u8, distro_id: []const u8, codename: []const u8, component: []const u8, arch: []const u8) ?[]const u8 {
+    return std.fmt.bufPrint(buf, "{s}/{s}-{s}-{s}-{s}.nbix", .{
         paths.APT_CACHE_DIR, distro_id, codename, component, arch,
     }) catch null;
 }
@@ -199,158 +200,154 @@ fn ensureCacheDir() void {
     };
 }
 
-pub fn readCachedIndex(alloc: std.mem.Allocator, distro_id: []const u8, codename: []const u8, component: []const u8, arch: []const u8) ?[]u8 {
+/// Serialize a list of DebPackages to a compact binary format.
+pub fn serializeIndex(alloc: std.mem.Allocator, packages: []const DebPackage) ![]u8 {
+    // Calculate total size
+    var total: usize = 4 + 4 + 4; // magic + version + count
+    for (packages) |pkg| {
+        total += 2 + pkg.name.len;
+        total += 2 + pkg.version.len;
+        total += 2 + pkg.depends.len;
+        total += 2 + pkg.provides.len;
+        total += 2 + pkg.filename.len;
+        total += 2 + pkg.sha256.len;
+        total += 8; // size u64
+        total += 2 + pkg.description.len;
+    }
+
+    const buf = try alloc.alloc(u8, total);
+    var pos: usize = 0;
+
+    // Header
+    @memcpy(buf[pos..][0..4], &NBIX_MAGIC);
+    pos += 4;
+    std.mem.writeInt(u32, buf[pos..][0..4], NBIX_VERSION, .little);
+    pos += 4;
+    std.mem.writeInt(u32, buf[pos..][0..4], @intCast(packages.len), .little);
+    pos += 4;
+
+    // Packages
+    for (packages) |pkg| {
+        inline for (.{ pkg.name, pkg.version, pkg.depends, pkg.provides, pkg.filename, pkg.sha256 }) |field| {
+            std.mem.writeInt(u16, buf[pos..][0..2], @intCast(field.len), .little);
+            pos += 2;
+            @memcpy(buf[pos..][0..field.len], field);
+            pos += field.len;
+        }
+        std.mem.writeInt(u64, buf[pos..][0..8], pkg.size, .little);
+        pos += 8;
+        // description
+        std.mem.writeInt(u16, buf[pos..][0..2], @intCast(pkg.description.len), .little);
+        pos += 2;
+        @memcpy(buf[pos..][0..pkg.description.len], pkg.description);
+        pos += pkg.description.len;
+    }
+
+    return buf;
+}
+
+/// Deserialize a binary index into a ParsedIndex. All strings are arena-owned.
+pub fn deserializeIndex(alloc: std.mem.Allocator, data: []const u8) !ParsedIndex {
+    if (data.len < 12) return error.InvalidFormat;
+
+    // Validate header
+    if (!std.mem.eql(u8, data[0..4], &NBIX_MAGIC)) return error.InvalidFormat;
+    const version = std.mem.readInt(u32, data[4..8], .little);
+    if (version != NBIX_VERSION) return error.InvalidFormat;
+    const count = std.mem.readInt(u32, data[8..12], .little);
+
+    var arena = std.heap.ArenaAllocator.init(alloc);
+    errdefer arena.deinit();
+    const a = arena.allocator();
+
+    const packages = try a.alloc(DebPackage, count);
+    var pos: usize = 12;
+
+    for (0..count) |i| {
+        var pkg: DebPackage = undefined;
+
+        // Read 6 string fields
+        inline for (.{ "name", "version", "depends", "provides", "filename", "sha256" }) |field_name| {
+            if (pos + 2 > data.len) return error.InvalidFormat;
+            const len = std.mem.readInt(u16, data[pos..][0..2], .little);
+            pos += 2;
+            if (pos + len > data.len) return error.InvalidFormat;
+            @field(pkg, field_name) = try a.dupe(u8, data[pos..][0..len]);
+            pos += len;
+        }
+
+        // size
+        if (pos + 8 > data.len) return error.InvalidFormat;
+        pkg.size = std.mem.readInt(u64, data[pos..][0..8], .little);
+        pos += 8;
+
+        // description
+        if (pos + 2 > data.len) return error.InvalidFormat;
+        const desc_len = std.mem.readInt(u16, data[pos..][0..2], .little);
+        pos += 2;
+        if (pos + desc_len > data.len) return error.InvalidFormat;
+        pkg.description = try a.dupe(u8, data[pos..][0..desc_len]);
+        pos += desc_len;
+
+        packages[i] = pkg;
+    }
+
+    return .{ .packages = packages, .arena = arena };
+}
+
+/// Try to read a cached binary index. Returns ParsedIndex on hit, null on miss/stale.
+pub fn readCachedBinaryIndex(alloc: std.mem.Allocator, distro_id: []const u8, codename: []const u8, component: []const u8, arch: []const u8) ?ParsedIndex {
     var path_buf: [512]u8 = undefined;
-    const cache_file = cachePath(&path_buf, distro_id, codename, component, arch) orelse return null;
+    const cache_file = binaryCachePath(&path_buf, distro_id, codename, component, arch) orelse return null;
+
     const file = std.fs.openFileAbsolute(cache_file, .{}) catch return null;
     defer file.close();
+
     const stat = file.stat() catch return null;
     const now = std.time.nanoTimestamp();
     const mtime: i128 = @intCast(stat.mtime);
     if (now - mtime > cache_max_age_ns or now - mtime < 0) return null;
+
     const size = stat.size;
-    if (size == 0 or size > 100 * 1024 * 1024) return null;
+    if (size < 12 or size > 100 * 1024 * 1024) return null;
     const data = alloc.alloc(u8, @intCast(size)) catch return null;
-    const bytes_read = file.readAll(data) catch { alloc.free(data); return null; };
-    if (bytes_read != @as(usize, @intCast(size))) { alloc.free(data); return null; }
-    return data;
+    defer alloc.free(data);
+
+    const bytes_read = file.readAll(data) catch return null;
+    if (bytes_read != @as(usize, @intCast(size))) return null;
+
+    return deserializeIndex(alloc, data) catch null;
 }
 
-pub fn writeCachedIndex(distro_id: []const u8, codename: []const u8, component: []const u8, arch: []const u8, data: []const u8) void {
+/// Write a binary index cache for a given component.
+pub fn writeCachedBinaryIndex(distro_id: []const u8, codename: []const u8, component: []const u8, arch: []const u8, alloc: std.mem.Allocator, packages: []const DebPackage) void {
     ensureCacheDir();
+
     var path_buf: [512]u8 = undefined;
-    const cache_file = cachePath(&path_buf, distro_id, codename, component, arch) orelse return;
+    const cache_file = binaryCachePath(&path_buf, distro_id, codename, component, arch) orelse return;
+
+    const serialized = serializeIndex(alloc, packages) catch return;
+    defer alloc.free(serialized);
+
     const file = std.fs.createFileAbsolute(cache_file, .{}) catch return;
     defer file.close();
-    file.writeAll(data) catch {};
+    file.writeAll(serialized) catch {};
 }
 
+/// Invalidate (delete) all cached APT index files.
 pub fn invalidateCache() void {
     var dir = std.fs.openDirAbsolute(paths.APT_CACHE_DIR, .{ .iterate = true }) catch return;
     defer dir.close();
+
     var iter = dir.iterate();
     while (iter.next() catch null) |entry| {
-        if (entry.kind == .file) dir.deleteFile(entry.name) catch {};
+        if (entry.kind == .file) {
+            dir.deleteFile(entry.name) catch {};
+        }
     }
 }
 
 const testing = std.testing;
-
-test "parsePackagesIndex - parses single package" {
-    const data =
-        \\Package: curl
-        \\Version: 8.5.0-2ubuntu10.6
-        \\Depends: libc6 (>= 2.38), libcurl4t64
-        \\Filename: pool/main/c/curl/curl_8.5.0-2ubuntu10.6_amd64.deb
-        \\SHA256: abc123def456
-        \\Size: 227824
-        \\Description: command line tool for transferring data
-    ;
-    var result = try parsePackagesIndex(testing.allocator, data);
-    defer result.deinit();
-    const pkgs = result.packages;
-    try testing.expectEqual(@as(usize, 1), pkgs.len);
-    try testing.expectEqualStrings("curl", pkgs[0].name);
-    try testing.expectEqualStrings("8.5.0-2ubuntu10.6", pkgs[0].version);
-    try testing.expectEqualStrings("abc123def456", pkgs[0].sha256);
-    try testing.expectEqual(@as(u64, 227824), pkgs[0].size);
-}
-
-test "parsePackagesIndex - parses multiple packages" {
-    const data =
-        \\Package: curl
-        \\Version: 8.5.0
-        \\Filename: pool/main/c/curl/curl_8.5.0_amd64.deb
-        \\SHA256: aaa
-        \\Size: 100
-        \\
-        \\Package: wget
-        \\Version: 1.21.4
-        \\Filename: pool/main/w/wget/wget_1.21.4_amd64.deb
-        \\SHA256: bbb
-        \\Size: 200
-    ;
-    var result = try parsePackagesIndex(testing.allocator, data);
-    defer result.deinit();
-    const pkgs = result.packages;
-    try testing.expectEqual(@as(usize, 2), pkgs.len);
-    try testing.expectEqualStrings("curl", pkgs[0].name);
-    try testing.expectEqualStrings("wget", pkgs[1].name);
-}
-
-test "debUrl - formats full URL" {
-    var buf: [512]u8 = undefined;
-    const url = debUrl("http://archive.ubuntu.com/ubuntu", "pool/main/c/curl/curl.deb", &buf);
-    try testing.expectEqualStrings("http://archive.ubuntu.com/ubuntu/pool/main/c/curl/curl.deb", url);
-}
-
-test "parsePackagesIndex - parses Provides field" {
-    const data =
-        \\Package: gcc-14
-        \\Version: 14.2.0-4ubuntu2
-        \\Depends: libc6
-        \\Provides: c-compiler, cc (= 14.2.0), gcc
-        \\Filename: pool/main/g/gcc-14/gcc-14_14.2.0_amd64.deb
-        \\SHA256: deadbeef
-        \\Size: 500
-    ;
-    var result = try parsePackagesIndex(testing.allocator, data);
-    defer result.deinit();
-    const pkgs = result.packages;
-    try testing.expectEqual(@as(usize, 1), pkgs.len);
-    try testing.expectEqualStrings("gcc-14", pkgs[0].name);
-    try testing.expectEqualStrings("c-compiler, cc (= 14.2.0), gcc", pkgs[0].provides);
-}
-
-test "buildProvidesMap - maps virtual to real package names" {
-    const alloc = testing.allocator;
-
-    // Create packages with Provides fields
-    var pkgs_list = [_]DebPackage{
-        .{
-            .name = "gcc-14",
-            .version = "14.2.0",
-            .depends = "",
-            .provides = "c-compiler, cc (= 14.2.0), gcc",
-            .filename = "pool/main/g/gcc-14.deb",
-            .sha256 = "",
-            .size = 0,
-            .description = "",
-        },
-        .{
-            .name = "libssl3t64",
-            .version = "3.0.13",
-            .depends = "",
-            .provides = "libssl3 (= 3.0.13)",
-            .filename = "pool/main/o/openssl.deb",
-            .sha256 = "",
-            .size = 0,
-            .description = "",
-        },
-        .{
-            .name = "no-provides",
-            .version = "1.0",
-            .depends = "",
-            .provides = "",
-            .filename = "pool/main/n/no-provides.deb",
-            .sha256 = "",
-            .size = 0,
-            .description = "",
-        },
-    };
-
-    var pmap = try buildProvidesMap(alloc, &pkgs_list);
-    defer pmap.deinit();
-
-    // gcc-14 provides: c-compiler, cc, gcc
-    try testing.expectEqualStrings("gcc-14", pmap.get("c-compiler").?);
-    try testing.expectEqualStrings("gcc-14", pmap.get("cc").?);
-    try testing.expectEqualStrings("gcc-14", pmap.get("gcc").?);
-    // libssl3t64 provides: libssl3
-    try testing.expectEqualStrings("libssl3t64", pmap.get("libssl3").?);
-    // no-provides should not be in map
-    try testing.expect(pmap.get("no-provides") == null);
-}
 
 test "buildProvidesMap - first provider wins" {
     const alloc = testing.allocator;

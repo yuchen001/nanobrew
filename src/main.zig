@@ -2408,6 +2408,7 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     // Use --repo override or auto-detect distro
     var mirror: []const u8 = undefined;
     var dist: []const u8 = undefined;
+    var distro_id: []const u8 = "ubuntu";
     const arch = platform.deb_arch;
     var components: []const []const u8 = undefined;
 
@@ -2430,6 +2431,7 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
             &.{ "main", "universe" };
     } else {
         const distro = nb.deb_distro.detect(alloc);
+        distro_id = distro.id;
         mirror = distro.mirror;
         dist = distro.codename;
         components = nb.deb_distro.getComponents(distro.id);
@@ -2470,6 +2472,20 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     }
 
     for (components) |component| {
+        // Try binary cache first (instant deserialization, no HTTP/gzip/parse)
+        if (nb.deb_index.readCachedBinaryIndex(alloc, distro_id, dist, component, arch)) |cached| {
+            var parsed = cached;
+            for (parsed.packages) |pkg| {
+                all_pkgs_list.append(alloc, pkg) catch continue;
+            }
+            parsed_indices.append(alloc, parsed) catch {
+                parsed.deinit();
+                continue;
+            };
+            continue;
+        }
+
+        // Cache miss — fetch from mirror
         var url_buf: [512]u8 = undefined;
         const index_url = std.fmt.bufPrint(&url_buf, "{s}/dists/{s}/{s}/binary-{s}/Packages.gz", .{
             mirror, dist, component, arch,
@@ -2488,6 +2504,9 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
         defer alloc.free(index_data);
 
         var parsed = nb.deb_index.parsePackagesIndex(alloc, index_data) catch continue;
+
+        // Write binary cache for next time
+        nb.deb_index.writeCachedBinaryIndex(distro_id, dist, component, arch, alloc, parsed.packages);
 
         for (parsed.packages) |pkg| {
             all_pkgs_list.append(alloc, pkg) catch continue;
