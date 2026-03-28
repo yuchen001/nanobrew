@@ -236,7 +236,6 @@ pub fn decompressGzip(alloc: std.mem.Allocator, compressed: []const u8) ![]u8 {
     var in: std.Io.Reader = .fixed(compressed);
     var decomp: std.compress.flate.Decompress = .init(&in, .gzip, &.{});
     var out: std.Io.Writer.Allocating = .init(alloc);
-
     _ = decomp.reader.streamRemaining(&out.writer) catch return error.DecompressFailed;
 
     if (out.written().len > max_decompressed_size) return error.DecompressionBombDetected;
