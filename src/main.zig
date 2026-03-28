@@ -915,7 +915,18 @@ const Outdated = struct {
 };
 
 fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filter_names: []const []const u8, check_casks: bool, check_kegs: bool) std.ArrayList(Outdated) {
+    const stdout = std.fs.File.stdout().deprecatedWriter();
     var result: std.ArrayList(Outdated) = .empty;
+
+    // Collect all packages to check
+    const CheckItem = struct {
+        name: []const u8,
+        old_ver: []const u8,
+        is_cask: bool,
+        is_pinned: bool,
+    };
+    var to_check: std.ArrayList(CheckItem) = .empty;
+    defer to_check.deinit(alloc);
 
     if (check_casks) {
         const installed_casks = db.listInstalledCasks(alloc) catch &.{};
@@ -928,17 +939,12 @@ fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filt
                 }
                 if (!found) continue;
             }
-            const latest = nb.api_client.fetchCask(alloc, c.token) catch continue;
-            defer latest.deinit(alloc);
-            if (nb.version.isNewer(latest.version, c.version)) {
-                result.append(alloc, .{
-                    .name = alloc.dupe(u8, c.token) catch continue,
-                    .old_ver = alloc.dupe(u8, c.version) catch continue,
-                    .new_ver = alloc.dupe(u8, latest.version) catch continue,
-                    .is_cask_pkg = true,
-                    .is_pinned = false,
-                }) catch {};
-            }
+            to_check.append(alloc, .{
+                .name = c.token,
+                .old_ver = c.version,
+                .is_cask = true,
+                .is_pinned = false,
+            }) catch {};
         }
     }
 
@@ -953,17 +959,100 @@ fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filt
                 }
                 if (!found) continue;
             }
-            const latest = nb.api_client.fetchFormula(alloc, k.name) catch continue;
-            defer latest.deinit(alloc);
-            if (nb.version.isNewer(latest.version, k.version)) {
-                result.append(alloc, .{
-                    .name = alloc.dupe(u8, k.name) catch continue,
-                    .old_ver = alloc.dupe(u8, k.version) catch continue,
-                    .new_ver = alloc.dupe(u8, latest.version) catch continue,
-                    .is_cask_pkg = false,
-                    .is_pinned = k.pinned,
-                }) catch {};
+            to_check.append(alloc, .{
+                .name = k.name,
+                .old_ver = k.version,
+                .is_cask = false,
+                .is_pinned = k.pinned,
+            }) catch {};
+        }
+    }
+
+    if (to_check.items.len == 0) return result;
+
+    stdout.print("==> Checking {d} package(s) for updates...\n", .{to_check.items.len}) catch {};
+
+    // Parallel version check — each thread gets its own HTTP client
+    const VersionResult = struct {
+        new_ver_buf: [128]u8 = undefined,
+        new_ver_len: usize = 0,
+        has_update: bool = false,
+    };
+
+    const version_results = alloc.alloc(VersionResult, to_check.items.len) catch return result;
+    defer alloc.free(version_results);
+    for (version_results) |*r| r.* = .{};
+
+    const CheckCtx = struct {
+        items: []const CheckItem,
+        results: []VersionResult,
+        next_idx: *std.atomic.Value(usize),
+        alloc_: std.mem.Allocator,
+    };
+
+    const checkWorkerFn = struct {
+        fn run(ctx: CheckCtx) void {
+            var client: std.http.Client = .{ .allocator = ctx.alloc_ };
+            defer client.deinit();
+
+            while (true) {
+                const idx = ctx.next_idx.fetchAdd(1, .monotonic);
+                if (idx >= ctx.items.len) break;
+                const item = ctx.items[idx];
+
+                const latest_ver: ?[]const u8 = blk: {
+                    if (item.is_cask) {
+                        const cask = nb.api_client.fetchCask(ctx.alloc_, item.name) catch break :blk null;
+                        defer cask.deinit(ctx.alloc_);
+                        break :blk cask.version;
+                    } else {
+                        const formula = nb.api_client.fetchFormulaWithClient(ctx.alloc_, &client, item.name) catch break :blk null;
+                        defer formula.deinit(ctx.alloc_);
+                        break :blk formula.version;
+                    }
+                };
+
+                if (latest_ver) |ver| {
+                    if (nb.version.isNewer(ver, item.old_ver)) {
+                        const len = @min(ver.len, 128);
+                        @memcpy(ctx.results[idx].new_ver_buf[0..len], ver[0..len]);
+                        ctx.results[idx].new_ver_len = len;
+                        ctx.results[idx].has_update = true;
+                    }
+                }
             }
+        }
+    }.run;
+
+    var next_idx = std.atomic.Value(usize).init(0);
+    const ctx = CheckCtx{
+        .items = to_check.items,
+        .results = version_results,
+        .next_idx = &next_idx,
+        .alloc_ = alloc,
+    };
+
+    const n_threads = @min(to_check.items.len, 8);
+    var threads: [8]std.Thread = undefined;
+    var spawned: usize = 0;
+
+    for (0..n_threads) |_| {
+        threads[spawned] = std.Thread.spawn(.{}, checkWorkerFn, .{ctx}) catch continue;
+        spawned += 1;
+    }
+    for (threads[0..spawned]) |t| t.join();
+
+    // Collect results
+    for (to_check.items, 0..) |item, i| {
+        if (version_results[i].has_update) {
+            const new_ver = version_results[i].new_ver_buf[0..version_results[i].new_ver_len];
+            result.append(alloc, .{
+                .name = alloc.dupe(u8, item.name) catch continue,
+                .old_ver = alloc.dupe(u8, item.old_ver) catch continue,
+                .new_ver = alloc.dupe(u8, new_ver) catch continue,
+                .is_cask_pkg = item.is_cask,
+                .is_pinned = item.is_pinned,
+            }) catch {};
         }
     }
 
