@@ -53,7 +53,7 @@ const Phase = enum(u8) {
 
 const ROOT = paths.ROOT;
 const PREFIX = paths.PREFIX;
-const VERSION = "0.1.076";
+const VERSION = "0.1.077";
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -2812,7 +2812,6 @@ fn httpGetToMemory(alloc: std.mem.Allocator, client: *std.http.Client, url: []co
 
     // Stream response body to memory
     var out: std.Io.Writer.Allocating = .init(alloc);
-    defer out.deinit();
     var reader = response.reader(&.{});
     _ = reader.streamRemaining(&out.writer) catch return null;
     return out.toOwnedSlice() catch return null;

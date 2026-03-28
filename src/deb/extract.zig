@@ -304,7 +304,6 @@ fn decompressZstd(alloc: std.mem.Allocator, compressed: []const u8) ![]u8 {
 
     var zstd_stream: std.compress.zstd.Decompress = .init(&in, window_buf, .{});
     var out: std.Io.Writer.Allocating = .init(alloc);
-    defer out.deinit();
 
     _ = zstd_stream.reader.streamRemaining(&out.writer) catch return error.DecompressFailed;
 
@@ -317,8 +316,6 @@ pub fn decompressGzip(alloc: std.mem.Allocator, compressed: []const u8) ![]u8 {
     var in: std.Io.Reader = .fixed(compressed);
     var decomp: std.compress.flate.Decompress = .init(&in, .gzip, &.{});
     var out: std.Io.Writer.Allocating = .init(alloc);
-    defer out.deinit();
-
     _ = decomp.reader.streamRemaining(&out.writer) catch return error.DecompressFailed;
 
     if (out.written().len > max_decompressed_size) return error.DecompressionBombDetected;
