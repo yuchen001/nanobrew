@@ -4,6 +4,7 @@
 // Uses native Zig HTTP client (no curl dependency).
 // Parses JSON to extract: name, version, dependencies, bottle URL + SHA256.
 const std = @import("std");
+const builtin = @import("builtin");
 const Formula = @import("formula.zig").Formula;
 const BOTTLE_TAG = @import("formula.zig").BOTTLE_TAG;
 const BOTTLE_FALLBACKS = @import("formula.zig").BOTTLE_FALLBACKS;
@@ -317,6 +318,25 @@ fn parseFormulaJson(alloc: std.mem.Allocator, json_data: []const u8) !Formula {
             }
         }
     }
+    if (builtin.os.tag == .macos) {
+        if (root.get("uses_from_macos")) |uses_val| {
+            if (uses_val == .array) {
+                for (uses_val.array.items) |dep| {
+                    if (dep != .string) continue;
+                    var present = false;
+                    for (deps.items) |existing| {
+                        if (std.mem.eql(u8, existing, dep.string)) {
+                            present = true;
+                            break;
+                        }
+                    }
+                    if (!present) {
+                        try deps.append(alloc, try allocDupe(alloc, dep.string));
+                    }
+                }
+            }
+        }
+    }
     const dependencies = try deps.toOwnedSlice(alloc);
     errdefer {
         for (dependencies) |dep| alloc.free(dep);
@@ -473,6 +493,27 @@ test "parseFormulaJson - parses dependencies array" {
     try testing.expectEqualStrings("lame", f.dependencies[0]);
     try testing.expectEqualStrings("opus", f.dependencies[1]);
     try testing.expectEqualStrings("x265", f.dependencies[2]);
+}
+
+test "parseFormulaJson - includes uses_from_macos on macOS" {
+    const json =
+        \\{"name":"python@3.14","desc":"","versions":{"stable":"3.14.3"},"revision":0,
+        \\"dependencies":["mpdecimal"],
+        \\"uses_from_macos":["expat","libffi"],
+        \\"bottle":{"stable":{"rebuild":0,"files":{"arm64_sonoma":{"url":"https://ghcr.io/bottle/python","sha256":"cafe"}}}}}
+    ;
+    const f = try parseFormulaJson(testing.allocator, json);
+    defer f.deinit(testing.allocator);
+
+    if (builtin.os.tag == .macos) {
+        try testing.expectEqual(@as(usize, 3), f.dependencies.len);
+        try testing.expectEqualStrings("mpdecimal", f.dependencies[0]);
+        try testing.expectEqualStrings("expat", f.dependencies[1]);
+        try testing.expectEqualStrings("libffi", f.dependencies[2]);
+    } else {
+        try testing.expectEqual(@as(usize, 1), f.dependencies.len);
+        try testing.expectEqualStrings("mpdecimal", f.dependencies[0]);
+    }
 }
 
 test "parseFormulaJson - missing name returns error" {
