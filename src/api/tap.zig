@@ -57,7 +57,7 @@ pub fn fetchTapCask(alloc: std.mem.Allocator, name: []const u8) !Cask {
     const src = ruby_src orelse return error.CaskNotFound;
     defer alloc.free(src);
 
-    return parseRubyCask(alloc, ref.formula, src);
+    return parseRubyCask(alloc, name, src);
 }
 
 /// Parse a Ruby cask file into a Cask struct.
@@ -73,10 +73,68 @@ fn parseRubyCask(alloc: std.mem.Allocator, token: []const u8, src: []const u8) !
     var artifacts: std.ArrayList(Artifact) = .empty;
     defer artifacts.deinit(alloc);
 
+    var platform_skip: bool = false;
+    var block_depth: u32 = 0;
+    var platform_depth: u32 = 0;
+
     var line_iter = std.mem.splitScalar(u8, src, '\n');
     while (line_iter.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, " \t\r");
         if (line.len == 0) continue;
+
+        if (startsWith(line, "if Hardware::CPU.intel?")) {
+            block_depth += 1;
+            platform_depth = block_depth;
+            platform_skip = (builtin.cpu.arch != .x86_64);
+            continue;
+        } else if (startsWith(line, "if Hardware::CPU.arm?")) {
+            block_depth += 1;
+            platform_depth = block_depth;
+            platform_skip = (builtin.cpu.arch != .aarch64);
+            continue;
+        }
+
+        if (std.mem.eql(u8, line, "else") and platform_depth > 0 and block_depth == platform_depth) {
+            platform_skip = !platform_skip;
+            if (!platform_skip) {
+                url_raw = null;
+                sha256 = null;
+            }
+            continue;
+        }
+
+        if (endsWith(line, " do") or std.mem.eql(u8, line, "do")) {
+            block_depth += 1;
+
+            if (startsWith(line, "on_macos")) {
+                platform_depth = block_depth;
+                platform_skip = !is_macos;
+                continue;
+            } else if (startsWith(line, "on_linux")) {
+                platform_depth = block_depth;
+                platform_skip = !is_linux;
+                continue;
+            } else if (startsWith(line, "on_arm")) {
+                platform_depth = block_depth;
+                platform_skip = (builtin.cpu.arch != .aarch64);
+                continue;
+            } else if (startsWith(line, "on_intel")) {
+                platform_depth = block_depth;
+                platform_skip = (builtin.cpu.arch != .x86_64);
+                continue;
+            }
+        }
+
+        if (std.mem.eql(u8, line, "end")) {
+            if (block_depth == platform_depth and platform_depth > 0) {
+                platform_skip = false;
+                platform_depth = 0;
+            }
+            if (block_depth > 0) block_depth -= 1;
+            continue;
+        }
+
+        if (platform_skip) continue;
 
         if (version == null) {
             if (extractQuotedAfter(line, "version ")) |v| {
@@ -644,6 +702,46 @@ test "parseRubyCask - supports version latest with no_check sha" {
     try testing.expectEqualStrings("latest", c.version);
     try testing.expectEqualStrings("no_check", c.sha256);
     try testing.expectEqualStrings("https://example.com/demo-latest.zip", c.url);
+}
+
+test "parseRubyCask - preserves full tap token" {
+    const src =
+        \\cask "cc-switch" do
+        \\  version "1.0.0"
+        \\  sha256 "abc123"
+        \\  url "https://example.com/cc-switch.zip"
+        \\end
+    ;
+    const c = try parseRubyCask(testing.allocator, "farion1231/ccswitch/cc-switch", src);
+    defer c.deinit(testing.allocator);
+
+    try testing.expectEqualStrings("farion1231/ccswitch/cc-switch", c.token);
+}
+
+test "parseRubyCask - respects on_arm branch for url and sha256" {
+    const src =
+        \\cask "demo-arch" do
+        \\  version "2.0.0"
+        \\  on_arm do
+        \\    url "https://example.com/arm/demo.zip"
+        \\    sha256 "armsha"
+        \\  end
+        \\  on_intel do
+        \\    url "https://example.com/intel/demo.zip"
+        \\    sha256 "intelsha"
+        \\  end
+        \\end
+    ;
+    const c = try parseRubyCask(testing.allocator, "demo-arch", src);
+    defer c.deinit(testing.allocator);
+
+    if (builtin.cpu.arch == .aarch64) {
+        try testing.expectEqualStrings("https://example.com/arm/demo.zip", c.url);
+        try testing.expectEqualStrings("armsha", c.sha256);
+    } else if (builtin.cpu.arch == .x86_64) {
+        try testing.expectEqualStrings("https://example.com/intel/demo.zip", c.url);
+        try testing.expectEqualStrings("intelsha", c.sha256);
+    }
 }
 
 test "parseRubyFormula - simple formula with version and url" {
