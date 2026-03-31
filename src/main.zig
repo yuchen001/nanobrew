@@ -352,7 +352,10 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
         if (std.fs.openDirAbsolute(ver_dir, .{})) |d| {
             var dir = d;
             dir.close();
-            // Already installed: ensure prefix/bin and opt/ links still exist.
+            // Already installed: rerun generic keg repair steps so stale text
+            // placeholders and missing prefix links are healed too.
+            platform.relocate.relocateKeg(alloc, f.name, actual_ver) catch {};
+            platform.relocate.replaceKegPlaceholders(f.name, actual_ver);
             nb.linker.linkKeg(f.name, actual_ver) catch {};
         } else |_| {
             to_install.append(alloc, f) catch {};
