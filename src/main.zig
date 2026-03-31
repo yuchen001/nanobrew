@@ -53,7 +53,7 @@ const Phase = enum(u8) {
 
 const ROOT = paths.ROOT;
 const PREFIX = paths.PREFIX;
-const VERSION = "0.1.079";
+const VERSION = "0.1.080";
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -352,7 +352,8 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
         if (std.fs.openDirAbsolute(ver_dir, .{})) |d| {
             var dir = d;
             dir.close();
-            // Already installed, skip
+            // Already installed: ensure prefix/bin and opt/ links still exist.
+            nb.linker.linkKeg(f.name, actual_ver) catch {};
         } else |_| {
             to_install.append(alloc, f) catch {};
         }
