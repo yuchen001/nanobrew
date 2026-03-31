@@ -519,12 +519,13 @@ fn extractQuotedAfter(line: []const u8, keyword: []const u8) ?[]const u8 {
 /// Format: `sha256 cellar: :any_skip_relocation, arm64_sonoma: "abc123"`
 /// or: `sha256 arm64_sonoma: "abc123"`
 fn findBottleSha256(line: []const u8) ?[]const u8 {
-    if (!startsWith(line, "sha256")) return null;
+    const trimmed = std.mem.trimLeft(u8, line, " \t");
+    if (!startsWith(trimmed, "sha256")) return null;
 
     // Try primary tag first, then fallbacks
-    if (findTagInLine(line, BOTTLE_TAG)) |sha| return sha;
+    if (findTagInLine(trimmed, BOTTLE_TAG)) |sha| return sha;
     for (BOTTLE_FALLBACKS) |tag| {
-        if (findTagInLine(line, tag)) |sha| return sha;
+        if (findTagInLine(trimmed, tag)) |sha| return sha;
     }
     return null;
 }
@@ -570,8 +571,13 @@ fn extractVersionFromUrl(url: []const u8) ?[]const u8 {
             // Find end of version segment
             var end = num_start;
             var has_dot = false;
-            while (end < url.len and url[end] != '/' and url[end] != '?' and url[end] != '#') : (end += 1) {
-                if (url[end] == '.') has_dot = true;
+            while (end < url.len) : (end += 1) {
+                const c = url[end];
+                if (c == '.' and end + 1 < url.len and std.ascii.isDigit(url[end + 1])) {
+                    has_dot = true;
+                    continue;
+                }
+                if (!std.ascii.isDigit(c)) break;
             }
             if (has_dot and end > num_start + 1) {
                 return url[num_start..end];
