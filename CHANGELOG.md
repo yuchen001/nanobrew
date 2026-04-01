@@ -2,6 +2,14 @@
 
 All notable changes to nanobrew are documented here.
 
+## [0.1.082] - 2026-04-01
+
+### Fixed
+- **macOS self-update downloads** — `nb update` now requests the actual macOS release asset names (`nb-<arch>-apple-darwin.tar.gz`) instead of the non-existent `...-darwin.tar.gz` variant. This fixes checksum-download failures on released macOS builds. (#99)
+
+### Changed
+- Release notes and landing-page version metadata were rolled forward for the self-update patch release.
+
 ## [0.1.081] - 2026-04-01
 
 ### Fixed

@@ -642,8 +642,8 @@ const LANDING_HTML = `<!DOCTYPE html>
   </section>
 
   <section class="bench">
-    <h2>What shipped in v0.1.081</h2>
-    <p class="bench-sub">A patch release for installed-state reconciliation, so already-present kegs are recorded correctly and stay manageable.</p>
+    <h2>What shipped in v0.1.082</h2>
+    <p class="bench-sub">Recent fixes across install state, self-update, release automation, and the open-issue batch are now reflected in the current patch line.</p>
 
     <div class="bg">
       <div class="bg-title">🛡 security</div>
@@ -1045,7 +1045,7 @@ const APT_GET_HTML = `<!DOCTYPE html>
   </section>
 
   <footer>
-    <p>nanobrew v0.1.081 &mdash; <a href="https://github.com/justrach/nanobrew">GitHub</a> &mdash; Apache-2.0</p>
+    <p>nanobrew v0.1.082 &mdash; <a href="https://github.com/justrach/nanobrew">GitHub</a> &mdash; Apache-2.0</p>
   </footer>
 </div>
 <script>
@@ -1083,7 +1083,7 @@ export default {
         });
         if (!gh.ok) {
           // Rate limited — return last known version
-          return new Response("0.1.081", {
+          return new Response("0.1.082", {
             headers: {
               "content-type": "text/plain; charset=utf-8",
               "cache-control": "public, max-age=60",
@@ -1105,7 +1105,7 @@ export default {
         await cache.put(cacheKey, resp.clone());
         return resp;
       } catch {
-        return new Response("0.1.081", {
+        return new Response("0.1.082", {
           headers: {
             "content-type": "text/plain; charset=utf-8",
             "cache-control": "public, max-age=60",
