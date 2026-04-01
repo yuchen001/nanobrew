@@ -1199,6 +1199,11 @@ fn runUpdate(alloc: std.mem.Allocator) void {
         .linux => "linux",
         else => @compileError("unsupported OS for self-update"),
     };
+    const asset_os_name = comptime switch (@import("builtin").os.tag) {
+        .macos => "apple-darwin",
+        .linux => "linux",
+        else => @compileError("unsupported OS for self-update"),
+    };
     const arch_name = comptime switch (@import("builtin").cpu.arch) {
         .aarch64 => "arm64",
         .x86_64 => "x86_64",
@@ -1240,7 +1245,7 @@ fn runUpdate(alloc: std.mem.Allocator) void {
     stdout.print("==> Downloading v{s} ({s}-{s})...\n", .{ latest_ver, arch_name, os_name }) catch {};
 
     // Build download URLs
-    const tarball_name = "nb-" ++ arch_name ++ "-" ++ os_name ++ ".tar.gz";
+    const tarball_name = "nb-" ++ arch_name ++ "-" ++ asset_os_name ++ ".tar.gz";
     const base_url = "https://github.com/justrach/nanobrew/releases/download/";
     var url_buf: [512]u8 = undefined;
     const tarball_url = std.fmt.bufPrint(&url_buf, "{s}{s}/{s}", .{ base_url, tag_name, tarball_name }) catch {
