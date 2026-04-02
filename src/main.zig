@@ -824,8 +824,12 @@ fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
     defer pkg_deps.deinit();
 
     // Fetch dependency info for each installed package from the API cache
+    var fetch_failures: usize = 0;
     for (kegs) |keg| {
-        const formula = nb.api_client.fetchFormula(alloc, keg.name) catch continue;
+        const formula = nb.api_client.fetchFormula(alloc, keg.name) catch {
+            fetch_failures += 1;
+            continue;
+        };
         if (show_tree) {
             pkg_deps.put(keg.name, formula.dependencies) catch {};
         }
@@ -839,6 +843,10 @@ fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
                 }
             }
         }
+    }
+
+    if (fetch_failures > 0) {
+        stderr.print("nb: warning: could not fetch metadata for {d} package(s); results may be incomplete\n", .{fetch_failures}) catch {};
     }
 
     // Print leaves (packages not depended on by any other installed package)

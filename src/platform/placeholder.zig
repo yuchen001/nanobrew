@@ -104,10 +104,17 @@ pub fn relocateTextFile(path: []const u8) bool {
     if (!has_placeholder and !has_homebrew_path) return false;
 
     // Replace in-place
+    // Worst case expansion: every "/opt/homebrew/" (14 bytes) becomes "/opt/nanobrew/prefix/" (21 bytes)
+    // so output can be at most n * 21/14 ≈ 1.5x input. The 1 MiB buffer handles files up to ~680 KiB
+    // with worst-case expansion; files are already capped at 1 MiB on read.
     var result: [1024 * 1024]u8 = undefined;
+    const result_cap = result.len;
     var out_len: usize = 0;
     var i: usize = 0;
     while (i < n) {
+        // Bail out if we're running out of buffer space (need at least max replacement len)
+        if (out_len + REAL_PREFIX_SLASH.len >= result_cap) return false;
+
         if (i + paths.PLACEHOLDER_CELLAR.len <= n and
             std.mem.eql(u8, content[i..][0..paths.PLACEHOLDER_CELLAR.len], paths.PLACEHOLDER_CELLAR))
         {
