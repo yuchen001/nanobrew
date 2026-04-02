@@ -8,6 +8,7 @@ const paths = @import("paths.zig");
 
 /// Literal /opt/homebrew/ paths hardcoded in some Homebrew bottles (not using @@HOMEBREW_*@@ placeholders).
 const HOMEBREW_PREFIX_LITERAL = "/opt/homebrew/";
+const REAL_PREFIX_SLASH = paths.REAL_PREFIX ++ "/";
 
 pub fn hasPlaceholder(s: []const u8) bool {
     return std.mem.indexOf(u8, s, "@@HOMEBREW") != null;
@@ -134,8 +135,8 @@ pub fn relocateTextFile(path: []const u8) bool {
         } else if (i + HOMEBREW_PREFIX_LITERAL.len <= n and
             std.mem.eql(u8, content[i..][0..HOMEBREW_PREFIX_LITERAL.len], HOMEBREW_PREFIX_LITERAL))
         {
-            @memcpy(result[out_len..][0..paths.REAL_PREFIX.len], paths.REAL_PREFIX);
-            out_len += paths.REAL_PREFIX.len;
+            @memcpy(result[out_len..][0..REAL_PREFIX_SLASH.len], REAL_PREFIX_SLASH);
+            out_len += REAL_PREFIX_SLASH.len;
             i += HOMEBREW_PREFIX_LITERAL.len;
         } else {
             result[out_len] = content[i];
