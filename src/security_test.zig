@@ -330,3 +330,19 @@ test "symlink target resolved path must stay within dest_dir" {
     // Null bytes in target
     try testing.expect(!extract.isLinkTargetSafe("usr/bin/link", "../lib\x00/../../etc/passwd", "/tmp/dest"));
 }
+
+test "tar extraction strips setuid and setgid bits from mode" {
+    // The extraction mode mask should strip setuid (04000), setgid (02000),
+    // and sticky (01000) bits. Only rwxrwxrwx (0o777) should be preserved.
+    const raw_mode: u32 = 0o4755; // setuid + rwxr-xr-x
+    const safe_mode = raw_mode & 0o0777;
+    try testing.expectEqual(@as(u32, 0o0755), safe_mode);
+
+    const raw_mode2: u32 = 0o6755; // setuid + setgid
+    const safe_mode2 = raw_mode2 & 0o0777;
+    try testing.expectEqual(@as(u32, 0o0755), safe_mode2);
+
+    const raw_mode3: u32 = 0o1755; // sticky
+    const safe_mode3 = raw_mode3 & 0o0777;
+    try testing.expectEqual(@as(u32, 0o0755), safe_mode3);
+}

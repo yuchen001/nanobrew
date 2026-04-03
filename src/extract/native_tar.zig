@@ -351,7 +351,7 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
 
                 // Extract file mode from header
                 const mode_val = parseOctal(&header.mode);
-                const mode: std.posix.mode_t = @intCast(mode_val & 0o7777);
+                const mode: std.posix.mode_t = @intCast(mode_val & 0o0777);
 
                 writeFile(abs_path, tar_data[pos..data_end], mode) catch {
                     // Skip files we can't write (permission errors, etc.)
