@@ -245,6 +245,17 @@ docker run --rm -v "$(find .zig-cache -name test -newer build.zig | head -1):/t:
 
 Zig's cross-compilation produces a statically-linked binary that runs directly in any Linux container — no need to install Zig or any toolchain inside Docker.
 
+## Contributing
+
+Follow [CONTRIBUTING.md](./CONTRIBUTING.md) for all future issues and PRs.
+
+The short version:
+
+- every PR must be tied to an issue
+- every fix must show red-to-green proof
+- every non-trivial branch must be rebased onto current `main`
+- PRs over 500 changed lines will usually be rejected unless they are clearly justified, tightly scoped, and good enough to survive strict review
+
 
 ## Directory layout
 
