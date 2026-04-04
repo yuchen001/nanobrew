@@ -22,6 +22,13 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
         return error.CaskNotSupported;
     }
 
+    // For third-party taps, cask.token may contain slashes (e.g. "indaco/tap/sley").
+    // Use only the basename for filesystem paths to avoid creating nested directories.
+    const safe_token = if (std.mem.lastIndexOfScalar(u8, cask.token, '/')) |idx|
+        cask.token[idx + 1 ..]
+    else
+        cask.token;
+
     // 1. Download artifact
     const ext: []const u8 = switch (cask.downloadFormat()) {
         .dmg => ".dmg",
@@ -31,7 +38,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
         .unknown => ".dmg", // try dmg as default
     };
     var dl_buf: [512]u8 = undefined;
-    const dl_path = std.fmt.bufPrint(&dl_buf, "{s}/{s}{s}", .{ CACHE_TMP, cask.token, ext }) catch return error.PathTooLong;
+    const dl_path = std.fmt.bufPrint(&dl_buf, "{s}/{s}{s}", .{ CACHE_TMP, safe_token, ext }) catch return error.PathTooLong;
 
     try downloadArtifact(alloc, cask.url, dl_path, cask);
 
@@ -40,7 +47,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
     const caskroom_path = cask.caskroomPath(&caskroom_buf);
     std.fs.makeDirAbsolute("/opt/nanobrew/prefix/Caskroom") catch {};
     var token_dir_buf: [512]u8 = undefined;
-    const token_dir = std.fmt.bufPrint(&token_dir_buf, "/opt/nanobrew/prefix/Caskroom/{s}", .{cask.token}) catch return error.PathTooLong;
+    const token_dir = std.fmt.bufPrint(&token_dir_buf, "/opt/nanobrew/prefix/Caskroom/{s}", .{safe_token}) catch return error.PathTooLong;
     std.fs.makeDirAbsolute(token_dir) catch {};
     std.fs.makeDirAbsolute(caskroom_path) catch {};
 
@@ -63,13 +70,13 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
             mount_point = try mountDmg(alloc, dl_path, &mount_point_buf);
         },
         .zip => {
-            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, cask.token }) catch return error.PathTooLong;
+            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
             std.fs.makeDirAbsolute(tmp_dir) catch {};
             try extractZip(alloc, dl_path, tmp_dir);
             temp_extract_dir = tmp_dir;
         },
         .tar_gz => {
-            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, cask.token }) catch return error.PathTooLong;
+            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
             std.fs.makeDirAbsolute(tmp_dir) catch {};
             try extractTarGz(alloc, dl_path, tmp_dir);
             temp_extract_dir = tmp_dir;
