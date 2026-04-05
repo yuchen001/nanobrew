@@ -81,12 +81,45 @@ fn isZeroBlock(block: *const [BLOCK_SIZE]u8) bool {
     return true;
 }
 
+/// Check that a symlink/hardlink target, when resolved relative to the
+/// link's location within dest_dir, does not escape dest_dir.
+pub fn isLinkTargetSafe(link_name: []const u8, link_target: []const u8, dest_dir: []const u8) bool {
+    _ = dest_dir; // Only used conceptually; we track depth arithmetically
+    // Absolute targets always escape
+    if (link_target.len > 0 and link_target[0] == '/') return false;
+    // Reject null bytes
+    if (std.mem.indexOfScalar(u8, link_target, 0) != null) return false;
+
+    // Compute the depth of the link's parent directory within dest_dir
+    // link_name = "usr/bin/link" => parent has depth 2 (usr, bin)
+    var depth: i32 = 0;
+    var name_components = std.mem.splitScalar(u8, link_name, '/');
+    while (name_components.next()) |_| {
+        depth += 1;
+    }
+    depth -= 1; // subtract the filename itself — we want the directory depth
+
+    // Walk the target components
+    var target_components = std.mem.splitScalar(u8, link_target, '/');
+    while (target_components.next()) |comp| {
+        if (std.mem.eql(u8, comp, "..")) {
+            depth -= 1;
+            if (depth < 0) return false; // escaped dest_dir
+        } else if (comp.len > 0 and !std.mem.eql(u8, comp, ".")) {
+            depth += 1;
+        }
+    }
+    return true;
+}
+
 /// Validate that a path is safe (no ".." traversal, no absolute escape).
 /// Matches the existing isPathSafe() contract in deb/extract.zig.
 pub fn isPathSafe(path: []const u8) bool {
     if (path.len == 0) return false;
     // Reject absolute paths that escape the destination
     if (path[0] == '/') return false;
+    // Reject null bytes — OS-level path truncation can bypass component checks
+    if (std.mem.indexOfScalar(u8, path, 0) != null) return false;
     var components = std.mem.splitScalar(u8, path, '/');
     while (components.next()) |comp| {
         if (std.mem.eql(u8, comp, "..")) return false;
@@ -318,7 +351,7 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
 
                 // Extract file mode from header
                 const mode_val = parseOctal(&header.mode);
-                const mode: std.posix.mode_t = @intCast(mode_val & 0o7777);
+                const mode: std.posix.mode_t = @intCast(mode_val & 0o0777);
 
                 writeFile(abs_path, tar_data[pos..data_end], mode) catch {
                     // Skip files we can't write (permission errors, etc.)
@@ -329,6 +362,10 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
                 try files.append(alloc, try alloc.dupe(u8, entry_name));
             },
             TypeFlag.symlink => {
+                if (!isLinkTargetSafe(entry_name, link_target, dest_dir)) {
+                    continue; // skip unsafe symlink
+                }
+
                 if (std.fs.path.dirname(abs_path)) |parent| {
                     makeDirRecursive(parent) catch {};
                 }
@@ -349,6 +386,9 @@ pub fn extractToDir(alloc: std.mem.Allocator, tar_data: []const u8, dest_dir: []
 
                 // Resolve the link target relative to dest_dir
                 const normalized_target = normalizePath(link_target);
+                if (!isPathSafe(normalized_target)) {
+                    continue; // skip unsafe hardlink
+                }
                 var target_buf: [4096]u8 = undefined;
                 const abs_target = std.fmt.bufPrint(&target_buf, "{s}/{s}", .{ dest_dir, normalized_target }) catch {
                     pos += alignToBlock(file_size);

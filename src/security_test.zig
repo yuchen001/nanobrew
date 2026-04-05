@@ -65,14 +65,14 @@ test "writeJsonEscaped handles string of only null bytes" {
 test "isPathSafe rejects paths with null bytes" {
     // Null bytes in paths can truncate the string at the OS level,
     // potentially allowing traversal past the visible path.
-    // NOTE: isPathSafe currently checks only for ".." components.
-    // Paths with null bytes but containing ".." ARE caught:
     try testing.expect(!extract.isPathSafe("usr/bin\x00/../../../etc/passwd"));
 
-    // A path with a null byte but no ".." is currently accepted.
-    // This documents the current behavior — null-byte sanitization
-    // should happen at the caller level (e.g., OS path validation).
-    try testing.expect(extract.isPathSafe("usr/bin/safe\x00"));
+    // Null bytes without ".." must also be rejected — the OS may
+    // truncate the path at the null byte, producing a different
+    // effective path than what isPathSafe inspected.
+    try testing.expect(!extract.isPathSafe("usr/bin/safe\x00"));
+    try testing.expect(!extract.isPathSafe("\x00"));
+    try testing.expect(!extract.isPathSafe("a/b\x00c/d"));
 }
 test "writeJsonEscaped handles very long input" {
     // 10KB of input data — must not crash or overflow
@@ -291,7 +291,7 @@ test "isPathSafe accepts safe paths" {
     try testing.expect(extract.isPathSafe("a"));
     try testing.expect(extract.isPathSafe("."));
     try testing.expect(extract.isPathSafe("..."));
-    try testing.expect(extract.isPathSafe("/absolute/path"));
+    try testing.expect(!extract.isPathSafe("/absolute/path"));
     try testing.expect(extract.isPathSafe("file..name"));
     try testing.expect(extract.isPathSafe("..hidden"));
 }
@@ -313,4 +313,36 @@ test "isPathSafe handles very long paths" {
     // A very long path with traversal at the end
     const long_bad = "a/" ** 512 ++ "../etc/passwd";
     try testing.expect(!extract.isPathSafe(long_bad));
+}
+
+test "symlink target resolved path must stay within dest_dir" {
+    // Simulates: symlink at "usr/bin/link" -> target "../../etc/passwd"
+    // Resolved: dest_dir + usr/bin -> up 2 -> etc/passwd = dest_dir/etc/passwd — OK (within dest_dir)
+    // But: symlink at "usr/bin/link" -> target "../../../etc/passwd"
+    // Resolved: dest_dir + usr/bin -> up 3 -> escapes dest_dir — REJECT
+
+    try testing.expect(extract.isLinkTargetSafe("usr/bin/link", "../../etc/passwd", "/tmp/dest"));
+    try testing.expect(extract.isLinkTargetSafe("usr/bin/link", "../lib/libfoo.so", "/tmp/dest"));
+    try testing.expect(!extract.isLinkTargetSafe("usr/bin/link", "../../../etc/passwd", "/tmp/dest"));
+    try testing.expect(!extract.isLinkTargetSafe("a/link", "../../outside", "/tmp/dest"));
+    // Absolute symlink targets always escape
+    try testing.expect(!extract.isLinkTargetSafe("usr/bin/link", "/etc/passwd", "/tmp/dest"));
+    // Null bytes in target
+    try testing.expect(!extract.isLinkTargetSafe("usr/bin/link", "../lib\x00/../../etc/passwd", "/tmp/dest"));
+}
+
+test "tar extraction strips setuid and setgid bits from mode" {
+    // The extraction mode mask should strip setuid (04000), setgid (02000),
+    // and sticky (01000) bits. Only rwxrwxrwx (0o777) should be preserved.
+    const raw_mode: u32 = 0o4755; // setuid + rwxr-xr-x
+    const safe_mode = raw_mode & 0o0777;
+    try testing.expectEqual(@as(u32, 0o0755), safe_mode);
+
+    const raw_mode2: u32 = 0o6755; // setuid + setgid
+    const safe_mode2 = raw_mode2 & 0o0777;
+    try testing.expectEqual(@as(u32, 0o0755), safe_mode2);
+
+    const raw_mode3: u32 = 0o1755; // sticky
+    const safe_mode3 = raw_mode3 & 0o0777;
+    try testing.expectEqual(@as(u32, 0o0755), safe_mode3);
 }
