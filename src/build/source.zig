@@ -9,6 +9,20 @@ const fetch = @import("../net/fetch.zig");
 
 const CACHE_TMP = @import("../platform/paths.zig").TMP_DIR;
 
+fn archiveSuffixFromUrl(url: []const u8) []const u8 {
+    const path = blk: {
+        if (std.mem.indexOfScalar(u8, url, '?')) |q| break :blk url[0..q];
+        break :blk url;
+    };
+    const suffixes: []const []const u8 = &.{
+        ".tar.xz", ".tar.bz2", ".tar.gz", ".txz", ".tbz2", ".tgz", ".zip",
+    };
+    for (suffixes) |s| {
+        if (path.len >= s.len and std.mem.endsWith(u8, path, s)) return s;
+    }
+    return ".tar.gz";
+}
+
 const BuildSystem = enum {
     cmake,
     autotools,
@@ -23,10 +37,11 @@ pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
 
     if (formula.source_url.len == 0) return error.NoSourceUrl;
 
-    // 1. Download source tarball
+    // 1. Download source archive (extension follows URL — .tar.xz, .zip, etc.; #112)
     var tarball_buf: [512]u8 = undefined;
-    const tarball_path = std.fmt.bufPrint(&tarball_buf, "{s}/{s}-{s}.tar.gz", .{
-        CACHE_TMP, formula.name, formula.version,
+    const arc_suffix = archiveSuffixFromUrl(formula.source_url);
+    const tarball_path = std.fmt.bufPrint(&tarball_buf, "{s}/{s}-{s}{s}", .{
+        CACHE_TMP, formula.name, formula.version, arc_suffix,
     }) catch return error.PathTooLong;
 
     stdout.print("==> Downloading source for {s} {s}...\n", .{ formula.name, formula.version }) catch {};
@@ -79,13 +94,20 @@ pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
     std.fs.makeDirAbsolute(build_dir) catch {};
 
     {
-        const extract = std.process.Child.run(.{
-            .allocator = alloc,
-            .argv = &.{ "tar", "xzf", tarball_path, "-C", build_dir },
-        }) catch return error.ExtractFailed;
-        alloc.free(extract.stdout);
-        alloc.free(extract.stderr);
-        if (extract.term.Exited != 0) return error.ExtractFailed;
+        const extract = if (std.mem.endsWith(u8, tarball_path, ".zip"))
+            std.process.Child.run(.{
+                .allocator = alloc,
+                .argv = &.{ "unzip", "-q", tarball_path, "-d", build_dir },
+            })
+        else
+            std.process.Child.run(.{
+                .allocator = alloc,
+                .argv = &.{ "tar", "xf", tarball_path, "-C", build_dir },
+            });
+        const run = extract catch return error.ExtractFailed;
+        defer alloc.free(run.stdout);
+        defer alloc.free(run.stderr);
+        if (run.term.Exited != 0) return error.ExtractFailed;
     }
 
     // 4. Find source root (tarballs often have one top-level directory)
