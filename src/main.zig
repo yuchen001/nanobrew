@@ -2115,6 +2115,7 @@ fn cleanupOrphans(alloc: std.mem.Allocator, dry_run: bool, reclaimed: *u64, stdo
     if (std.fs.openDirAbsolute(ROOT ++ "/cache/blobs", .{ .iterate = true })) |d| {
         var dir = d;
         defer dir.close();
+        var iter = dir.iterate();
         while (iter.next() catch null) |entry| {
             if (!valid_shas.contains(entry.name)) {
                 var path_buf: [1024]u8 = undefined;
@@ -2133,7 +2134,6 @@ fn cleanupOrphans(alloc: std.mem.Allocator, dry_run: bool, reclaimed: *u64, stdo
                     std.fs.deleteFileAbsolute(path) catch {};
                 }
             }
-        }
         }
     } else |_| {}
 
@@ -2978,7 +2978,7 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
     // --- Step 3: Download + extract (streaming SHA256 verification) ---
     stdout.print("==> Installing {d} package(s)... (resolved in {d}ms)\n", .{ resolved.len, t_resolved - t_resolve }) catch {};
     var installed: usize = 0;
-    const cached: usize = 0;
+    var cached: usize = 0;
 
     // --- Step 3a: Parallel download of uncached packages ---
     {
@@ -2986,7 +2986,6 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
             url_storage: [1024]u8,
             url_len: usize,
             sha256: []const u8,
-    var cached: usize = 0;
             cache_path_len: usize,
         };
 

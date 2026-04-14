@@ -193,6 +193,43 @@ pub const Database = struct {
 
     pub fn close(self: *Database) void {
         self.save() catch {};
+        // Free all allocated keg strings
+        for (self.kegs.items) |keg| {
+            self.alloc.free(keg.name);
+            self.alloc.free(keg.version);
+            self.alloc.free(keg.sha256);
+        }
+        self.kegs.deinit(self.alloc);
+        // Free all allocated cask strings
+        for (self.casks.items) |c| {
+            self.alloc.free(c.token);
+            self.alloc.free(c.version);
+            for (c.apps) |a| self.alloc.free(a);
+            self.alloc.free(c.apps);
+            for (c.binaries) |b| self.alloc.free(b);
+            self.alloc.free(c.binaries);
+        }
+        self.casks.deinit(self.alloc);
+        // Free all allocated deb strings
+        for (self.debs.items) |d| {
+            self.alloc.free(d.name);
+            self.alloc.free(d.version);
+            self.alloc.free(d.sha256);
+            for (d.files) |f| self.alloc.free(f);
+            self.alloc.free(d.files);
+        }
+        self.debs.deinit(self.alloc);
+        // Free history entries
+        var hist_it = self.history.iterator();
+        while (hist_it.next()) |entry| {
+            self.alloc.free(entry.key_ptr.*);
+            for (entry.value_ptr.items) |h| {
+                self.alloc.free(h.version);
+                self.alloc.free(h.sha256);
+            }
+            entry.value_ptr.deinit(self.alloc);
+        }
+        self.history.deinit();
     }
 
     pub fn recordInstall(self: *Database, name: []const u8, version: []const u8, sha256: []const u8) !void {
