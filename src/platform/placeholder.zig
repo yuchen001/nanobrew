@@ -24,23 +24,29 @@ pub fn replacePlaceholders(alloc: std.mem.Allocator, input: []const u8) ![]u8 {
 
 /// Scan a file for @@HOMEBREW placeholder bytes.
 pub fn fileContainsPlaceholder(path: []const u8) bool {
-    const file = std.fs.openFileAbsolute(path, .{}) catch return false;
-    defer file.close();
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var file = std.Io.Dir.openFileAbsolute(lib_io, path, .{}) catch return false;
     var buf: [65536]u8 = undefined;
     var overlap: usize = 0;
+    var file_offset: u64 = 0;
     const needle = "@@HOMEBREW";
-    while (true) {
-        if (overlap > 0) {
-            const src = buf[buf.len - overlap ..];
-            std.mem.copyForwards(u8, buf[0..overlap], src);
+    const result: bool = blk: {
+        while (true) {
+            if (overlap > 0) {
+                const src = buf[buf.len - overlap ..];
+                std.mem.copyForwards(u8, buf[0..overlap], src);
+            }
+            const n = file.readPositional(lib_io, &.{buf[overlap..]}, file_offset) catch break :blk false;
+            if (n == 0) break;
+            const total = overlap + n;
+            if (std.mem.indexOf(u8, buf[0..total], needle) != null) break :blk true;
+            overlap = @min(needle.len - 1, total);
+            file_offset += @intCast(n);
         }
-        const n = file.read(buf[overlap..]) catch return false;
-        if (n == 0) break;
-        const total = overlap + n;
-        if (std.mem.indexOf(u8, buf[0..total], needle) != null) return true;
-        overlap = @min(needle.len - 1, total);
-    }
-    return false;
+        break :blk false;
+    };
+    file.close(lib_io);
+    return result;
 }
 
 /// Replace placeholders in text config files (.pc, .cmake, .la, etc.)

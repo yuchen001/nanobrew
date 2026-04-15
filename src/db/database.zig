@@ -54,20 +54,25 @@ pub const Database = struct {
             .history = std.StringHashMap(std.ArrayList(HistoryEntry)).init(alloc),
         };
 
-        const file = std.fs.openFileAbsolute(DB_PATH, .{}) catch return db;
-        defer file.close();
+        const lib_io = std.Io.Threaded.global_single_threaded.io();
+        const file = std.Io.Dir.openFileAbsolute(lib_io, DB_PATH, .{}) catch return db;
+        defer file.close(lib_io);
 
         const max_state_bytes = 16 * 1024 * 1024;
-        const contents = file.readToEndAlloc(alloc, max_state_bytes) catch |err| {
-            const stderr = std.fs.File.stderr().deprecatedWriter();
-            stderr.print("warning: nanobrew database read failed ({}): {s}\n", .{ err, DB_PATH }) catch {};
+        const st = file.stat(lib_io) catch return db;
+        const sz = @min(st.size, max_state_bytes);
+        const contents = alloc.alloc(u8, sz) catch return db;
+        const n_read = file.readPositionalAll(lib_io, contents, 0) catch {
+            alloc.free(contents);
+            std.Io.File.stderr().writeStreamingAll(std.Io.Threaded.global_single_threaded.io(), "warning: nanobrew database read failed: " ++ DB_PATH ++ "\n") catch {};
             return db;
         };
         defer alloc.free(contents);
-        if (contents.len == 0) return db;
+        const data = contents[0..n_read];
+        if (data.len == 0) return db;
 
-        const parsed = std.json.parseFromSlice(std.json.Value, alloc, contents, .{}) catch {
-            std.fs.File.stderr().deprecatedWriter().writeAll("warning: nanobrew database parse failed; returning empty database. File may be corrupted: " ++ DB_PATH ++ "\n") catch {};
+        const parsed = std.json.parseFromSlice(std.json.Value, alloc, data, .{}) catch {
+            std.Io.File.stderr().writeStreamingAll(std.Io.Threaded.global_single_threaded.io(), "warning: nanobrew database parse failed; returning empty database. File may be corrupted: " ++ DB_PATH ++ "\n") catch {};
             return db;
         };
         defer parsed.deinit();
@@ -233,7 +238,9 @@ pub const Database = struct {
     }
 
     pub fn recordInstall(self: *Database, name: []const u8, version: []const u8, sha256: []const u8) !void {
-        const now = std.time.timestamp();
+        const _lib_io_ri = std.Io.Threaded.global_single_threaded.io();
+        const _now_ts = std.Io.Timestamp.now(_lib_io_ri, .real);
+        const now: i64 = @as(i64, @truncate(@divTrunc(_now_ts.nanoseconds, std.time.ns_per_s)));
 
         // Push old version to history before replacing
         var i: usize = 0;
@@ -390,7 +397,7 @@ pub const Database = struct {
     }
 
     pub fn recordDebInstall(self: *Database, name: []const u8, version: []const u8, sha256: []const u8, files: []const []const u8) !void {
-        const now = std.time.timestamp();
+        const now = @divTrunc(std.time.nanoTimestamp(), std.time.ns_per_s);
 
         // Remove existing entry for this package
         var i: usize = 0;
@@ -488,91 +495,94 @@ pub const Database = struct {
         // This ensures readers always see a complete file — a SIGKILL
         // or power-loss mid-write cannot corrupt state.json.
         const tmp_path = DB_PATH ++ ".tmp";
-        const file = try std.fs.createFileAbsolute(tmp_path, .{});
-        errdefer std.fs.deleteFileAbsolute(tmp_path) catch {};
+        const lib_io = std.Io.Threaded.global_single_threaded.io();
+        const file = try std.Io.Dir.createFileAbsolute(lib_io, tmp_path, .{});
+        errdefer std.Io.Dir.deleteFileAbsolute(lib_io, tmp_path) catch {};
 
-        const writer = file.deprecatedWriter();
+        var write_buf: [65536]u8 = undefined;
+        var writer = file.writer(lib_io, &write_buf);
         var write_ok = true;
-        writer.writeAll("{\"kegs\":[") catch { write_ok = false; };
+        writer.interface.writeAll("{\"kegs\":[") catch { write_ok = false; };
         for (self.kegs.items, 0..) |keg, i| {
-            if (i > 0) writer.writeAll(",") catch {};
-            writer.writeAll("{\"name\":") catch {};
-            writeJsonString(writer, keg.name);
-            writer.writeAll(",\"version\":") catch {};
-            writeJsonString(writer, keg.version);
-            writer.writeAll(",\"sha256\":") catch {};
-            writeJsonString(writer, keg.sha256);
-            writer.print(",\"pinned\":{s},\"installed_at\":{d}}}", .{
+            if (i > 0) writer.interface.writeAll(",") catch {};
+            writer.interface.writeAll("{\"name\":") catch {};
+            writeJsonString(&writer.interface, keg.name);
+            writer.interface.writeAll(",\"version\":") catch {};
+            writeJsonString(&writer.interface, keg.version);
+            writer.interface.writeAll(",\"sha256\":") catch {};
+            writeJsonString(&writer.interface, keg.sha256);
+            writer.interface.print(",\"pinned\":{s},\"installed_at\":{d}}}", .{
                 if (keg.pinned) "true" else "false", keg.installed_at,
             }) catch {};
         }
-        writer.writeAll("],\"casks\":[") catch { write_ok = false; };
+        writer.interface.writeAll("],\"casks\":[") catch { write_ok = false; };
         for (self.casks.items, 0..) |c, i| {
-            if (i > 0) writer.writeAll(",") catch {};
-            writer.writeAll("{\"token\":") catch {};
-            writeJsonString(writer, c.token);
-            writer.writeAll(",\"version\":") catch {};
-            writeJsonString(writer, c.version);
-            writer.writeAll(",\"apps\":[") catch {};
+            if (i > 0) writer.interface.writeAll(",") catch {};
+            writer.interface.writeAll("{\"token\":") catch {};
+            writeJsonString(&writer.interface, c.token);
+            writer.interface.writeAll(",\"version\":") catch {};
+            writeJsonString(&writer.interface, c.version);
+            writer.interface.writeAll(",\"apps\":[") catch {};
             for (c.apps, 0..) |a, j| {
-                if (j > 0) writer.writeAll(",") catch {};
-                writeJsonString(writer, a);
+                if (j > 0) writer.interface.writeAll(",") catch {};
+                writeJsonString(&writer.interface, a);
             }
-            writer.writeAll("],\"binaries\":[") catch {};
+            writer.interface.writeAll("],\"binaries\":[") catch {};
             for (c.binaries, 0..) |b, j| {
-                if (j > 0) writer.writeAll(",") catch {};
-                writeJsonString(writer, b);
+                if (j > 0) writer.interface.writeAll(",") catch {};
+                writeJsonString(&writer.interface, b);
             }
-            writer.writeAll("]}") catch {};
+            writer.interface.writeAll("]}") catch {};
         }
         // Serialize history
-        writer.writeAll("],\"history\":{") catch { write_ok = false; };
+        writer.interface.writeAll("],\"history\":{") catch { write_ok = false; };
         var hist_iter = self.history.iterator();
         var hist_first = true;
         while (hist_iter.next()) |entry| {
-            if (!hist_first) writer.writeAll(",") catch {};
+            if (!hist_first) writer.interface.writeAll(",") catch {};
             hist_first = false;
-            writeJsonString(writer, entry.key_ptr.*);
-            writer.writeAll(":[") catch {};
+            writeJsonString(&writer.interface, entry.key_ptr.*);
+            writer.interface.writeAll(":[") catch {};
             for (entry.value_ptr.items, 0..) |h, hi| {
-                if (hi > 0) writer.writeAll(",") catch {};
-                writer.writeAll("{\"version\":") catch {};
-                writeJsonString(writer, h.version);
-                writer.writeAll(",\"sha256\":") catch {};
-                writeJsonString(writer, h.sha256);
-                writer.print(",\"installed_at\":{d}}}", .{h.installed_at}) catch {};
+                if (hi > 0) writer.interface.writeAll(",") catch {};
+                writer.interface.writeAll("{\"version\":") catch {};
+                writeJsonString(&writer.interface, h.version);
+                writer.interface.writeAll(",\"sha256\":") catch {};
+                writeJsonString(&writer.interface, h.sha256);
+                writer.interface.print(",\"installed_at\":{d}}}", .{h.installed_at}) catch {};
             }
-            writer.writeAll("]") catch {};
+            writer.interface.writeAll("]") catch {};
         }
         // Serialize deb packages
-        writer.writeAll("},\"deb_packages\":[") catch { write_ok = false; };
+        writer.interface.writeAll("},\"deb_packages\":[") catch { write_ok = false; };
         for (self.debs.items, 0..) |d, i| {
-            if (i > 0) writer.writeAll(",") catch {};
-            writer.writeAll("{\"name\":") catch {};
-            writeJsonString(writer, d.name);
-            writer.writeAll(",\"version\":") catch {};
-            writeJsonString(writer, d.version);
-            writer.writeAll(",\"sha256\":") catch {};
-            writeJsonString(writer, d.sha256);
-            writer.print(",\"installed_at\":{d},\"files\":[", .{d.installed_at}) catch {};
+            if (i > 0) writer.interface.writeAll(",") catch {};
+            writer.interface.writeAll("{\"name\":") catch {};
+            writeJsonString(&writer.interface, d.name);
+            writer.interface.writeAll(",\"version\":") catch {};
+            writeJsonString(&writer.interface, d.version);
+            writer.interface.writeAll(",\"sha256\":") catch {};
+            writeJsonString(&writer.interface, d.sha256);
+            writer.interface.print(",\"installed_at\":{d},\"files\":[", .{d.installed_at}) catch {};
             for (d.files, 0..) |f, j| {
-                if (j > 0) writer.writeAll(",") catch {};
-                writeJsonString(writer, f);
+                if (j > 0) writer.interface.writeAll(",") catch {};
+                writeJsonString(&writer.interface, f);
             }
-            writer.writeAll("]}") catch {};
+            writer.interface.writeAll("]}") catch {};
         }
-        writer.writeAll("]}") catch { write_ok = false; };
+        writer.interface.writeAll("]}") catch { write_ok = false; };
 
-        file.sync() catch {};
-        file.close();
+        writer.interface.flush() catch {};
+        file.sync(lib_io) catch {};
+        file.close(lib_io);
 
         if (!write_ok) {
-            std.fs.deleteFileAbsolute(tmp_path) catch {};
+            std.Io.Dir.deleteFileAbsolute(lib_io, tmp_path) catch {};
             return error.SaveFailed;
         }
 
         // Atomic rename: readers see either the old complete file or the new one
-        try std.fs.renameAbsolute(tmp_path, DB_PATH);
+        try std.Io.Dir.renameAbsolute(tmp_path, DB_PATH, lib_io);
     }
 };
 

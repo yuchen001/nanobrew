@@ -13,17 +13,18 @@ const STORE_DIR = paths.STORE_DIR;
 /// Extract a gzipped tar blob into the store at store/<sha256>/
 pub fn extractToStore(alloc: std.mem.Allocator, blob_path: []const u8, sha256: []const u8) !void {
     _ = alloc; // no longer needed — native extraction uses no heap allocations
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
     if (!store.isValidSha256(sha256)) return error.InvalidSha256;
 
     var dest_buf: [512]u8 = undefined;
     const dest_dir = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ STORE_DIR, sha256 }) catch return error.PathTooLong;
 
     // Skip if already extracted
-    std.fs.accessAbsolute(dest_dir, .{}) catch {
+    std.Io.Dir.accessAbsolute(lib_io, dest_dir, .{}) catch {
         // Doesn't exist — create and extract
-        try std.fs.makeDirAbsolute(dest_dir);
-        errdefer std.fs.deleteTreeAbsolute(dest_dir) catch {};
-        try extractTarGzNative(blob_path, dest_dir);
+        try std.Io.Dir.createDirAbsolute(lib_io, dest_dir, .default_dir);
+        errdefer std.Io.Dir.cwd().deleteTree(lib_io, dest_dir) catch {};
+        try extractTarGzNative(lib_io, blob_path, dest_dir);
         return;
     };
 }
