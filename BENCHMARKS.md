@@ -144,3 +144,38 @@ bash bench/bench_macos.sh wget
 - Larger-batch benchmark (50+ packages) to measure persistent TLS session reuse at scale
 - HTTP/2 multiplexing to co-pipeline downloads over fewer connections
 - Prefetch metadata for dependency-tree resolution (currently one API round-trip per package)
+
+## Warm-install cache ("recall") + placeholder scanner (PR #XXX)
+
+Two optimizations targeting reinstall performance:
+
+### 1. Placeholder scanner skips
+
+`walkAndReplaceText` now skips known-safe subdirectories (`doc/`, `docs/`, `man/`,
+`html/`, `info/`, `locale/`, `charset/`) and 13 additional binary/doc extensions.
+openssl@3 has 1808 man+HTML files with zero `@@HOMEBREW@@` hits — all previously
+opened and scanned for nothing.
+
+### 2. Relocated store cache
+
+After relocation (Mach-O `install_name_tool` + text placeholder patching), the
+finished Cellar keg is APFS-clonefielded to `store-relocated/<sha256>/`. Reinstalls
+check this cache first and skip all relocation work.
+
+### Results (openssl@3, Apple Silicon)
+
+| scenario | before | after | speedup |
+|---|---|---|---|
+| first install (warm, blobs cached) | ~1508ms | ~1126ms | **1.3x** (scanner skip) |
+| second install (relocated cache hit) | ~1508ms | ~129ms | **11.7x** |
+
+The 129ms on cached reinstall is almost entirely the `c_rehash` post-install script
+(certificate directory indexing). The clone + link itself is ~0ms on APFS.
+
+```bash
+# Measure recall speedup
+nb remove openssl@3
+NB_BENCH=1 nb install openssl@3   # first: seeds store-relocated/<sha256>/
+nb remove openssl@3
+NB_BENCH=1 nb install openssl@3   # second: hits cache, skips all relocation
+```
