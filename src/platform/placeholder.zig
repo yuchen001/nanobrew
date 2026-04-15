@@ -181,7 +181,19 @@ fn walkAndReplaceText(dir_path: []const u8) void {
         const child_path = std.fmt.bufPrint(&child_buf, "{s}/{s}", .{ dir_path, entry.name }) catch continue;
 
         switch (entry.kind) {
-            .directory => walkAndReplaceText(child_path),
+            .directory => {
+                // Skip directories that never contain executable path placeholders.
+                // doc/man/info/locale/html contain only docs and binary locale data.
+                if (std.mem.eql(u8, entry.name, "doc") or
+                    std.mem.eql(u8, entry.name, "docs") or
+                    std.mem.eql(u8, entry.name, "man") or
+                    std.mem.eql(u8, entry.name, "html") or
+                    std.mem.eql(u8, entry.name, "info") or
+                    std.mem.eql(u8, entry.name, "locale") or
+                    std.mem.eql(u8, entry.name, "charset"))
+                    continue;
+                walkAndReplaceText(child_path);
+            },
             .sym_link => {
                 // Resolve symlink target and process if it's a regular file
                 var target_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -200,14 +212,27 @@ fn walkAndReplaceText(dir_path: []const u8) void {
                 _ = relocateTextFile(target_path);
             },
             .file => {
-                // Fast skip: known binary extensions (no syscalls needed)
+                // Fast skip: known binary/data extensions (no syscalls needed)
                 const name = entry.name;
                 if (std.mem.endsWith(u8, name, ".dylib") or
                     std.mem.endsWith(u8, name, ".a") or
                     std.mem.endsWith(u8, name, ".o") or
                     std.mem.endsWith(u8, name, ".so") or
+                    std.mem.endsWith(u8, name, ".html") or
+                    std.mem.endsWith(u8, name, ".htm") or
+                    std.mem.endsWith(u8, name, ".mo") or
+                    std.mem.endsWith(u8, name, ".gmo") or
+                    std.mem.endsWith(u8, name, ".wmo") or
+                    std.mem.endsWith(u8, name, ".pdf") or
+                    std.mem.endsWith(u8, name, ".ttf") or
+                    std.mem.endsWith(u8, name, ".otf") or
+                    std.mem.endsWith(u8, name, ".woff") or
+                    std.mem.endsWith(u8, name, ".woff2") or
                     std.mem.endsWith(u8, name, ".png") or
                     std.mem.endsWith(u8, name, ".jpg") or
+                    std.mem.endsWith(u8, name, ".jpeg") or
+                    std.mem.endsWith(u8, name, ".gif") or
+                    std.mem.endsWith(u8, name, ".ico") or
                     std.mem.endsWith(u8, name, ".gz") or
                     std.mem.endsWith(u8, name, ".tar") or
                     std.mem.endsWith(u8, name, ".zip") or

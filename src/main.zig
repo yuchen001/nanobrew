@@ -658,6 +658,22 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
 
         // 3. Materialize (clonefile into Cellar)
         phase.store(@intFromEnum(Phase.installing), .release);
+        fast: {
+            if (!nb.store.hasRelocatedEntry(f.bottle_sha256)) break :fast;
+            var fv_buf: [256]u8 = undefined;
+            const fv = nb.cellar.detectKegVersion(f.name, f.version, &fv_buf) orelse f.version;
+            nb.store.materializeFromRelocated(f.bottle_sha256, f.name, fv) catch break :fast;
+            // Relocated snapshot found — skip steps 4/4b, go straight to link+post-install
+            phase.store(@intFromEnum(Phase.linking), .release);
+            nb.linker.linkKeg(f.name, fv) catch |err| {
+                stderr.print("nb: {s}: link failed: {}\n", .{ f.name, err }) catch {};
+            };
+            nb.postinstall.runPostInstall(alloc, f) catch |err| {
+                stderr.print("nb: {s}: post-install warning: {}\n", .{ f.name, err }) catch {};
+            };
+            phase.store(@intFromEnum(Phase.done), .release);
+            return;
+        }
         nb.cellar.materialize(f.bottle_sha256, f.name, f.version) catch |err| {
             stderr.print("nb: {s}: materialize failed: {}\n", .{ f.name, err }) catch {};
             had_error.store(true, .release);
@@ -676,6 +692,8 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
 
     // 4b. Replace @@HOMEBREW_*@@ placeholders in text files (shebangs, scripts, configs)
     platform.relocate.replaceKegPlaceholders(f.name, actual_ver);
+    // Save post-relocation snapshot so future reinstalls skip steps 4/4b (~1500ms → ~10ms)
+    nb.store.saveRelocatedEntry(f.bottle_sha256, f.name, actual_ver) catch {};
 
     // 5. Link binaries
     phase.store(@intFromEnum(Phase.linking), .release);

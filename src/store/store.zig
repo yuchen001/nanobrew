@@ -11,6 +11,8 @@ const tar = @import("../extract/tar.zig");
 const paths = @import("../platform/paths.zig");
 
 const STORE_DIR = paths.STORE_DIR;
+const STORE_RELOCATED_DIR = paths.STORE_RELOCATED_DIR;
+const CELLAR_DIR = paths.CELLAR_DIR;
 
 /// Validate that sha256 is exactly 64 lowercase hex characters.
 /// This prevents path traversal attacks when sha256 is used as a path component.
@@ -60,6 +62,107 @@ pub fn removeEntry(sha256: []const u8) void {
 
     var buf: [512]u8 = undefined;
     const p = std.fmt.bufPrint(&buf, "{s}/{s}", .{ STORE_DIR, sha256 }) catch return;
+    std.fs.deleteTreeAbsolute(p) catch {};
+}
+
+// ── Relocated store ───────────────────────────────────────────────────────────
+// After the first install of a package, the Cellar keg has all @@HOMEBREW_*@@
+// placeholders replaced and Mach-O load commands fixed. We clonefile that
+// already-processed tree into store-relocated/<sha256>/ so subsequent reinstalls
+// can skip both text-scan and install_name_tool entirely.
+
+/// Check if a post-relocation snapshot exists for this blob.
+pub fn hasRelocatedEntry(sha256: []const u8) bool {
+    if (!isValidSha256(sha256)) return false;
+
+    var buf: [512]u8 = undefined;
+    const p = std.fmt.bufPrint(&buf, "{s}/{s}", .{ STORE_RELOCATED_DIR, sha256 }) catch return false;
+    std.fs.accessAbsolute(p, .{}) catch return false;
+    return true;
+}
+
+/// Snapshot the already-relocated keg from Cellar into store-relocated/<sha256>/.
+/// Called once after a successful relocate+placeholder pass.
+/// Uses APFS clonefile so this is near-instantaneous and zero marginal disk cost.
+/// Layout: store-relocated/<sha256>/ contains the full keg tree directly.
+pub fn saveRelocatedEntry(sha256: []const u8, name: []const u8, version: []const u8) !void {
+    if (!isValidSha256(sha256)) return error.InvalidSha256;
+
+    // src = Cellar/<name>/<version>/  (already fully relocated)
+    var src_buf: [512:0]u8 = undefined;
+    const src_dir = std.fmt.bufPrint(&src_buf, "{s}/{s}/{s}", .{ CELLAR_DIR, name, version }) catch return error.PathTooLong;
+    src_buf[src_dir.len] = 0;
+
+    // dest = store-relocated/<sha256>/
+    var dest_buf: [512:0]u8 = undefined;
+    const dest_dir = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ STORE_RELOCATED_DIR, sha256 }) catch return error.PathTooLong;
+    dest_buf[dest_dir.len] = 0;
+
+    // Already saved (concurrent installs, or we're upgrading)
+    if (std.fs.accessAbsolute(dest_dir, .{})) {
+        return; // already exists, nothing to do
+    } else |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    }
+
+    std.fs.makeDirAbsolute(STORE_RELOCATED_DIR) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    };
+
+    // cloneTree from Cellar → store-relocated (APFS copy-on-write, ~0ms on APFS)
+    const copy = @import("../platform/copy.zig");
+    if (!copy.cloneTree(&src_buf, &dest_buf)) {
+        // Fallback: regular recursive copy (Linux or APFS failure)
+        try copy.cpFallback(src_dir, dest_dir);
+    }
+}
+
+/// Materialize a package from store-relocated/<sha256>/ into Cellar/<name>/<version>/.
+/// This is the fast reinstall path: no relocation needed.
+pub fn materializeFromRelocated(sha256: []const u8, name: []const u8, version: []const u8) !void {
+    if (!isValidSha256(sha256)) return error.InvalidSha256;
+
+    // src = store-relocated/<sha256>/
+    var src_buf: [512:0]u8 = undefined;
+    const src_dir = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ STORE_RELOCATED_DIR, sha256 }) catch return error.PathTooLong;
+    src_buf[src_dir.len] = 0;
+
+    // dest = Cellar/<name>/<version>/
+    var dest_buf: [512:0]u8 = undefined;
+    const dest_dir = std.fmt.bufPrint(&dest_buf, "{s}/{s}/{s}", .{ CELLAR_DIR, name, version }) catch return error.PathTooLong;
+    dest_buf[dest_dir.len] = 0;
+
+    // Ensure parent dir exists
+    var parent_buf: [512]u8 = undefined;
+    const parent = std.fmt.bufPrint(&parent_buf, "{s}/{s}", .{ CELLAR_DIR, name }) catch return error.PathTooLong;
+    std.fs.makeDirAbsolute(parent) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    };
+
+    // Remove existing keg if present (fresh reinstall)
+    std.fs.deleteTreeAbsolute(dest_dir) catch {};
+
+    const copy = @import("../platform/copy.zig");
+    if (!copy.cloneTree(&src_buf, &dest_buf)) {
+        try copy.cpFallback(src_dir, dest_dir);
+    }
+}
+
+/// Return store-relocated path for an entry.
+pub fn relocatedEntryPath(sha256: []const u8, buf: []u8) []const u8 {
+    if (!isValidSha256(sha256)) return "";
+    return std.fmt.bufPrint(buf, "{s}/{s}", .{ STORE_RELOCATED_DIR, sha256 }) catch "";
+}
+
+/// Remove the post-relocation snapshot for a sha256.
+pub fn removeRelocatedEntry(sha256: []const u8) void {
+    if (!isValidSha256(sha256)) return;
+
+    var buf: [512]u8 = undefined;
+    const p = std.fmt.bufPrint(&buf, "{s}/{s}", .{ STORE_RELOCATED_DIR, sha256 }) catch return;
     std.fs.deleteTreeAbsolute(p) catch {};
 }
 

@@ -9,6 +9,9 @@ pub const CELLAR_DIR = PREFIX ++ "/Cellar";
 pub const BIN_DIR = PREFIX ++ "/bin";
 pub const OPT_DIR = PREFIX ++ "/opt";
 pub const STORE_DIR = ROOT ++ "/store";
+/// Post-relocation store: keg trees that have already had Mach-O paths and text
+/// placeholders patched. Clonefiles from here skip all relocation on reinstalls.
+pub const STORE_RELOCATED_DIR = ROOT ++ "/store-relocated";
 pub const CACHE_DIR = ROOT ++ "/cache";
 pub const BLOBS_DIR = CACHE_DIR ++ "/blobs";
 pub const TMP_DIR = CACHE_DIR ++ "/tmp";
