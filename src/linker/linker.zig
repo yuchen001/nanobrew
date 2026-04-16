@@ -18,6 +18,9 @@ const OPT_DIR = paths.OPT_DIR;
 const LIB_DIR = paths.LIB_DIR;
 const INCLUDE_DIR = paths.INCLUDE_DIR;
 const SHARE_DIR = paths.SHARE_DIR;
+const FORTUNE_NAME = "fortune";
+const FORTUNE_DEFAULT_DIR = SHARE_DIR ++ "/games/fortunes";
+const WRAPPER_DIR = "libexec/.nanobrew-wrappers";
 
 const SubdirMapping = struct {
     src: []const u8,
@@ -164,6 +167,122 @@ fn unlinkSubdir(keg_subdir: []const u8, prefix_dest: []const u8) void {
     }
 }
 
+fn needsManagedWrapper(pkg_name: []const u8, subdir: []const u8, entry_name: []const u8) bool {
+    return std.mem.eql(u8, pkg_name, FORTUNE_NAME) and
+        std.mem.eql(u8, subdir, "bin") and
+        std.mem.eql(u8, entry_name, FORTUNE_NAME);
+}
+
+fn renderFortuneWrapper(buf: []u8, actual_bin: []const u8) ![]const u8 {
+    return std.fmt.bufPrint(
+        buf,
+        \\#!/bin/sh
+        \\set -eu
+        \\
+        \\default_dir="{s}"
+        \\need_default=1
+        \\expect_value=0
+        \\for arg in "$@"; do
+        \\  if [ "$expect_value" -eq 1 ]; then
+        \\    expect_value=0
+        \\    continue
+        \\  fi
+        \\  case "$arg" in
+        \\    -n|-m)
+        \\      expect_value=1
+        \\      ;;
+        \\    -n*|-m*)
+        \\      ;;
+        \\    -[acefilosuw]*)
+        \\      ;;
+        \\    -*)
+        \\      need_default=0
+        \\      break
+        \\      ;;
+        \\    *)
+        \\      need_default=0
+        \\      break
+        \\      ;;
+        \\  esac
+        \\done
+        \\if [ "$need_default" -eq 1 ] && [ -d "{s}" ]; then
+        \\  exec "{s}" "$@" "{s}"
+        \\fi
+        \\exec "{s}" "$@"
+        \\
+    , .{ FORTUNE_DEFAULT_DIR, FORTUNE_DEFAULT_DIR, actual_bin, FORTUNE_DEFAULT_DIR, actual_bin });
+}
+
+fn installManagedWrapper(pkg_name: []const u8, keg_dir: []const u8) void {
+    if (!needsManagedWrapper(pkg_name, "bin", FORTUNE_NAME)) return;
+
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+
+    var libexec_dir_buf: [512]u8 = undefined;
+    const libexec_dir = std.fmt.bufPrint(&libexec_dir_buf, "{s}/libexec", .{keg_dir}) catch return;
+    std.Io.Dir.createDirAbsolute(lib_io, libexec_dir, .default_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+
+    var wrapper_dir_buf: [512]u8 = undefined;
+    const wrapper_dir = std.fmt.bufPrint(&wrapper_dir_buf, "{s}/{s}", .{ keg_dir, WRAPPER_DIR }) catch return;
+    std.Io.Dir.createDirAbsolute(lib_io, wrapper_dir, .default_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+
+    var actual_bin_buf: [512]u8 = undefined;
+    const actual_bin = std.fmt.bufPrint(&actual_bin_buf, "{s}/bin/{s}", .{ keg_dir, FORTUNE_NAME }) catch return;
+
+    var wrapper_path_buf: [512]u8 = undefined;
+    const wrapper_path = std.fmt.bufPrint(&wrapper_path_buf, "{s}/{s}", .{ wrapper_dir, FORTUNE_NAME }) catch return;
+
+    var content_buf: [2048]u8 = undefined;
+    const wrapper_content = renderFortuneWrapper(&content_buf, actual_bin) catch return;
+
+    const wrapper_file = std.Io.Dir.createFileAbsolute(lib_io, wrapper_path, .{ .permissions = .executable_file }) catch return;
+    defer wrapper_file.close(lib_io);
+    wrapper_file.writeStreamingAll(lib_io, wrapper_content) catch return;
+
+    var dest_buf: [512]u8 = undefined;
+    const dest = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ BIN_DIR, FORTUNE_NAME }) catch return;
+
+    var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+    if (std.Io.Dir.readLinkAbsolute(lib_io, dest, &target_buf)) |target_n| {
+        const existing_target = target_buf[0..target_n];
+        if (isConflict(existing_target, keg_dir)) {
+            var msg_buf: [512]u8 = undefined;
+            const msg = std.fmt.bufPrint(&msg_buf, "warning: {s} is already linked by {s}, skipping wrapper\n", .{
+                FORTUNE_NAME,
+                extractKegName(existing_target),
+            }) catch "warning: conflict detected, skipping wrapper\n";
+            std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
+            return;
+        }
+        std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
+    } else |_| {}
+
+    std.Io.Dir.symLinkAbsolute(lib_io, wrapper_path, dest, .{}) catch |err| {
+        var msg_buf: [512]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "warning: failed to install {s} wrapper: {}\n", .{ FORTUNE_NAME, err }) catch "warning: failed to install wrapper\n";
+        std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
+    };
+}
+
+fn removeManagedWrapper(pkg_name: []const u8, keg_dir: []const u8) void {
+    if (!needsManagedWrapper(pkg_name, "bin", FORTUNE_NAME)) return;
+
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var dest_buf: [512]u8 = undefined;
+    const dest = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ BIN_DIR, FORTUNE_NAME }) catch return;
+
+    var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const target_n = std.Io.Dir.readLinkAbsolute(lib_io, dest, &target_buf) catch return;
+    const target = target_buf[0..target_n];
+    if (std.mem.startsWith(u8, target, keg_dir)) {
+        std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
+    }
+}
+
 /// Link a keg's files and create opt/ symlink.
 pub fn linkKeg(name: []const u8, version: []const u8) !void {
     const lib_io = std.Io.Threaded.global_single_threaded.io();
@@ -175,6 +294,8 @@ pub fn linkKeg(name: []const u8, version: []const u8) !void {
         const keg_subdir = std.fmt.bufPrint(&sub_buf, "{s}/{s}", .{ keg_dir, mapping.src }) catch continue;
         linkSubdir(keg_subdir, mapping.dest, keg_dir);
     }
+
+    installManagedWrapper(name, keg_dir);
 
     // Create opt/ symlink: prefix/opt/<name> -> Cellar/<name>/<version>
     std.Io.Dir.createDirAbsolute(lib_io, OPT_DIR, .default_dir) catch {};
@@ -199,9 +320,27 @@ pub fn unlinkKeg(name: []const u8, version: []const u8) !void {
         unlinkSubdir(keg_subdir, mapping.dest);
     }
 
+    removeManagedWrapper(name, keg_dir);
+
     // Remove opt/ symlink
     const lib_io = std.Io.Threaded.global_single_threaded.io();
     var opt_buf: [512]u8 = undefined;
     const opt_link = std.fmt.bufPrint(&opt_buf, "{s}/{s}", .{ OPT_DIR, name }) catch return;
     std.Io.Dir.deleteFileAbsolute(lib_io, opt_link) catch {};
+}
+
+test "needsManagedWrapper only wraps fortune binary" {
+    try std.testing.expect(needsManagedWrapper("fortune", "bin", "fortune"));
+    try std.testing.expect(!needsManagedWrapper("fortune", "share", "fortune"));
+    try std.testing.expect(!needsManagedWrapper("wget", "bin", "fortune"));
+    try std.testing.expect(!needsManagedWrapper("fortune", "bin", "strfile"));
+}
+
+test "renderFortuneWrapper injects default fortunes dir" {
+    var buf: [2048]u8 = undefined;
+    const script = try renderFortuneWrapper(&buf, "/opt/nanobrew/prefix/Cellar/fortune/9708/bin/fortune");
+
+    try std.testing.expect(std.mem.indexOf(u8, script, "default_dir=\"" ++ FORTUNE_DEFAULT_DIR ++ "\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "exec \"/opt/nanobrew/prefix/Cellar/fortune/9708/bin/fortune\" \"$@\" \"" ++ FORTUNE_DEFAULT_DIR ++ "\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "-n|-m") != null);
 }
