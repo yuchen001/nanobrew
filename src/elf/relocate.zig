@@ -20,7 +20,8 @@ const ELF_MAGIC = [4]u8{ 0x7f, 'E', 'L', 'F' };
 const TEXT_EXTS = [_][]const u8{ ".pc", ".cmake", ".la", ".sh", ".cfg" };
 
 /// Relocate all ELF files and text configs in a keg.
-pub fn relocateKeg(alloc: std.mem.Allocator, name: []const u8, version: []const u8) !void {
+pub fn relocateKeg(alloc: std.mem.Allocator, _io: std.Io, name: []const u8, version: []const u8) !void {
+    _ = _io;
     hasPatchelf(alloc) catch {
         ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "nb: patchelf not found — attempting auto-install...\n", .{}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stderr().writeStreamingAll(std.Io.Threaded.global_single_threaded.io(), _tmp) catch {}; });
 
