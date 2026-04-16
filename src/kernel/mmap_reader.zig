@@ -17,7 +17,7 @@ pub const MappedFile = struct {
 
     /// Map a file into memory. Returns null if file is empty or can't be mapped.
     pub fn open(path: []const u8) !?MappedFile {
-        const file = try std.fs.cwd().openFile(path, .{});
+        const file = try std.Io.Dir.cwd().openFile(path, .{});
         defer file.close();
 
         const stat = try file.stat();
@@ -80,10 +80,10 @@ pub const StreamReader = struct {
     buffers: [2][BUF_SIZE]u8,
     active: u1,
     len: usize,
-    source: std.fs.File,
+    source: std.Io.File,
     eof: bool,
 
-    pub fn init(source: std.fs.File) StreamReader {
+    pub fn init(source: std.Io.File) StreamReader {
         return .{
             .buffers = undefined,
             .active = 0,

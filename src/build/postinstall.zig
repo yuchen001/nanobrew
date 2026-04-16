@@ -8,40 +8,45 @@ const std = @import("std");
 const Formula = @import("../api/formula.zig").Formula;
 const fetch = @import("../net/fetch.zig");
 
-fn printOut(lib_io: std.Io, comptime fmt: []const u8, args: anytype) void {
-    var buf: [1024]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, fmt, args) catch fmt;
-    std.Io.File.stdout().writeStreamingAll(lib_io, msg) catch {};
-}
 
-fn printErr(lib_io: std.Io, comptime fmt: []const u8, args: anytype) void {
-    var buf: [1024]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, fmt, args) catch fmt;
-    std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
-}
+const sandbox = @import("sandbox.zig");
+const formula_cache = @import("formula_cache.zig");
+
+pub const ParsedCommand = struct {
+    argv: []const []const u8,
+
+    pub fn deinit(self: ParsedCommand, alloc: std.mem.Allocator) void {
+        for (self.argv) |arg| alloc.free(arg);
+        alloc.free(self.argv);
+    }
+};
 
 pub fn runPostInstall(alloc: std.mem.Allocator, formula: Formula) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    const _io = std.Io.Threaded.global_single_threaded.io();
 
     // Execute post_install if defined
     if (formula.post_install_defined) {
-        printOut(lib_io, "==> Running post-install for {s}...\n", .{formula.name});
-        runPostInstallScript(alloc, lib_io, formula) catch |err| {
-            printErr(lib_io, "nb: {s}: post-install script failed: {}\n", .{ formula.name, err });
+        ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "==> Running post-install for {s}...\n", .{formula.name}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stdout().writeStreamingAll(_io, _tmp) catch {}; });
+        runPostInstallScript(alloc, formula) catch |err| {
+            ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "nb: {s}: post-install script failed: {}\n", .{ formula.name, err }) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stderr().writeStreamingAll(_io, _tmp) catch {}; });
         };
     }
 
     // Display caveats
     if (formula.caveats.len > 0) {
-        printOut(lib_io, "==> Caveats\n{s}", .{formula.caveats});
+        ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "==> Caveats\n{s}", .{formula.caveats}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stdout().writeStreamingAll(_io, _tmp) catch {}; });
         // Ensure trailing newline
         if (formula.caveats[formula.caveats.len - 1] != '\n') {
-            printOut(lib_io, "\n", .{});
+            ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "\n", .{}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stdout().writeStreamingAll(_io, _tmp) catch {}; });
         }
     }
 }
 
-fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formula) !void {
+fn runPostInstallScript(alloc: std.mem.Allocator, formula: Formula) !void {
+    const _io = std.Io.Threaded.global_single_threaded.io();
+    // Compute effective version early (needed for cache key)
+    var ver_buf: [128]u8 = undefined;
+    const eff_ver = formula.effectiveVersion(&ver_buf);
 
     // Fetch Ruby formula source
     const first_letter = if (formula.name.len > 0) formula.name[0..1] else return;
@@ -50,7 +55,7 @@ fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formu
     }) catch return error.OutOfMemory;
     defer alloc.free(url);
 
-    const ruby_src = fetch.get(alloc, url) catch return;
+    const ruby_src = formula_cache.getVerifiedFormula(alloc, formula.name, eff_ver, url) catch return;
     defer alloc.free(ruby_src);
 
     if (ruby_src.len == 0) return;
@@ -60,8 +65,6 @@ fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formu
 
     // Parse and execute commands
     var keg_buf: [512]u8 = undefined;
-    var ver_buf: [128]u8 = undefined;
-    const eff_ver = formula.effectiveVersion(&ver_buf);
     const keg_path = std.fmt.bufPrint(&keg_buf, "/opt/nanobrew/prefix/Cellar/{s}/{s}", .{
         formula.name, eff_ver,
     }) catch return;
@@ -73,19 +76,13 @@ fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formu
 
         if (parseRubyCommand(alloc, trimmed, formula.name, keg_path)) |cmd| {
             defer alloc.free(cmd);
-            const result = std.process.run(alloc, lib_io, .{
+            const result = std.process.run(alloc, _io, .{
                 .argv = &.{ "/bin/sh", "-c", cmd },
-                .stdout_limit = .limited(64 * 1024),
-                .stderr_limit = .limited(64 * 1024),
             }) catch continue;
-            defer alloc.free(result.stdout);
-            defer alloc.free(result.stderr);
-            const failed = switch (result.term) {
-                .exited => |code| code != 0,
-                else => true,
-            };
-            if (failed) {
-                printErr(lib_io, "nb: {s}: post-install command failed: {s}\n", .{ formula.name, cmd });
+            alloc.free(result.stdout);
+            alloc.free(result.stderr);
+            if (result.term.exited != 0) {
+                ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "nb: {s}: post-install command failed: {s}\n", .{ formula.name, cmd }) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stderr().writeStreamingAll(_io, _tmp) catch {}; });
             }
         }
     }

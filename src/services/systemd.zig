@@ -92,8 +92,49 @@ pub fn isRunning(alloc: std.mem.Allocator, label: []const u8) bool {
     return switch (result.term) { .exited => |c| c == 0, else => false };
 }
 
+pub fn isServiceFileSafe(content: []const u8, keg_prefix: []const u8) bool {
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trimStart(u8, line, " \t");
+        // Reject User=root
+        if (std.mem.startsWith(u8, trimmed, "User=")) {
+            const value = std.mem.trimStart(u8, trimmed["User=".len..], " \t");
+            if (std.mem.eql(u8, value, "root")) return false;
+        }
+        // Validate ExecStart points within the keg
+        if (std.mem.startsWith(u8, trimmed, "ExecStart=")) {
+            const value = std.mem.trimStart(u8, trimmed["ExecStart=".len..], " \t");
+            // Skip leading '-' (optional prefix that suppresses failure)
+            const exec_path = if (value.len > 0 and value[0] == '-') value[1..] else value;
+            const end = std.mem.indexOfAny(u8, exec_path, " \t") orelse exec_path.len;
+            const bin_path = exec_path[0..end];
+            if (!std.mem.startsWith(u8, bin_path, keg_prefix)) return false;
+            if (std.mem.indexOf(u8, bin_path, "..") != null) return false;
+        }
+    }
+    return true;
+}
+
 pub fn start(alloc: std.mem.Allocator, plist_path: []const u8) !void {
     const lib_io = std.Io.Threaded.global_single_threaded.io();
+
+    // Read and validate the service file before installing
+    const svc_file = std.Io.Dir.openFileAbsolute(lib_io, plist_path, .{}) catch return error.SystemdFailed;
+    const svc_stat = svc_file.stat(lib_io) catch { svc_file.close(lib_io); return error.SystemdFailed; };
+    const svc_size = @min(svc_stat.size, 64 * 1024);
+    const svc_buf = alloc.alloc(u8, svc_size) catch { svc_file.close(lib_io); return error.SystemdFailed; };
+    defer alloc.free(svc_buf);
+    const svc_n = svc_file.readPositionalAll(lib_io, svc_buf, 0) catch { svc_file.close(lib_io); return error.SystemdFailed; };
+    svc_file.close(lib_io);
+    const svc_content = svc_buf[0..svc_n];
+
+    if (!isServiceFileSafe(svc_content, paths.CELLAR_DIR)) {
+        var msg_buf: [1024]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "nb: refusing to install unsafe service file: {s}\n", .{plist_path}) catch "nb: refusing to install unsafe service file\n";
+        std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
+        return error.SystemdFailed;
+    }
+
     // Install the service file and start it
     const basename = std.fs.path.basename(plist_path);
     var dest_buf: [512]u8 = undefined;

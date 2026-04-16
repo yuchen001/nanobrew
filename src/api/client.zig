@@ -121,10 +121,11 @@ fn fetchFormulaList(alloc: std.mem.Allocator) ![]u8 {
     const body = fetch.get(alloc, "https://formulae.brew.sh/api/formula.json") catch return error.FetchFailed;
 
     // Write to cache
-    std.fs.makeDirAbsolute(API_CACHE_DIR) catch {};
-    if (std.fs.createFileAbsolute(list_cache_path, .{})) |file| {
-        defer file.close();
-        file.writeAll(body) catch {};
+    const _lio_fl = std.Io.Threaded.global_single_threaded.io();
+    std.Io.Dir.createDirAbsolute(_lio_fl, API_CACHE_DIR, .default_dir) catch {};
+    if (std.Io.Dir.createFileAbsolute(_lio_fl, list_cache_path, .{})) |file| {
+        defer file.close(_lio_fl);
+        file.writeStreamingAll(_lio_fl, body) catch {};
     } else |_| {}
 
     return body;
@@ -132,13 +133,21 @@ fn fetchFormulaList(alloc: std.mem.Allocator) ![]u8 {
 
 /// Read cached file with custom TTL.
 fn readCachedList(alloc: std.mem.Allocator, path: []const u8, ttl_ns: u64) ?[]u8 {
-    const file = std.fs.openFileAbsolute(path, .{}) catch return null;
-    defer file.close();
-    const stat = file.stat() catch return null;
-    const now = std.time.nanoTimestamp();
-    const age_ns = now - stat.mtime;
-    if (age_ns > ttl_ns) return null;
-    return file.readToEndAlloc(alloc, 64 * 1024 * 1024) catch null;
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    const file = std.Io.Dir.openFileAbsolute(lib_io, path, .{}) catch return null;
+    defer file.close(lib_io);
+    const st = file.stat(lib_io) catch return null;
+    const now_ts = std.Io.Timestamp.now(lib_io, .real);
+    const age_ns: i96 = now_ts.nanoseconds - st.mtime.nanoseconds;
+    if (age_ns > @as(i96, @intCast(ttl_ns))) return null;
+    const sz = @min(st.size, 64 * 1024 * 1024);
+    const buf = alloc.alloc(u8, sz) catch return null;
+    const n = file.readPositionalAll(lib_io, buf, 0) catch { alloc.free(buf); return null; };
+    if (n < sz) {
+        const trimmed = alloc.realloc(buf, n) catch return buf[0..n];
+        return trimmed;
+    }
+    return buf;
 }
 
 /// Fetch formula using a shared HTTP client (avoids repeated TLS handshakes).

@@ -219,6 +219,9 @@ fn runInit() void {
         PREFIX ++ "/Caskroom",
         PREFIX ++ "/bin",
         PREFIX ++ "/opt",
+        PREFIX ++ "/lib",
+        PREFIX ++ "/include",
+        PREFIX ++ "/share",
         ROOT ++ "/cache",
         ROOT ++ "/cache/blobs",
         ROOT ++ "/cache/tmp",
@@ -249,11 +252,12 @@ fn runInit() void {
     // Homebrew bottles embed literal /opt/homebrew/ paths in binary data segments.
     // These can't be safely rewritten (different string lengths). The symlink
     // catches all such references without binary patching.
-    std.fs.symLinkAbsolute(PREFIX, "/opt/homebrew", .{}) catch |err| switch (err) {
+    std.Io.Dir.symLinkAbsolute(g_io, PREFIX, "/opt/homebrew", .{}) catch |err| switch (err) {
         error.PathAlreadyExists => {
             // /opt/homebrew already exists — check if it's our symlink or something else
-            var target_buf: [std.fs.max_path_bytes]u8 = undefined;
-            if (std.fs.readLinkAbsolute("/opt/homebrew", &target_buf)) |target| {
+            var target_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+            if (std.Io.Dir.readLinkAbsolute(g_io, "/opt/homebrew", &target_buf)) |target_n| {
+                const target = target_buf[0..target_n];
                 if (!std.mem.eql(u8, target, PREFIX)) {
                     stdout.print("nb: note: /opt/homebrew is a symlink to {s} (not nanobrew)\n", .{target}) catch {};
                 }
@@ -265,8 +269,7 @@ fn runInit() void {
         },
         error.AccessDenied => {
             // nb init runs with sudo, so this shouldn't happen, but warn if it does
-            const s = std.fs.File.stderr().deprecatedWriter();
-            s.print("nb: warning: could not create /opt/homebrew compatibility symlink (permission denied)\n", .{}) catch {};
+            std.Io.File.stderr().writeStreamingAll(g_io, "nb: warning: could not create /opt/homebrew compatibility symlink (permission denied)\n") catch {};
         },
         else => {},
     };
@@ -2009,10 +2012,28 @@ fn runDoctor(alloc: std.mem.Allocator) void {
         for (kegs) |keg| {
             var buf: [512]u8 = undefined;
             const cellar_path = std.fmt.bufPrint(&buf, "{s}/Cellar/{s}/{s}", .{ PREFIX, keg.name, keg.version }) catch continue;
-            std.Io.Dir.accessAbsolute(g_io, cellar_path, .{}) catch {
+            const found = blk: {
+                std.Io.Dir.accessAbsolute(g_io, cellar_path, .{}) catch {
+                    // Also check Homebrew cellar paths for migrated packages (#172)
+                    const homebrew_cellar_paths = [_][]const u8{
+                        "/opt/homebrew/Cellar",
+                        "/usr/local/Cellar",
+                        "/home/linuxbrew/.linuxbrew/Cellar",
+                    };
+                    for (homebrew_cellar_paths) |hb_cellar| {
+                        var hb_buf: [512]u8 = undefined;
+                        const hb_path = std.fmt.bufPrint(&hb_buf, "{s}/{s}/{s}", .{ hb_cellar, keg.name, keg.version }) catch continue;
+                        std.Io.Dir.accessAbsolute(g_io, hb_path, .{}) catch continue;
+                        break :blk true;
+                    }
+                    break :blk false;
+                };
+                break :blk true;
+            };
+            if (!found) {
                 stdout.print("  ✗ DB entry '{s}' has no Cellar dir\n", .{keg.name}) catch {};
                 issues += 1;
-            };
+            }
         }
 
         if (std.Io.Dir.openDirAbsolute(g_io, ROOT ++ "/store", .{ .iterate = true })) |d| {

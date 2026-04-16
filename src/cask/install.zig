@@ -291,6 +291,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                     var _b: [512]u8 = undefined;
                     const _m = std.fmt.bufPrint(&_b, "nb: installer failed for {s}\n", .{pkg_name}) catch "nb: installer failed\n";
                     std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
+                    any_artifact_failed = true;
                 }
             },
             .uninstall => {}, // only used during removal

