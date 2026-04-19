@@ -455,14 +455,31 @@ fn extractZip(alloc: std.mem.Allocator, zip_path: []const u8, dest: []const u8) 
         }
     }
 
-    // Now extract
+    // Primary extractor: BSD `unzip`. Fast and ubiquitous.
     const result = std.process.run(alloc, lib_io, .{
         .argv = &.{ "unzip", "-o", "-q", zip_path, "-d", dest },
         .stdout_limit = .limited(4096),
+        .stderr_limit = .limited(16 * 1024),
     }) catch return error.ExtractFailed;
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+    if (switch (result.term) { .exited => |c| c != 0, else => true }) {
+        // Fallback to Apple's `ditto` on macOS — handles extended attributes,
+        // code-signature resources, and zip variants that BSD unzip rejects
+        // (seen on some notarized .app zips — issue #224, PureMac).
+        if (comptime builtin.os.tag == .macos) {
+            const ditto = std.process.run(alloc, lib_io, .{
+                .argv = &.{ "ditto", "-x", "-k", zip_path, dest },
+                .stdout_limit = .limited(4096),
+                .stderr_limit = .limited(16 * 1024),
+            }) catch return error.ExtractFailed;
+            defer alloc.free(ditto.stdout);
+            defer alloc.free(ditto.stderr);
+            if (switch (ditto.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+            return;
+        }
+        return error.ExtractFailed;
+    }
 }
 
 fn extractTarGz(alloc: std.mem.Allocator, tar_path: []const u8, dest: []const u8) !void {

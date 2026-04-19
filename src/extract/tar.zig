@@ -1,8 +1,10 @@
 // nanobrew — Tar/gzip extraction
 //
 // Extracts Homebrew bottle tarballs into the content-addressable store.
-// v1: native std.compress.flate.Decompress + std.tar.pipeToFileSystem
-//     Eliminates fork/exec overhead of `tar xzf` subprocess per package.
+// Fast path: native std.compress.flate.Decompress + std.tar.pipeToFileSystem.
+// Fallback: `tar -xzf` subprocess — Zig's std.tar doesn't yet support every
+// header variant shipped by Homebrew bottles (GNU long-name / pax-extended
+// headers hit by perl, postgresql@17 — issue #221).
 
 const std = @import("std");
 const paths = @import("../platform/paths.zig");
@@ -12,7 +14,6 @@ const STORE_DIR = paths.STORE_DIR;
 
 /// Extract a gzipped tar blob into the store at store/<sha256>/
 pub fn extractToStore(alloc: std.mem.Allocator, blob_path: []const u8, sha256: []const u8) !void {
-    _ = alloc; // no longer needed — native extraction uses no heap allocations
     const lib_io = std.Io.Threaded.global_single_threaded.io();
     if (!store.isValidSha256(sha256)) return error.InvalidSha256;
 
@@ -24,7 +25,15 @@ pub fn extractToStore(alloc: std.mem.Allocator, blob_path: []const u8, sha256: [
         // Doesn't exist — create and extract
         try std.Io.Dir.createDirAbsolute(lib_io, dest_dir, .default_dir);
         errdefer std.Io.Dir.cwd().deleteTree(lib_io, dest_dir) catch {};
-        try extractTarGzNative(lib_io, blob_path, dest_dir);
+
+        extractTarGzNative(lib_io, blob_path, dest_dir) catch {
+            // Native extractor couldn't parse this bottle (likely an unsupported
+            // tar header type). Wipe any partial output and retry via the system
+            // `tar` binary, which handles every header variant we've hit.
+            std.Io.Dir.cwd().deleteTree(lib_io, dest_dir) catch {};
+            try std.Io.Dir.createDirAbsolute(lib_io, dest_dir, .default_dir);
+            try extractTarGzSubprocess(alloc, blob_path, dest_dir);
+        };
         return;
     };
 }
@@ -51,6 +60,24 @@ fn extractTarGzNative(io: std.Io, blob_path: []const u8, dest_dir: []const u8) !
     try std.tar.pipeToFileSystem(io, dest, &decomp.reader, .{
         .mode_mode = .executable_bit_only,
     });
+}
+
+/// Fallback extraction via the system `tar` binary. Slower (fork/exec + extra
+/// read of the blob) but handles every header type `tar(1)` understands.
+fn extractTarGzSubprocess(alloc: std.mem.Allocator, blob_path: []const u8, dest_dir: []const u8) !void {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    const result = std.process.run(alloc, lib_io, .{
+        .argv = &.{ "tar", "-xzf", blob_path, "-C", dest_dir },
+        .stdout_limit = .limited(4096),
+        .stderr_limit = .limited(16 * 1024),
+    }) catch return error.ExtractFailed;
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.ExtractFailed;
 }
 
 const testing = std.testing;
