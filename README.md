@@ -2,6 +2,10 @@
   <img src="assets/logo.png" alt="nanobrew logo" width="200">
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/25937" target="_blank"><img src="https://trendshift.io/api/badge/repositories/25937" alt="justrach%2Fnanobrew | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</p>
+
 # nanobrew
 
 A fast package manager for macOS and Linux. Written in Zig. Uses Homebrew's bottles and formulas under the hood, plus native .deb support for Docker containers.
@@ -216,6 +220,8 @@ nb install steipete/tap/sag              # Third-party taps
   ├─ 4. Resolve dependencies normally (they're homebrew-core names)
   └─ 5. Install via bottle or source path (same pipeline as above)
 ```
+
+Dependency ordering walks the explicit formula graph and topologically sorts it in `O(V+E)`. The `O(1)` resolver improvement in v0.1.190 refers to queue dequeue during that sort, not solving arbitrary version constraints.
 
 Key design choices:
 - **Content-addressable store** — deduplicates bottles by SHA256. Reinstalls are instant because the data is already there.
