@@ -109,7 +109,25 @@ pub const DepResolver = struct {
     }
 
     pub fn hasFormula(self: *DepResolver, name: []const u8) bool {
-        return self.formulae.contains(name) or self.formulae.contains(tapShortName(name));
+        // Check exact name
+        if (self.formulae.contains(name)) return true;
+        // Check tapShortName (for "user/tap/formula" -> "formula")
+        if (self.formulae.contains(tapShortName(name))) return true;
+        return false;
+    }
+
+    /// Check if a name (which might be an alias) matches any stored formula.
+    /// This requires network access to check aliases, so it's only used when direct lookup fails.
+    pub fn hasFormulaOrAlias(self: *DepResolver, alloc: std.mem.Allocator, name: []const u8) bool {
+        // First check direct match
+        if (self.formulae.contains(name)) return true;
+        if (self.formulae.contains(tapShortName(name))) return true;
+        // Try to resolve as alias
+        const resolved = api.resolveFormulaAlias(alloc, name) orelse return false;
+        defer alloc.free(resolved);
+        if (self.formulae.contains(resolved)) return true;
+        if (self.formulae.contains(tapShortName(resolved))) return true;
+        return false;
     }
 
     pub fn topologicalSort(self: *DepResolver) ![]const Formula {
@@ -119,17 +137,12 @@ pub const DepResolver = struct {
             self.client = null;
         }
 
-        // Pre-flight: catch missing dependencies before attempting sort.
-        // Without this, a missing dep inflates in_degree and Kahn's algorithm
-        // stalls, incorrectly returning DependencyCycle instead of MissingDependency.
-        var edge_check = self.edges.iterator();
-        while (edge_check.next()) |entry| {
-            for (entry.value_ptr.*) |dep| {
-                if (!self.formulae.contains(dep)) {
-                    return error.MissingDependency;
-                }
-            }
-        }
+        // in_degree[name] = number of known Homebrew deps name has.
+        // Deps not in formulae (system libraries from uses_from_macos like bzip2,
+        // libarchive, zlib) are simply skipped — they come from the OS and are not
+        // installed by nanobrew. The reverse_edges builder below uses the same
+        // formulae.contains() guard, so in_degree counts and decrement counts
+        // are always consistent, and Kahn's algorithm produces a correct order.
 
         var in_degree = std.StringHashMap(u32).init(self.alloc);
         defer in_degree.deinit();
@@ -139,9 +152,6 @@ pub const DepResolver = struct {
             try in_degree.put(name_ptr.*, 0);
         }
 
-        // in_degree[name] = number of known deps name has (must be installed before name).
-        // Only count deps present in formulae — missing deps are caught above.
-        // Skip self-edges: packages like r, neomutt, pnpm list themselves as deps.
         var edge_iter = self.edges.iterator();
         while (edge_iter.next()) |entry| {
             if (in_degree.getPtr(entry.key_ptr.*)) |count| {
@@ -151,6 +161,29 @@ pub const DepResolver = struct {
                     if (self.formulae.contains(dep)) known += 1;
                 }
                 count.* = known;
+            }
+        }
+
+        // Build reverse adjacency map: dep -> list of nodes that depend on dep.
+        // This lets us find dependents in O(out-degree) instead of O(V+E) per dequeue.
+        var reverse_edges = std.StringHashMap(std.ArrayList([]const u8)).init(self.alloc);
+        defer {
+            var rev_it = reverse_edges.valueIterator();
+            while (rev_it.next()) |list| list.deinit(self.alloc);
+            reverse_edges.deinit();
+        }
+
+        var build_iter = self.edges.iterator();
+        while (build_iter.next()) |entry| {
+            const dependent = entry.key_ptr.*;
+            for (entry.value_ptr.*) |dep| {
+                if (std.mem.eql(u8, dep, dependent)) continue; // skip self-dep
+                if (!self.formulae.contains(dep)) continue;
+                const gop = try reverse_edges.getOrPut(dep);
+                if (!gop.found_existing) {
+                    gop.value_ptr.* = .empty;
+                }
+                try gop.value_ptr.append(self.alloc, dependent);
             }
         }
 
@@ -173,16 +206,13 @@ pub const DepResolver = struct {
             const f = self.formulae.get(sorted_name) orelse continue;
             try result.append(self.alloc, f);
 
-            var re_iter = self.edges.iterator();
-            while (re_iter.next()) |entry| {
-                for (entry.value_ptr.*) |dep| {
-                    if (std.mem.eql(u8, dep, entry.key_ptr.*)) continue; // skip self-dep
-                    if (std.mem.eql(u8, dep, sorted_name)) {
-                        if (in_degree.getPtr(entry.key_ptr.*)) |count| {
-                            count.* -= 1;
-                            if (count.* == 0) {
-                                try queue.append(self.alloc, entry.key_ptr.*);
-                            }
+            // Use reverse_edges for O(out-degree) lookup instead of O(V+E) full scan
+            if (reverse_edges.get(sorted_name)) |dependents| {
+                for (dependents.items) |dependent| {
+                    if (in_degree.getPtr(dependent)) |count| {
+                        count.* -= 1;
+                        if (count.* == 0) {
+                            try queue.append(self.alloc, dependent);
                         }
                     }
                 }
@@ -295,18 +325,25 @@ test "topologicalSort - cycle detection" {
     try testing.expectError(error.DependencyCycle, r.topologicalSort());
 }
 
-test "topologicalSort - missing dependency returns MissingDependency not DependencyCycle" {
+test "topologicalSort - system dep (uses_from_macos) not in formulae is skipped not errored" {
     var r = DepResolver.init(testing.allocator);
     defer r.deinit();
 
-    // A depends on B, but B was never resolved into formulae
-    const a = makeFormula("a", &.{"b"});
+    // A depends on "bzip2" (a macOS system library not in formulae).
+    // This mirrors `nb install node` where uses_from_macos adds system lib names
+    // that have no standalone Homebrew formula.  The sort must succeed and
+    // produce [a], not return MissingDependency or DependencyCycle.
+    const a = makeFormula("a", &.{"bzip2"});
 
     try r.formulae.put("a", a);
     try r.edges.put("a", a.dependencies);
-    // Note: "b" is intentionally absent from r.formulae and r.edges
+    // "bzip2" intentionally absent — it is a system dep, not a Homebrew formula
 
-    try testing.expectError(error.MissingDependency, r.topologicalSort());
+    const sorted = try r.topologicalSort();
+    defer testing.allocator.free(sorted);
+
+    try testing.expectEqual(@as(usize, 1), sorted.len);
+    try testing.expectEqualStrings("a", sorted[0].name);
 }
 
 test "topologicalSort - self-dependency does not cause false cycle" {
@@ -328,4 +365,56 @@ test "topologicalSort - self-dependency does not cause false cycle" {
     try testing.expectEqual(@as(usize, 2), sorted.len);
     try testing.expectEqualStrings("b", sorted[0].name);
     try testing.expectEqualStrings("r", sorted[1].name);
+}
+
+test "topologicalSort - node-style diamond with system deps does not false-cycle" {
+    var r = DepResolver.init(testing.allocator);
+    defer r.deinit();
+
+    // Mirrors the real `node` dep graph structure reported in issue #216:
+    //   node -> openssl@3 (direct)
+    //   node -> libnghttp2
+    //   node -> libuv (direct)
+    //   node -> uvwasi
+    //   node -> bzip2   (uses_from_macos — NOT in formulae)
+    //   libnghttp2 -> openssl@3          (diamond via openssl@3)
+    //   uvwasi -> libuv                  (diamond via libuv)
+    const openssl = makeFormula("openssl@3", &.{});
+    const libuv = makeFormula("libuv", &.{});
+    const libnghttp2 = makeFormula("libnghttp2", &.{"openssl@3"});
+    const uvwasi = makeFormula("uvwasi", &.{"libuv"});
+    const node = makeFormula("node", &.{ "openssl@3", "libnghttp2", "libuv", "uvwasi", "bzip2" });
+
+    try r.formulae.put("openssl@3", openssl);
+    try r.formulae.put("libuv", libuv);
+    try r.formulae.put("libnghttp2", libnghttp2);
+    try r.formulae.put("uvwasi", uvwasi);
+    try r.formulae.put("node", node);
+    try r.edges.put("openssl@3", openssl.dependencies);
+    try r.edges.put("libuv", libuv.dependencies);
+    try r.edges.put("libnghttp2", libnghttp2.dependencies);
+    try r.edges.put("uvwasi", uvwasi.dependencies);
+    try r.edges.put("node", node.dependencies);
+    // "bzip2" absent — system dep from uses_from_macos
+
+    const sorted = try r.topologicalSort();
+    defer testing.allocator.free(sorted);
+
+    // All 5 known formulae must be present in the result
+    try testing.expectEqual(@as(usize, 5), sorted.len);
+    // node must come last (depends on everything else)
+    try testing.expectEqualStrings("node", sorted[sorted.len - 1].name);
+    // openssl@3 and libuv must precede their dependents
+    var openssl_pos: usize = 0;
+    var libuv_pos: usize = 0;
+    var libnghttp2_pos: usize = 0;
+    var uvwasi_pos: usize = 0;
+    for (sorted, 0..) |f, i| {
+        if (std.mem.eql(u8, f.name, "openssl@3")) openssl_pos = i;
+        if (std.mem.eql(u8, f.name, "libuv")) libuv_pos = i;
+        if (std.mem.eql(u8, f.name, "libnghttp2")) libnghttp2_pos = i;
+        if (std.mem.eql(u8, f.name, "uvwasi")) uvwasi_pos = i;
+    }
+    try testing.expect(openssl_pos < libnghttp2_pos);
+    try testing.expect(libuv_pos < uvwasi_pos);
 }

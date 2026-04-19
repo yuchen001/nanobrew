@@ -71,6 +71,85 @@ pub fn fetchFormula(alloc: std.mem.Allocator, name: []const u8) !Formula {
     return fetchFormulaWithClient(alloc, null, name);
 }
 
+/// Resolve a formula name that might be an alias (e.g., "python" -> "python@3.14").
+/// Returns the actual formula name if found, or null if not found or on network error.
+pub fn resolveFormulaAlias(alloc: std.mem.Allocator, name: []const u8) ?[]const u8 {
+    const formula_list_json = fetchFormulaList(alloc) catch return null;
+    defer alloc.free(formula_list_json);
+
+    const parsed = std.json.parseFromSlice(std.json.Value, alloc, formula_list_json, .{}) catch return null;
+    defer parsed.deinit();
+
+    if (parsed.value != .array) return null;
+
+    for (parsed.value.array.items) |item| {
+        if (item != .object) continue;
+        const obj = item.object;
+
+        // Check if this formula's name matches
+        const formula_name = getStr(obj, "name") orelse continue;
+        if (std.mem.eql(u8, formula_name, name)) {
+            // Exact match found - no need to resolve
+            return null;
+        }
+
+        // Check aliases
+        if (obj.get("aliases")) |aliases_val| {
+            if (aliases_val == .array) {
+                for (aliases_val.array.items) |alias_item| {
+                    if (alias_item == .string) {
+                        if (std.mem.eql(u8, alias_item.string, name)) {
+                            // Found alias match! Return the actual formula name
+                            return alloc.dupe(u8, formula_name) catch null;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+/// Fetch the cached formula list JSON (longer TTL since formulae don't change often).
+fn fetchFormulaList(alloc: std.mem.Allocator) ![]u8 {
+    const list_cache_path = API_CACHE_DIR ++ "/_formula_list.json";
+
+    // Check cache with 24-hour TTL
+    if (readCachedList(alloc, list_cache_path, 24 * 3600 * std.time.ns_per_s)) |data| return data;
+
+    const body = fetch.get(alloc, "https://formulae.brew.sh/api/formula.json") catch return error.FetchFailed;
+
+    // Write to cache
+    const _lio_fl = std.Io.Threaded.global_single_threaded.io();
+    std.Io.Dir.createDirAbsolute(_lio_fl, API_CACHE_DIR, .default_dir) catch {};
+    if (std.Io.Dir.createFileAbsolute(_lio_fl, list_cache_path, .{})) |file| {
+        defer file.close(_lio_fl);
+        file.writeStreamingAll(_lio_fl, body) catch {};
+    } else |_| {}
+
+    return body;
+}
+
+/// Read cached file with custom TTL.
+fn readCachedList(alloc: std.mem.Allocator, path: []const u8, ttl_ns: u64) ?[]u8 {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    const file = std.Io.Dir.openFileAbsolute(lib_io, path, .{}) catch return null;
+    defer file.close(lib_io);
+    const st = file.stat(lib_io) catch return null;
+    const now_ts = std.Io.Timestamp.now(lib_io, .real);
+    const age_ns: i96 = now_ts.nanoseconds - st.mtime.nanoseconds;
+    if (age_ns > @as(i96, @intCast(ttl_ns))) return null;
+    const sz = @min(st.size, 64 * 1024 * 1024);
+    const buf = alloc.alloc(u8, sz) catch return null;
+    const n = file.readPositionalAll(lib_io, buf, 0) catch { alloc.free(buf); return null; };
+    if (n < sz) {
+        const trimmed = alloc.realloc(buf, n) catch return buf[0..n];
+        return trimmed;
+    }
+    return buf;
+}
+
 /// Fetch formula using a shared HTTP client (avoids repeated TLS handshakes).
 pub fn fetchFormulaWithClient(alloc: std.mem.Allocator, client: ?*std.http.Client, name: []const u8) !Formula {
     // Tap formula: "user/tap/formula" -> fetch from GitHub
@@ -91,7 +170,20 @@ pub fn fetchFormulaWithClient(alloc: std.mem.Allocator, client: ?*std.http.Clien
         return formula;
     }
 
-    return fetchAndCache(alloc, client, name, cache_path);
+    const result = fetchAndCache(alloc, client, name, cache_path);
+    if (result == error.FormulaNotFound) {
+        // Try to resolve as an alias (e.g., "python" -> "python@3.14")
+        if (resolveFormulaAlias(alloc, name)) |resolved_name| {
+            defer alloc.free(resolved_name);
+            if (!std.mem.eql(u8, resolved_name, name)) {
+                // Found an alias, fetch with the resolved name
+                const r = fetchFormulaWithClient(alloc, client, resolved_name) catch return result;
+                // Return the formula with its resolved name
+                return r;
+            }
+        }
+    }
+    return result;
 }
 
 fn isTapRef(name: []const u8) bool {
@@ -151,9 +243,67 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
     errdefer alloc.free(token);
     const version = try allocDupe(alloc, getStr(root, "version") orelse return error.MissingField);
     errdefer alloc.free(version);
-    const url = try allocDupe(alloc, getStr(root, "url") orelse return error.MissingField);
+    // Resolve #{arch} in URL — Homebrew's cask DSL uses this for arch-specific downloads.
+    // The API returns the arm64-resolved URL by default; on x86_64 we need to substitute.
+    const cask_arch = comptime switch (@import("builtin").cpu.arch) {
+        .aarch64 => "arm64",
+        .x86_64 => "x86_64",
+        else => "arm64",
+    };
+    const raw_url = getStr(root, "url") orelse return error.MissingField;
+    const url = blk: {
+        if (std.mem.indexOf(u8, raw_url, "#{arch}") != null) {
+            break :blk try std.mem.replaceOwned(u8, alloc, raw_url, "#{arch}", cask_arch);
+        }
+        // On x86_64, also check the variations object for an Intel-specific URL override.
+        // Try macOS version keys newest-first so modern Intel Macs (Tahoe, Sequoia,
+        // Sonoma, Ventura, Monterey) match before falling through to the default arm64 URL.
+        // Fixes #174: casks with no #{arch} in their URL served the arm64 variant on Intel.
+        if (comptime @import("builtin").cpu.arch == .x86_64) {
+            if (root.get("variations")) |vars| {
+                if (vars == .object) {
+                    const intel_keys = [_][]const u8{
+                        "tahoe", "sequoia", "sonoma", "ventura", "monterey",
+                        "big_sur", "catalina", "mojave", "high_sierra", "x86_64",
+                    };
+                    for (intel_keys) |key| {
+                        if (vars.object.get(key)) |v| {
+                            if (v == .object) {
+                                if (getStr(v.object, "url")) |vurl| {
+                                    break :blk try allocDupe(alloc, vurl);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        break :blk try allocDupe(alloc, raw_url);
+    };
     errdefer alloc.free(url);
-    const sha256 = try allocDupe(alloc, getStr(root, "sha256") orelse "no_check");
+    // Pick sha256 matching the resolved URL source (variations may override it too)
+    const sha256 = blk: {
+        if (comptime @import("builtin").cpu.arch == .x86_64) {
+            if (root.get("variations")) |vars| {
+                if (vars == .object) {
+                    const intel_keys = [_][]const u8{
+                        "tahoe", "sequoia", "sonoma", "ventura", "monterey",
+                        "big_sur", "catalina", "mojave", "high_sierra", "x86_64",
+                    };
+                    for (intel_keys) |key| {
+                        if (vars.object.get(key)) |v| {
+                            if (v == .object) {
+                                if (getStr(v.object, "sha256")) |vsha| {
+                                    break :blk try allocDupe(alloc, vsha);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        break :blk try allocDupe(alloc, getStr(root, "sha256") orelse "no_check");
+    };
     errdefer alloc.free(sha256);
     const homepage = try allocDupe(alloc, getStr(root, "homepage") orelse "");
     errdefer alloc.free(homepage);

@@ -219,6 +219,9 @@ fn runInit() void {
         PREFIX ++ "/Caskroom",
         PREFIX ++ "/bin",
         PREFIX ++ "/opt",
+        PREFIX ++ "/lib",
+        PREFIX ++ "/include",
+        PREFIX ++ "/share",
         ROOT ++ "/cache",
         ROOT ++ "/cache/blobs",
         ROOT ++ "/cache/tmp",
@@ -244,6 +247,32 @@ fn runInit() void {
             },
         };
     }
+
+    // Create /opt/homebrew -> /opt/nanobrew/prefix compatibility symlink
+    // Homebrew bottles embed literal /opt/homebrew/ paths in binary data segments.
+    // These can't be safely rewritten (different string lengths). The symlink
+    // catches all such references without binary patching.
+    std.Io.Dir.symLinkAbsolute(g_io, PREFIX, "/opt/homebrew", .{}) catch |err| switch (err) {
+        error.PathAlreadyExists => {
+            // /opt/homebrew already exists — check if it's our symlink or something else
+            var target_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+            if (std.Io.Dir.readLinkAbsolute(g_io, "/opt/homebrew", &target_buf)) |target_n| {
+                const target = target_buf[0..target_n];
+                if (!std.mem.eql(u8, target, PREFIX)) {
+                    stdout.print("nb: note: /opt/homebrew is a symlink to {s} (not nanobrew)\n", .{target}) catch {};
+                }
+            } else |_| {
+                // Not a symlink — likely a real Homebrew installation directory
+                stdout.print("nb: note: /opt/homebrew exists (Homebrew installation detected), skipping compat symlink\n", .{}) catch {};
+            }
+            // Do NOT return — continue with remaining init steps
+        },
+        error.AccessDenied => {
+            // nb init runs with sudo, so this shouldn't happen, but warn if it does
+            std.Io.File.stderr().writeStreamingAll(g_io, "nb: warning: could not create /opt/homebrew compatibility symlink (permission denied)\n") catch {};
+        },
+        else => {},
+    };
 
     // If running as root (sudo), chown to the real user so nb install doesn't need sudo
     if (std.c.getenv("SUDO_USER")) |_sudo_cv| {
@@ -377,7 +406,8 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
     {
         var any_missing = false;
         for (formulae.items) |name| {
-            if (!resolver.hasFormula(name)) {
+            // Use hasFormulaOrAlias to handle aliases like "python" -> "python@3.14"
+            if (!resolver.hasFormulaOrAlias(alloc, name)) {
                 stderr.print("nb: formula not found: '{s}'\n", .{name}) catch {};
                 any_missing = true;
             }
@@ -388,8 +418,12 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
     const resolve_ms = @as(f64, @floatFromInt(phase_timer.read())) / 1_000_000.0;
     stdout.print("    [{d:.0}ms]\n", .{resolve_ms}) catch {};
 
-    const all_formulae = resolver.topologicalSort() catch {
-        stderr.print("nb: warning: dependency cycle detected for '{s}', skipping\n", .{formulae.items[0]}) catch {};
+    const all_formulae = resolver.topologicalSort() catch |err| {
+        if (err == error.DependencyCycle) {
+            stderr.print("nb: warning: circular dependency detected for '{s}', skipping\n", .{formulae.items[0]}) catch {};
+        } else {
+            stderr.print("nb: warning: dependency resolution failed for '{s}': {}, skipping\n", .{ formulae.items[0], err }) catch {};
+        }
         return;
     };
     defer alloc.free(all_formulae);
@@ -744,6 +778,9 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
     const actual_ver = nb.cellar.detectKegVersion(f.name, f.version, &ver_buf) orelse f.version;
     platform.relocate.relocateKeg(alloc, g_io, f.name, actual_ver) catch |err| {
         stderr.print("nb: {s}: relocate failed: {}\n", .{ f.name, err }) catch {};
+        had_error.store(true, .release);
+        phase.store(@intFromEnum(Phase.failed), .release);
+        return;
     };
 
     // 4b. Replace @@HOMEBREW_*@@ placeholders in text files (shebangs, scripts, configs)
@@ -755,6 +792,9 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
     phase.store(@intFromEnum(Phase.linking), .release);
     nb.linker.linkKeg(f.name, actual_ver) catch |err| {
         stderr.print("nb: {s}: link failed: {}\n", .{ f.name, err }) catch {};
+        had_error.store(true, .release);
+        phase.store(@intFromEnum(Phase.failed), .release);
+        return;
     };
 
     // 6. Post-install (non-fatal)
@@ -1976,10 +2016,28 @@ fn runDoctor(alloc: std.mem.Allocator) void {
         for (kegs) |keg| {
             var buf: [512]u8 = undefined;
             const cellar_path = std.fmt.bufPrint(&buf, "{s}/Cellar/{s}/{s}", .{ PREFIX, keg.name, keg.version }) catch continue;
-            std.Io.Dir.accessAbsolute(g_io, cellar_path, .{}) catch {
+            const found = blk: {
+                std.Io.Dir.accessAbsolute(g_io, cellar_path, .{}) catch {
+                    // Also check Homebrew cellar paths for migrated packages (#172)
+                    const homebrew_cellar_paths = [_][]const u8{
+                        "/opt/homebrew/Cellar",
+                        "/usr/local/Cellar",
+                        "/home/linuxbrew/.linuxbrew/Cellar",
+                    };
+                    for (homebrew_cellar_paths) |hb_cellar| {
+                        var hb_buf: [512]u8 = undefined;
+                        const hb_path = std.fmt.bufPrint(&hb_buf, "{s}/{s}/{s}", .{ hb_cellar, keg.name, keg.version }) catch continue;
+                        std.Io.Dir.accessAbsolute(g_io, hb_path, .{}) catch continue;
+                        break :blk true;
+                    }
+                    break :blk false;
+                };
+                break :blk true;
+            };
+            if (!found) {
                 stdout.print("  ✗ DB entry '{s}' has no Cellar dir\n", .{keg.name}) catch {};
                 issues += 1;
-            };
+            }
         }
 
         if (std.Io.Dir.openDirAbsolute(g_io, ROOT ++ "/store", .{ .iterate = true })) |d| {
@@ -2645,8 +2703,12 @@ fn runDeps(alloc: std.mem.Allocator, args: []const []const u8) void {
     if (tree_mode) {
         renderDepTree(stdout, &resolver, name, "", true);
     } else {
-        const sorted = resolver.topologicalSort() catch {
-            stderr.print("nb: dependency cycle detected\n", .{}) catch {};
+        const sorted = resolver.topologicalSort() catch |err| {
+            if (err == error.DependencyCycle) {
+                stderr.print("nb: dependency cycle detected in '{s}' dependency graph\n", .{name}) catch {};
+            } else {
+                stderr.print("nb: failed to sort dependencies for '{s}': {}\n", .{ name, err }) catch {};
+            }
             std.process.exit(1);
         };
         defer alloc.free(sorted);

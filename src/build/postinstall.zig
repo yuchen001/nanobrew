@@ -8,40 +8,45 @@ const std = @import("std");
 const Formula = @import("../api/formula.zig").Formula;
 const fetch = @import("../net/fetch.zig");
 
-fn printOut(lib_io: std.Io, comptime fmt: []const u8, args: anytype) void {
-    var buf: [1024]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, fmt, args) catch fmt;
-    std.Io.File.stdout().writeStreamingAll(lib_io, msg) catch {};
-}
 
-fn printErr(lib_io: std.Io, comptime fmt: []const u8, args: anytype) void {
-    var buf: [1024]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, fmt, args) catch fmt;
-    std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
-}
+const sandbox = @import("sandbox.zig");
+const formula_cache = @import("formula_cache.zig");
+
+pub const ParsedCommand = struct {
+    argv: []const []const u8,
+
+    pub fn deinit(self: ParsedCommand, alloc: std.mem.Allocator) void {
+        for (self.argv) |arg| alloc.free(arg);
+        alloc.free(self.argv);
+    }
+};
 
 pub fn runPostInstall(alloc: std.mem.Allocator, formula: Formula) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    const _io = std.Io.Threaded.global_single_threaded.io();
 
     // Execute post_install if defined
     if (formula.post_install_defined) {
-        printOut(lib_io, "==> Running post-install for {s}...\n", .{formula.name});
-        runPostInstallScript(alloc, lib_io, formula) catch |err| {
-            printErr(lib_io, "nb: {s}: post-install script failed: {}\n", .{ formula.name, err });
+        ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "==> Running post-install for {s}...\n", .{formula.name}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stdout().writeStreamingAll(_io, _tmp) catch {}; });
+        runPostInstallScript(alloc, formula) catch |err| {
+            ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "nb: {s}: post-install script failed: {}\n", .{ formula.name, err }) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stderr().writeStreamingAll(_io, _tmp) catch {}; });
         };
     }
 
     // Display caveats
     if (formula.caveats.len > 0) {
-        printOut(lib_io, "==> Caveats\n{s}", .{formula.caveats});
+        ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "==> Caveats\n{s}", .{formula.caveats}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stdout().writeStreamingAll(_io, _tmp) catch {}; });
         // Ensure trailing newline
         if (formula.caveats[formula.caveats.len - 1] != '\n') {
-            printOut(lib_io, "\n", .{});
+            ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "\n", .{}) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stdout().writeStreamingAll(_io, _tmp) catch {}; });
         }
     }
 }
 
-fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formula) !void {
+fn runPostInstallScript(alloc: std.mem.Allocator, formula: Formula) !void {
+    const _io = std.Io.Threaded.global_single_threaded.io();
+    // Compute effective version early (needed for cache key)
+    var ver_buf: [128]u8 = undefined;
+    const eff_ver = formula.effectiveVersion(&ver_buf);
 
     // Fetch Ruby formula source
     const first_letter = if (formula.name.len > 0) formula.name[0..1] else return;
@@ -50,7 +55,7 @@ fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formu
     }) catch return error.OutOfMemory;
     defer alloc.free(url);
 
-    const ruby_src = fetch.get(alloc, url) catch return;
+    const ruby_src = formula_cache.getVerifiedFormula(alloc, formula.name, eff_ver, url) catch return;
     defer alloc.free(ruby_src);
 
     if (ruby_src.len == 0) return;
@@ -60,8 +65,6 @@ fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formu
 
     // Parse and execute commands
     var keg_buf: [512]u8 = undefined;
-    var ver_buf: [128]u8 = undefined;
-    const eff_ver = formula.effectiveVersion(&ver_buf);
     const keg_path = std.fmt.bufPrint(&keg_buf, "/opt/nanobrew/prefix/Cellar/{s}/{s}", .{
         formula.name, eff_ver,
     }) catch return;
@@ -72,20 +75,14 @@ fn runPostInstallScript(alloc: std.mem.Allocator, lib_io: std.Io, formula: Formu
         if (trimmed.len == 0) continue;
 
         if (parseRubyCommand(alloc, trimmed, formula.name, keg_path)) |cmd| {
-            defer alloc.free(cmd);
-            const result = std.process.run(alloc, lib_io, .{
-                .argv = &.{ "/bin/sh", "-c", cmd },
-                .stdout_limit = .limited(64 * 1024),
-                .stderr_limit = .limited(64 * 1024),
+            defer cmd.deinit(alloc);
+            const result = std.process.run(alloc, _io, .{
+                .argv = cmd.argv,
             }) catch continue;
-            defer alloc.free(result.stdout);
-            defer alloc.free(result.stderr);
-            const failed = switch (result.term) {
-                .exited => |code| code != 0,
-                else => true,
-            };
-            if (failed) {
-                printErr(lib_io, "nb: {s}: post-install command failed: {s}\n", .{ formula.name, cmd });
+            alloc.free(result.stdout);
+            alloc.free(result.stderr);
+            if (result.term == .exited and result.term.exited != 0) {
+                ({ const _tmp = std.fmt.allocPrint(std.heap.smp_allocator, "nb: {s}: post-install command failed (exit {d})\n", .{ formula.name, result.term.exited }) catch ""; defer std.heap.smp_allocator.free(_tmp); std.Io.File.stderr().writeStreamingAll(_io, _tmp) catch {}; });
             }
         }
     }
@@ -141,9 +138,9 @@ fn startsWithKeyword(line: []const u8, keyword: []const u8) bool {
     return next == ' ' or next == '\t' or next == '\n';
 }
 
-fn parseRubyCommand(alloc: std.mem.Allocator, line: []const u8, name: []const u8, keg_path: []const u8) ?[]const u8 {
+fn parseRubyCommand(alloc: std.mem.Allocator, line: []const u8, name: []const u8, keg_path: []const u8) ?ParsedCommand {
     _ = name;
-    // system "cmd", "arg1", "arg2" → cmd arg1 arg2
+    // system "cmd", "arg1", "arg2" → run cmd directly with args (no shell)
     if (std.mem.startsWith(u8, line, "system ")) {
         return parseSystemCall(alloc, line["system ".len..], keg_path);
     }
@@ -152,8 +149,8 @@ fn parseRubyCommand(alloc: std.mem.Allocator, line: []const u8, name: []const u8
     if (std.mem.indexOf(u8, line, ".mkpath")) |_| {
         if (extractPathExpr(line)) |path_expr| {
             const resolved = resolvePath(alloc, path_expr, keg_path) catch return null;
-            defer alloc.free(resolved);
-            return std.fmt.allocPrint(alloc, "mkdir -p {s}", .{resolved}) catch null;
+            const argv = alloc.dupe([]const u8, &.{ "mkdir", "-p", resolved }) catch { alloc.free(resolved); return null; };
+            return ParsedCommand{ .argv = argv };
         }
     }
 
@@ -161,12 +158,12 @@ fn parseRubyCommand(alloc: std.mem.Allocator, line: []const u8, name: []const u8
     if (std.mem.startsWith(u8, line, "mkdir_p ")) {
         if (extractQuotedString(line["mkdir_p ".len..])) |path| {
             const resolved = resolvePath(alloc, path, keg_path) catch return null;
-            defer alloc.free(resolved);
-            return std.fmt.allocPrint(alloc, "mkdir -p {s}", .{resolved}) catch null;
+            const argv = alloc.dupe([]const u8, &.{ "mkdir", "-p", resolved }) catch { alloc.free(resolved); return null; };
+            return ParsedCommand{ .argv = argv };
         }
     }
 
-    // ln_sf source, target → ln -sf source target
+    // ln_sf source, target → ln -sf source target (no shell)
     if (std.mem.startsWith(u8, line, "ln_sf ")) {
         return parseLnSf(alloc, line["ln_sf ".len..], keg_path);
     }
@@ -174,9 +171,13 @@ fn parseRubyCommand(alloc: std.mem.Allocator, line: []const u8, name: []const u8
     return null;
 }
 
-fn parseSystemCall(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []const u8) ?[]const u8 {
+fn parseSystemCall(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []const u8) ?ParsedCommand {
+    // Parse "cmd", "arg1", "arg2" into an argv array — no shell involved
     var parts: std.ArrayList([]const u8) = .empty;
-    defer parts.deinit(alloc);
+    errdefer {
+        for (parts.items) |p| alloc.free(p);
+        parts.deinit(alloc);
+    }
 
     var rest = args_str;
     while (rest.len > 0) {
@@ -185,7 +186,7 @@ fn parseSystemCall(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []c
 
         if (extractQuotedString(rest)) |quoted| {
             const resolved = resolvePath(alloc, quoted, keg_path) catch return null;
-            parts.append(alloc, resolved) catch return null;
+            parts.append(alloc, resolved) catch { alloc.free(resolved); return null; };
             // Advance past the quoted string + quotes + comma
             const skip = std.mem.indexOf(u8, rest[1..], &[_]u8{rest[0]});
             if (skip) |s| {
@@ -196,24 +197,12 @@ fn parseSystemCall(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []c
 
     if (parts.items.len == 0) return null;
 
-    // Join all parts with spaces
-    var total: usize = 0;
-    for (parts.items) |p| total += p.len + 1;
-    const result = alloc.alloc(u8, total) catch return null;
-    var pos: usize = 0;
-    for (parts.items, 0..) |p, i| {
-        @memcpy(result[pos..][0..p.len], p);
-        pos += p.len;
-        if (i < parts.items.len - 1) {
-            result[pos] = ' ';
-            pos += 1;
-        }
-    }
-    return result[0..pos];
+    const argv = parts.toOwnedSlice(alloc) catch return null;
+    return ParsedCommand{ .argv = argv };
 }
 
-fn parseLnSf(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []const u8) ?[]const u8 {
-    // Parse: "source", "target" or source, target
+fn parseLnSf(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []const u8) ?ParsedCommand {
+    // Parse: "source", "target" → argv ["ln", "-sf", source, target] — no shell
     var rest = std.mem.trim(u8, args_str, " \t");
     const src = extractQuotedString(rest) orelse return null;
     // Skip past first quoted string
@@ -223,11 +212,19 @@ fn parseLnSf(alloc: std.mem.Allocator, args_str: []const u8, keg_path: []const u
     const tgt = extractQuotedString(rest) orelse return null;
 
     const rsrc = resolvePath(alloc, src, keg_path) catch return null;
-    defer alloc.free(rsrc);
-    const rtgt = resolvePath(alloc, tgt, keg_path) catch return null;
-    defer alloc.free(rtgt);
+    errdefer alloc.free(rsrc);
+    const rtgt = resolvePath(alloc, tgt, keg_path) catch { alloc.free(rsrc); return null; };
+    errdefer alloc.free(rtgt);
 
-    return std.fmt.allocPrint(alloc, "ln -sf {s} {s}", .{ rsrc, rtgt }) catch null;
+    const ln = alloc.dupe(u8, "ln") catch { alloc.free(rsrc); alloc.free(rtgt); return null; };
+    errdefer alloc.free(ln);
+    const flag = alloc.dupe(u8, "-sf") catch { alloc.free(rsrc); alloc.free(rtgt); alloc.free(ln); return null; };
+
+    const argv = alloc.dupe([]const u8, &.{ ln, flag, rsrc, rtgt }) catch {
+        alloc.free(rsrc); alloc.free(rtgt); alloc.free(ln); alloc.free(flag);
+        return null;
+    };
+    return ParsedCommand{ .argv = argv };
 }
 
 fn extractQuotedString(s: []const u8) ?[]const u8 {

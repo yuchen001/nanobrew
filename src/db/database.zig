@@ -33,7 +33,7 @@ pub const HistoryEntry = struct {
 pub const DebRecord = struct {
     name: []const u8,
     version: []const u8,
-    files: []const []const u8, // installed file paths (from data.tar)
+    files: []const []const u8,
     sha256: []const u8 = "",
     installed_at: i64 = 0,
 };
@@ -44,6 +44,9 @@ pub const Database = struct {
     casks: std.ArrayList(CaskRecord),
     debs: std.ArrayList(DebRecord),
     history: std.StringHashMap(std.ArrayList(HistoryEntry)),
+    dirty: bool = false,
+
+    pub const MAX_DB_SIZE: usize = 16 * 1024 * 1024;
 
     pub fn open(alloc: std.mem.Allocator) !Database {
         var db = Database{
@@ -58,7 +61,7 @@ pub const Database = struct {
         const file = std.Io.Dir.openFileAbsolute(lib_io, DB_PATH, .{}) catch return db;
         defer file.close(lib_io);
 
-        const max_state_bytes = 16 * 1024 * 1024;
+        const max_state_bytes = MAX_DB_SIZE;
         const st = file.stat(lib_io) catch return db;
         const sz = @min(st.size, max_state_bytes);
         const contents = alloc.alloc(u8, sz) catch return db;
@@ -97,7 +100,6 @@ pub const Database = struct {
                     }
                 }
             }
-            // Parse casks (backward compatible — missing key = empty list)
             if (parsed.value.object.get("casks")) |casks_val| {
                 if (casks_val == .array) {
                     for (casks_val.array.items) |item| {
@@ -136,7 +138,6 @@ pub const Database = struct {
                     }
                 }
             }
-            // Parse history (backward compatible — missing key = empty)
             if (parsed.value.object.get("history")) |hist_val| {
                 if (hist_val == .object) {
                     var hist_iter = hist_val.object.iterator();
@@ -160,7 +161,6 @@ pub const Database = struct {
                     }
                 }
             }
-            // Parse deb packages (backward compatible — missing key = empty)
             if (parsed.value.object.get("deb_packages")) |debs_val| {
                 if (debs_val == .array) {
                     for (debs_val.array.items) |item| {
@@ -197,15 +197,15 @@ pub const Database = struct {
     }
 
     pub fn close(self: *Database) void {
-        self.save() catch {};
-        // Free all allocated keg strings
+        self.save() catch |err| {
+            var _warn_buf: [256]u8 = undefined; const _warn_msg = std.fmt.bufPrint(&_warn_buf, "nb: WARNING: failed to save package database: {}\n", .{err}) catch "nb: WARNING: failed to save package database\n"; std.Io.File.stderr().writeStreamingAll(std.Io.Threaded.global_single_threaded.io(), _warn_msg) catch {};
+        };
         for (self.kegs.items) |keg| {
             self.alloc.free(keg.name);
             self.alloc.free(keg.version);
             self.alloc.free(keg.sha256);
         }
         self.kegs.deinit(self.alloc);
-        // Free all allocated cask strings
         for (self.casks.items) |c| {
             self.alloc.free(c.token);
             self.alloc.free(c.version);
@@ -215,7 +215,6 @@ pub const Database = struct {
             self.alloc.free(c.binaries);
         }
         self.casks.deinit(self.alloc);
-        // Free all allocated deb strings
         for (self.debs.items) |d| {
             self.alloc.free(d.name);
             self.alloc.free(d.version);
@@ -224,7 +223,6 @@ pub const Database = struct {
             self.alloc.free(d.files);
         }
         self.debs.deinit(self.alloc);
-        // Free history entries
         var hist_it = self.history.iterator();
         while (hist_it.next()) |entry| {
             self.alloc.free(entry.key_ptr.*);
@@ -242,14 +240,11 @@ pub const Database = struct {
         const _now_ts = std.Io.Timestamp.now(_lib_io_ri, .real);
         const now: i64 = @as(i64, @truncate(@divTrunc(_now_ts.nanoseconds, std.time.ns_per_s)));
 
-        // Push old version to history before replacing
         var i: usize = 0;
         while (i < self.kegs.items.len) {
             if (std.mem.eql(u8, self.kegs.items[i].name, name)) {
                 const old = self.kegs.items[i];
-                // Save to history (best-effort)
                 self.pushHistory(name, old) catch {};
-                // Free heap strings before removing from list
                 self.alloc.free(old.name);
                 self.alloc.free(old.version);
                 self.alloc.free(old.sha256);
@@ -266,7 +261,7 @@ pub const Database = struct {
             .pinned = false,
             .installed_at = now,
         });
-        try self.save();
+        self.dirty = true;
     }
 
     fn pushHistory(self: *Database, name: []const u8, old: Keg) !void {
@@ -296,7 +291,7 @@ pub const Database = struct {
                 i += 1;
             }
         }
-        try self.save();
+        self.dirty = true;
     }
 
     pub fn findKeg(self: *Database, name: []const u8) ?Keg {
@@ -313,7 +308,6 @@ pub const Database = struct {
     }
 
     pub fn recordCaskInstall(self: *Database, token: []const u8, version: []const u8, apps: []const []const u8, binaries: []const []const u8) !void {
-        // Remove existing entry for this token
         var i: usize = 0;
         while (i < self.casks.items.len) {
             if (std.mem.eql(u8, self.casks.items[i].token, token)) {
@@ -330,7 +324,6 @@ pub const Database = struct {
             }
         }
 
-        // Dupe all strings
         const dapps = try self.alloc.alloc([]const u8, apps.len);
         for (apps, 0..) |a, idx| dapps[idx] = try self.alloc.dupe(u8, a);
         const dbins = try self.alloc.alloc([]const u8, binaries.len);
@@ -342,7 +335,7 @@ pub const Database = struct {
             .apps = dapps,
             .binaries = dbins,
         });
-        try self.save();
+        self.dirty = true;
     }
 
     pub fn recordCaskRemoval(self: *Database, token: []const u8, alloc: std.mem.Allocator) !void {
@@ -362,7 +355,7 @@ pub const Database = struct {
                 i += 1;
             }
         }
-        try self.save();
+        self.dirty = true;
     }
 
     pub fn findCask(self: *Database, token: []const u8) ?CaskRecord {
@@ -382,7 +375,7 @@ pub const Database = struct {
         for (self.kegs.items) |*keg| {
             if (std.mem.eql(u8, keg.name, name)) {
                 keg.pinned = pinned;
-                try self.save();
+                self.dirty = true;
                 return;
             }
         }
@@ -401,7 +394,6 @@ pub const Database = struct {
         _ = std.c.clock_gettime(.REALTIME, &ts_now);
         const now: i64 = ts_now.sec;
 
-        // Remove existing entry for this package
         var i: usize = 0;
         while (i < self.debs.items.len) {
             if (std.mem.eql(u8, self.debs.items[i].name, name)) {
@@ -417,7 +409,6 @@ pub const Database = struct {
             }
         }
 
-        // Dupe file list
         const dfiles = try self.alloc.alloc([]const u8, files.len);
         for (files, 0..) |f, idx| dfiles[idx] = try self.alloc.dupe(u8, f);
 
@@ -428,7 +419,7 @@ pub const Database = struct {
             .sha256 = try self.alloc.dupe(u8, sha256),
             .installed_at = now,
         });
-        try self.save();
+        self.dirty = true;
     }
 
     pub fn recordDebRemoval(self: *Database, name: []const u8) !void {
@@ -446,7 +437,7 @@ pub const Database = struct {
                 i += 1;
             }
         }
-        try self.save();
+        self.dirty = true;
     }
 
     pub fn findDeb(self: *Database, name: []const u8) ?DebRecord {
@@ -462,7 +453,6 @@ pub const Database = struct {
         return result;
     }
 
-    /// Write a JSON-escaped string to the writer (escapes \, ", control chars).
     pub fn writeJsonEscaped(writer: anytype, s: []const u8) void {
         for (s) |c| {
             switch (c) {
@@ -473,7 +463,6 @@ pub const Database = struct {
                 '\t' => writer.writeAll("\\t") catch {},
                 else => {
                     if (c < 0x20) {
-                        // Escape other control characters as \u00XX
                         const hex = "0123456789abcdef";
                         writer.writeAll("\\u00") catch {};
                         writer.writeAll(&.{ hex[c >> 4], hex[c & 0x0f] }) catch {};
@@ -485,7 +474,6 @@ pub const Database = struct {
         }
     }
 
-    /// Write a JSON-quoted string: "escaped_value"
     pub fn writeJsonString(writer: anytype, s: []const u8) void {
         writer.writeAll("\"") catch {};
         writeJsonEscaped(writer, s);
@@ -493,9 +481,7 @@ pub const Database = struct {
     }
 
     fn save(self: *Database) !void {
-        // Write to a temp file first, then rename atomically.
-        // This ensures readers always see a complete file — a SIGKILL
-        // or power-loss mid-write cannot corrupt state.json.
+        if (!self.dirty) return;
         const tmp_path = DB_PATH ++ ".tmp";
         const lib_io = std.Io.Threaded.global_single_threaded.io();
         const file = try std.Io.Dir.createFileAbsolute(lib_io, tmp_path, .{});
@@ -536,7 +522,6 @@ pub const Database = struct {
             }
             writer.interface.writeAll("]}") catch {};
         }
-        // Serialize history
         writer.interface.writeAll("],\"history\":{") catch { write_ok = false; };
         var hist_iter = self.history.iterator();
         var hist_first = true;
@@ -555,7 +540,6 @@ pub const Database = struct {
             }
             writer.interface.writeAll("]") catch {};
         }
-        // Serialize deb packages
         writer.interface.writeAll("},\"deb_packages\":[") catch { write_ok = false; };
         for (self.debs.items, 0..) |d, i| {
             if (i > 0) writer.interface.writeAll(",") catch {};
@@ -583,8 +567,8 @@ pub const Database = struct {
             return error.SaveFailed;
         }
 
-        // Atomic rename: readers see either the old complete file or the new one
         try std.Io.Dir.renameAbsolute(tmp_path, DB_PATH, lib_io);
+        self.dirty = false;
     }
 };
 
@@ -609,11 +593,8 @@ fn getInt(obj: std.json.ObjectMap, key: []const u8) i64 {
     return 0;
 }
 
-// ── Security tests ──
-
 const testing = std.testing;
 
-/// Minimal anytype-compatible writer for tests — writes into a fixed stack buffer.
 const TestBufWriter = struct {
     buf: [20480]u8 = undefined,
     pos: usize = 0,
@@ -666,13 +647,10 @@ test "writeJsonString produces valid JSON string" {
 }
 
 test "writeJsonEscaped blocks JSON injection payload" {
-    // A malicious package name that tries to break out of JSON
     var w: TestBufWriter = .{};
     const malicious = "evil\",\"pinned\":true,\"x\":\"";
     Database.writeJsonEscaped(&w, malicious);
     const escaped = w.written();
-    // The escaped output must NOT contain unescaped quotes
-    // Count unescaped quotes (quotes not preceded by backslash)
     var unescaped_quotes: usize = 0;
     for (escaped, 0..) |c, i| {
         if (c == '"' and (i == 0 or escaped[i - 1] != '\\')) {
