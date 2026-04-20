@@ -24,6 +24,7 @@ const Command = enum {
     leaves,
     info,
     search,
+    where,
     upgrade,
     update,
     help,
@@ -105,7 +106,7 @@ fn milliTimestamp() i64 {
 
 const ROOT = paths.ROOT;
 const PREFIX = paths.PREFIX;
-const VERSION = "0.1.190";
+const VERSION = "0.1.191";
 
 pub fn main(init: std.process.Init) !void {
     g_io = init.io;
@@ -139,6 +140,7 @@ pub fn main(init: std.process.Init) !void {
         .leaves => runLeaves(alloc, args[2..]),
         .info => runInfo(alloc, args[2..]),
         .search => runSearch(alloc, args[2..]),
+        .where => runWhere(alloc, args[2..]),
         .upgrade => runUpgrade(alloc, args[2..]),
         .update => runUpdate(alloc),
         .help => printUsage(),
@@ -159,7 +161,6 @@ pub fn main(init: std.process.Init) !void {
     // Check for updates (once per day, non-blocking)
     checkForUpdate(alloc);
 }
-
 fn parseCommand(arg: []const u8) ?Command {
     const cmds = .{
         .{ "init", Command.init },
@@ -175,6 +176,8 @@ fn parseCommand(arg: []const u8) ?Command {
         .{ "info", Command.info },
         .{ "search", Command.search },
         .{ "s", Command.search },
+        .{ "where", Command.where },
+        .{ "wh", Command.where },
         .{ "upgrade", Command.upgrade },
         .{ "update", Command.update },
         .{ "self-update", Command.update },
@@ -1018,6 +1021,131 @@ fn runList(alloc: std.mem.Allocator) void {
     }
 }
 
+// ── nb where ──
+
+fn containsAsciiCaseless(haystack: []const u8, needle_lower: []const u8) bool {
+    if (needle_lower.len == 0) return true;
+    if (needle_lower.len > haystack.len) return false;
+    const end = haystack.len - needle_lower.len + 1;
+    var i: usize = 0;
+    while (i < end) : (i += 1) {
+        var j: usize = 0;
+        while (j < needle_lower.len) : (j += 1) {
+            if (std.ascii.toLower(haystack[i + j]) != needle_lower[j]) break;
+        }
+        if (j == needle_lower.len) return true;
+    }
+    return false;
+}
+
+fn runWhere(alloc: std.mem.Allocator, args: []const []const u8) void {
+    const stdout = StdoutWriter{};
+    const stderr = StderrWriter{};
+
+    if (args.len == 0) {
+        stderr.print("nb: no pattern specified\nUsage: nb where <pattern>\n", .{}) catch {};
+        std.process.exit(1);
+    }
+
+    const pattern = args[0];
+    var lower_buf: [256]u8 = undefined;
+    const plen = @min(pattern.len, lower_buf.len);
+    for (pattern[0..plen], 0..) |c, i| lower_buf[i] = std.ascii.toLower(c);
+    const needle = lower_buf[0..plen];
+
+    // 1. Installed (kegs, casks, debs)
+    stdout.print("\x1b[1m==> installed matching \"{s}\":\x1b[0m\n", .{pattern}) catch {};
+    var installed_hits: usize = 0;
+    if (nb.database.Database.open(alloc)) |opened_db| {
+        var db = opened_db;
+        defer db.close();
+
+        const kegs = db.listInstalled(alloc) catch &.{};
+        defer if (kegs.len > 0) alloc.free(kegs);
+        for (kegs) |k| {
+            if (!containsAsciiCaseless(k.name, needle)) continue;
+            const pin_tag = if (k.pinned) " [pinned]" else "";
+            stdout.print("  {s} {s}{s}\n", .{ k.name, k.version, pin_tag }) catch {};
+            installed_hits += 1;
+        }
+
+        if (db.listInstalledCasks(alloc)) |casks| {
+            defer alloc.free(casks);
+            for (casks) |c| {
+                if (!containsAsciiCaseless(c.token, needle)) continue;
+                stdout.print("  {s} {s} (cask)\n", .{ c.token, c.version }) catch {};
+                installed_hits += 1;
+            }
+        } else |_| {}
+
+        if (db.listInstalledDebs(alloc)) |debs| {
+            defer alloc.free(debs);
+            for (debs) |d| {
+                if (!containsAsciiCaseless(d.name, needle)) continue;
+                stdout.print("  {s} {s} (deb)\n", .{ d.name, d.version }) catch {};
+                installed_hits += 1;
+            }
+        } else |_| {}
+    } else |_| {
+        stdout.print("  (could not open database)\n", .{}) catch {};
+    }
+    if (installed_hits == 0) stdout.print("  (none)\n", .{}) catch {};
+
+    // 2. Files in prefix/{bin,lib,opt}
+    const prefix_subs = [_][]const u8{ "bin", "lib", "opt" };
+    for (prefix_subs) |sub| {
+        var dir_buf: [256]u8 = undefined;
+        const dir_path = std.fmt.bufPrint(&dir_buf, "{s}/{s}", .{ PREFIX, sub }) catch continue;
+        stdout.print("\x1b[1m==> {s}/ matching \"{s}\":\x1b[0m\n", .{ dir_path, pattern }) catch {};
+        var file_hits: usize = 0;
+        if (std.Io.Dir.openDirAbsolute(g_io, dir_path, .{ .iterate = true })) |d| {
+            var dir = d;
+            defer dir.close(g_io);
+            var iter = dir.iterate();
+            while (iter.next(g_io) catch null) |entry| {
+                if (!containsAsciiCaseless(entry.name, needle)) continue;
+                const kind_tag: []const u8 = switch (entry.kind) {
+                    .directory => "/",
+                    .sym_link => "@",
+                    else => "",
+                };
+                if (file_hits < 50) {
+                    stdout.print("  {s}{s}\n", .{ entry.name, kind_tag }) catch {};
+                }
+                file_hits += 1;
+            }
+        } else |_| {}
+        if (file_hits == 0) {
+            stdout.print("  (none)\n", .{}) catch {};
+        } else if (file_hits > 50) {
+            stdout.print("  ... and {d} more\n", .{file_hits - 50}) catch {};
+        }
+    }
+
+    // 3. Formula/cask index hits
+    stdout.print("\x1b[1m==> formula index matches for \"{s}\":\x1b[0m\n", .{pattern}) catch {};
+    if (nb.search_api.search(alloc, pattern)) |results| {
+        defer {
+            for (results) |r| r.deinit(alloc);
+            if (results.len > 0) alloc.free(results);
+        }
+        if (results.len == 0) {
+            stdout.print("  (none)\n", .{}) catch {};
+        } else {
+            const cap = @min(results.len, 20);
+            for (results[0..cap]) |r| {
+                const tag = if (r.is_cask) " (cask)" else "";
+                stdout.print("  {s} {s}{s} - {s}\n", .{ r.name, r.version, tag, r.desc }) catch {};
+            }
+            if (results.len > cap) {
+                stdout.print("  ... and {d} more\n", .{results.len - cap}) catch {};
+            }
+        }
+    } else |err| {
+        stdout.print("  (search failed: {s})\n", .{@errorName(err)}) catch {};
+    }
+}
+
 // ── nb leaves ──
 
 fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
@@ -1054,6 +1182,13 @@ fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
     var pkg_deps = std.StringHashMap([]const []const u8).init(alloc);
     defer pkg_deps.deinit();
 
+    // O(1) lookup from keg name -> Keg (version for tree output, membership test).
+    // Keyed on borrowed slices from kegs, so lifetime follows `kegs`.
+    var keg_set = std.StringHashMap(nb.database.Keg).init(alloc);
+    defer keg_set.deinit();
+    keg_set.ensureTotalCapacity(@intCast(kegs.len)) catch {};
+    for (kegs) |k| keg_set.put(k.name, k) catch {};
+
     // Keep fetched formulae alive until both loops finish; depended_on and
     // pkg_deps hold slices that point into formula memory.
     var fetched_formulae: std.ArrayList(nb.formula.Formula) = .empty;
@@ -1062,15 +1197,71 @@ fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
         fetched_formulae.deinit(alloc);
     }
 
-    // Fetch dependency info for each installed package from the API cache
+    // Parallel fetch — each worker thread owns a persistent std.http.Client and
+    // steals work from a shared atomic counter. Mirrors checkWorkerFn pattern.
+    const SlotState = enum(u8) { empty, filled };
+    const Slot = struct {
+        state: SlotState = .empty,
+        formula: nb.formula.Formula = undefined,
+    };
+
+    const slots = alloc.alloc(Slot, kegs.len) catch {
+        stderr.print("nb: out of memory\n", .{}) catch {};
+        return;
+    };
+    defer alloc.free(slots);
+    for (slots) |*s| s.* = .{};
+
+    const LeavesCtx = struct {
+        kegs_: []const nb.database.Keg,
+        slots_: []Slot,
+        next_idx: *std.atomic.Value(usize),
+        alloc_: std.mem.Allocator,
+    };
+
+    const leavesWorkerFn = struct {
+        fn run(ctx: LeavesCtx) void {
+            var client: std.http.Client = .{ .allocator = ctx.alloc_, .io = g_io };
+            defer client.deinit();
+
+            while (true) {
+                const idx = ctx.next_idx.fetchAdd(1, .monotonic);
+                if (idx >= ctx.kegs_.len) break;
+                const keg = ctx.kegs_[idx];
+                const formula = nb.api_client.fetchFormulaWithClient(ctx.alloc_, &client, keg.name) catch continue;
+                ctx.slots_[idx].formula = formula;
+                ctx.slots_[idx].state = .filled;
+            }
+        }
+    }.run;
+
+    var next_idx = std.atomic.Value(usize).init(0);
+    const ctx = LeavesCtx{
+        .kegs_ = kegs,
+        .slots_ = slots,
+        .next_idx = &next_idx,
+        .alloc_ = alloc,
+    };
+
+    const n_threads = @min(kegs.len, 8);
+    var threads: [8]std.Thread = undefined;
+    var spawned: usize = 0;
+    for (0..n_threads) |_| {
+        threads[spawned] = std.Thread.spawn(.{}, leavesWorkerFn, .{ctx}) catch continue;
+        spawned += 1;
+    }
+    for (threads[0..spawned]) |t| t.join();
+
+    // Collect results serially, preserving `kegs` order.
     var fetch_failures: usize = 0;
-    for (kegs) |keg| {
-        const formula = nb.api_client.fetchFormula(alloc, keg.name) catch {
+    fetched_formulae.ensureTotalCapacity(alloc, kegs.len) catch {};
+    for (kegs, 0..) |keg, i| {
+        if (slots[i].state != .filled) {
             fetch_failures += 1;
             continue;
-        };
-        fetched_formulae.append(alloc, formula) catch {
-            formula.deinit(alloc);
+        }
+        fetched_formulae.append(alloc, slots[i].formula) catch {
+            slots[i].formula.deinit(alloc);
             continue;
         };
         const f = &fetched_formulae.items[fetched_formulae.items.len - 1];
@@ -1079,12 +1270,9 @@ fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
         }
         for (f.dependencies) |dep| {
             if (std.mem.eql(u8, dep, keg.name)) continue; // skip self-dep
-            // Check if the dep is actually installed
-            for (kegs) |other| {
-                if (std.mem.eql(u8, other.name, dep)) {
-                    depended_on.put(dep, {}) catch {};
-                    break;
-                }
+            // O(1) membership test against installed kegs.
+            if (keg_set.contains(dep)) {
+                depended_on.put(dep, {}) catch {};
             }
         }
     }
@@ -1102,12 +1290,9 @@ fn runLeaves(alloc: std.mem.Allocator, args: []const []const u8) void {
             if (show_tree) {
                 if (pkg_deps.get(keg.name)) |deps| {
                     for (deps) |dep| {
-                        // Only show installed deps
-                        for (kegs) |other| {
-                            if (std.mem.eql(u8, other.name, dep)) {
-                                stdout.print("  {s} {s}\n", .{ dep, other.version }) catch {};
-                                break;
-                            }
+                        // O(1) lookup — only show installed deps.
+                        if (keg_set.get(dep)) |other| {
+                            stdout.print("  {s} {s}\n", .{ dep, other.version }) catch {};
                         }
                     }
                 }
@@ -1155,6 +1340,7 @@ fn runInfo(alloc: std.mem.Allocator, args: []const []const u8) void {
                 }
                 continue;
             };
+            defer f.deinit(alloc);
             const bottled = f.bottle_url.len > 0;
             stdout.print("{s} {s}{s}\n", .{
                 f.name,
@@ -1192,7 +1378,6 @@ fn runInfo(alloc: std.mem.Allocator, args: []const []const u8) void {
                     stdout.print("    {s}\n", .{line}) catch {};
                 }
             }
-            f.deinit(alloc);
         }
     }
 }
@@ -1306,6 +1491,12 @@ const Outdated = struct {
     new_ver: []const u8,
     is_cask_pkg: bool,
     is_pinned: bool,
+
+    pub fn deinit(self: *const @This(), alloc: std.mem.Allocator) void {
+        alloc.free(self.name);
+        alloc.free(self.old_ver);
+        alloc.free(self.new_ver);
+    }
 };
 
 fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filter_names: []const []const u8, check_casks: bool, check_kegs: bool) std.ArrayList(Outdated) {
@@ -1439,13 +1630,28 @@ fn getOutdatedPackages(alloc: std.mem.Allocator, db: *nb.database.Database, filt
     for (to_check.items, 0..) |item, i| {
         if (version_results[i].has_update) {
             const new_ver = version_results[i].new_ver_buf[0..version_results[i].new_ver_len];
+            const n = alloc.dupe(u8, item.name) catch continue;
+            const ov = alloc.dupe(u8, item.old_ver) catch {
+                alloc.free(n);
+                continue;
+            };
+            const nv = alloc.dupe(u8, new_ver) catch {
+                alloc.free(n);
+                alloc.free(ov);
+                continue;
+            };
             result.append(alloc, .{
-                .name = alloc.dupe(u8, item.name) catch continue,
-                .old_ver = alloc.dupe(u8, item.old_ver) catch continue,
-                .new_ver = alloc.dupe(u8, new_ver) catch continue,
+                .name = n,
+                .old_ver = ov,
+                .new_ver = nv,
                 .is_cask_pkg = item.is_cask,
                 .is_pinned = item.is_pinned,
-            }) catch {};
+            }) catch {
+                alloc.free(n);
+                alloc.free(ov);
+                alloc.free(nv);
+                continue;
+            };
         }
     }
 
@@ -1487,7 +1693,10 @@ fn runUpgrade(alloc: std.mem.Allocator, args: []const []const u8) void {
     const check_casks = is_cask or names.items.len == 0;
     const check_kegs = !is_cask or names.items.len == 0;
     var outdated = getOutdatedPackages(alloc, &db, names.items, check_casks, check_kegs);
-    defer outdated.deinit(alloc);
+    defer {
+        for (outdated.items) |*pkg| pkg.deinit(alloc);
+        outdated.deinit(alloc);
+    }
 
     // Filter out pinned packages
     var upgradeable: std.ArrayList(Outdated) = .empty;
@@ -2031,6 +2240,7 @@ fn printUsage() void {
         \\  info <formula>           Show formula info from Homebrew API
         \\  info --cask <app>        Show cask info from Homebrew API
         \\  search <query>           Search for formulas and casks
+        \\  where <pattern>          Show installed kegs, prefix files, and index hits matching pattern
         \\  upgrade [formula]        Upgrade packages (or all if none specified)
         \\  upgrade --cask [app]     Upgrade casks (or all if none specified)
         \\  upgrade --deb            Upgrade all installed .deb packages
@@ -2067,6 +2277,7 @@ fn printUsage() void {
         \\  nb remove --cask firefox
         \\  nb remove --deb curl
         \\  nb doctor
+        \\  nb where krun
         \\  nb cleanup --dry-run
         \\  nb pin tree
         \\  nb rollback ffmpeg
@@ -2718,7 +2929,10 @@ fn runOutdated(alloc: std.mem.Allocator) void {
 
     stdout.print("==> Checking for outdated packages...\n", .{}) catch {};
     var outdated = getOutdatedPackages(alloc, &db, &.{}, true, true);
-    defer outdated.deinit(alloc);
+    defer {
+        for (outdated.items) |*pkg| pkg.deinit(alloc);
+        outdated.deinit(alloc);
+    }
 
     // Also check deb packages
     var deb_outdated: usize = 0;
@@ -2976,6 +3190,7 @@ fn runCompletions(args: []const []const u8) void {
             \\    'leaves:List packages with no dependents'
             \\    'info:Show formula info'
             \\    'search:Search for packages'
+            \\    'where:Find packages by pattern (installed, files, index)'
             \\    'upgrade:Upgrade packages'
             \\    'update:Self-update nanobrew'
             \\    'doctor:Check installation health'
@@ -3036,7 +3251,7 @@ fn runCompletions(args: []const []const u8) void {
     } else if (std.mem.eql(u8, shell, "bash")) {
         stdout.print(
             \\_nb_completions() {{
-            \\  local commands="init install remove list leaves info search upgrade update doctor cleanup outdated pin unpin rollback bundle deps services completions nuke migrate help"
+            \\  local commands="init install remove list leaves info search where upgrade update doctor cleanup outdated pin unpin rollback bundle deps services completions nuke migrate help"
             \\  if [[ $COMP_CWORD -eq 1 ]]; then
             \\    COMPREPLY=($(compgen -W "$commands" -- "${{COMP_WORDS[COMP_CWORD]}}"))
             \\  else
@@ -3070,6 +3285,7 @@ fn runCompletions(args: []const []const u8) void {
             \\complete -c nb -n '__fish_use_subcommand' -a 'leaves' -d 'List packages with no dependents'
             \\complete -c nb -n '__fish_use_subcommand' -a 'info' -d 'Show formula info'
             \\complete -c nb -n '__fish_use_subcommand' -a 'search' -d 'Search for packages'
+            \\complete -c nb -n '__fish_use_subcommand' -a 'where' -d 'Find packages by pattern'
             \\complete -c nb -n '__fish_use_subcommand' -a 'upgrade' -d 'Upgrade packages'
             \\complete -c nb -n '__fish_use_subcommand' -a 'update' -d 'Self-update nanobrew'
             \\complete -c nb -n '__fish_use_subcommand' -a 'doctor' -d 'Check installation health'
