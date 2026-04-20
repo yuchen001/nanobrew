@@ -694,6 +694,38 @@ const LANDING_HTML = `<!DOCTYPE html>
       <div class="bg-note">+47 tests &middot; path traversal &middot; JSON injection &middot; null bytes &middot; version string attacks</div>
     </div>
   </section>
+
+  <section class="bench">
+    <h2>Version timeline</h2>
+    <p class="bench-sub">What each nanobrew release actually shipped. Tree install numbers are warm, Apple Silicon, median of 3 runs.</p>
+
+    <div class="bg">
+      <div class="bg-title">v0.1.082 <span>/ jun 2025, first stable line</span></div>
+      <div class="br">
+        <span class="br-l">nb</span>
+        <div class="br-t"><div class="br-b nb" data-w="100%">39ms warm</div></div>
+      </div>
+      <div class="bg-note">21 CVEs fixed &middot; nb migrate &middot; nb info --cask &middot; nb bundle install &middot; no sudo after init</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">v0.1.190 <span>/ apr 2026, Zig 0.16 + faster everything</span></div>
+      <div class="br">
+        <span class="br-l">nb</span>
+        <div class="br-t"><div class="br-b nb" data-w="44%">17ms warm &middot; 2.3x faster than v0.1.082</div></div>
+      </div>
+      <div class="bg-note">Zig 0.16.0 compiler &middot; native tar extractor (no subprocess) &middot; persistent HTTP client &middot; O(1) resolver queue &middot; 15+ bugs fixed</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">v0.1.191 <span>/ apr 2026, signed + command-speed wins</span></div>
+      <div class="br">
+        <span class="br-l">nb</span>
+        <div class="br-t"><div class="br-b nb" data-w="44%">17ms warm &middot; install path unchanged</div></div>
+      </div>
+      <div class="bg-note">Apple-notarized &middot; 12x faster nb leaves &middot; 1.80x faster nb search (streaming JSON) &middot; 1.77x faster cold-install resolver &middot; Python dlopen codesign fix &middot; zero-leak nb outdated / nb info &middot; <a href="/v0.1.191">full notes</a></div>
+    </div>
+  </section>
     <div class="term">
       <div class="term-bar">
         <span class="term-dot r"></span>
@@ -1462,15 +1494,84 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
   </nav>
 
   <section class="hero">
-    <h1>nanobrew v0.1.191<br><em>signed, notarized, searchable</em></h1>
-    <p>macOS release binaries ship code-signed with a Developer ID, hardened runtime, Apple-notarized. New <code>nb where</code> command collapses the list + grep + ls + search triage pipeline into one call.</p>
+    <h1>nanobrew v0.1.191<br><em>signed, searchable, leak-free</em></h1>
+    <p>macOS binaries are now code-signed with a Developer ID, hardened, and Apple-notarized. Shell commands got a round of targeted speedups, a Python <code>dlopen</code> codesign regression is fixed, and two long-running DebugAllocator leaks are gone.</p>
     <code>nb update  # to v0.1.191</code>
   </section>
 
   <section class="stat">
-    <span class="stat-num sig">Signed &amp; notarized<br>by Apple</span>
-    <span class="stat-label">macOS releases now notarized by Apple</span>
-    <p class="stat-ctx"><em>arm64</em> and <em>x86_64</em> tarballs accepted by Apple's notary service — Gatekeeper fetches the ticket online on first quarantined run.</p>
+    <span class="stat-num">140×</span>
+    <span class="stat-label">faster than Homebrew on warm installs</span>
+    <p class="stat-ctx"><em>tree</em> warm: Homebrew 2.38s &rarr; v0.1.083 23ms &rarr; v0.1.190 17ms &rarr; <em>v0.1.191 17ms</em></p>
+  </section>
+
+  <section class="bench">
+    <h2>vs. Homebrew — install path unchanged, wins carry over</h2>
+    <p class="bench-sub">Apple Silicon (M-series), macOS, median of 3 runs. v0.1.191 does not touch the install hot path; the Homebrew speedup the previous release earned is preserved.</p>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">tree <span>warm install</span></div>
+        <div class="bg-badge">140× faster than Homebrew</div>
+      </div>
+      <div class="br"><div class="br-l">Homebrew</div><div class="br-t"><div class="br-b apt" style="width:100%"></div></div><span class="br-time brew-t">2.38s</span></div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:0.71%"></div></div><span class="br-time old-t">17ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:0.71%"></div></div><span class="br-time nb-t">17ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">tree <span>cold install</span></div>
+        <div class="bg-badge">9× faster than Homebrew</div>
+      </div>
+      <div class="br"><div class="br-l">Homebrew</div><div class="br-t"><div class="br-b apt" style="width:100%"></div></div><span class="br-time brew-t">3.13s</span></div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:11.4%"></div></div><span class="br-time old-t">356ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:11.4%"></div></div><span class="br-time nb-t">356ms</span></div>
+    </div>
+  </section>
+
+  <section class="bench">
+    <h2>Command-speed wins — v0.1.190 &rarr; v0.1.191</h2>
+    <p class="bench-sub">Targeted work on the JSON parse, BFS resolver, and <code>nb leaves</code> hot paths. Apple Silicon, macOS, median of 3 runs.</p>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb leaves <span>cold API cache, ~100 packages</span></div>
+        <div class="bg-badge">12× faster</div>
+      </div>
+      <div class="br"><div class="br-l">Homebrew</div><div class="br-t"><div class="br-b apt" style="width:11.4%"></div></div><span class="br-time brew-t">1.14s</span></div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">10.0 s</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:8.3%"></div></div><span class="br-time nb-t">0.83 s</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb search curl <span>streaming std.json.Scanner</span></div>
+        <div class="bg-badge">1.80× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">190 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:55.8%"></div></div><span class="br-time nb-t">106 ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb info python <span>alias-resolved formula fetch</span></div>
+        <div class="bg-badge">1.68× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">168 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:59.5%"></div></div><span class="br-time nb-t">100 ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb install graphviz <span>cold resolver phase, 15 deps</span></div>
+        <div class="bg-badge">1.77× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">3123 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:56.5%"></div></div><span class="br-time nb-t">1766 ms</span></div>
+    </div>
+
+    <p class="bench-sub" style="margin-top:1.5rem;"><code>brew leaves</code> reads a local prefix cache; nanobrew had been doing ~100 sequential API fetches with no shared HTTP client and O(n³) membership scans to reach the same answer. v0.1.191 parallelizes those fetches across a bounded worker pool with a per-thread persistent <code>std.http.Client</code> and replaces the scans with a <code>StringHashMap</code>. Net: nanobrew <code>nb leaves</code> is now 1.37× faster than <code>brew leaves</code> while still carrying fresh dep info.</p>
   </section>
 
   <section class="demo">
@@ -1493,7 +1594,7 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
   </section>
 
   <section class="how">
-    <h2>What's in v0.1.191</h2>
+    <h2>What changed in v0.1.191</h2>
     <div class="how-grid">
       <div class="how-card">
         <div class="num">✓</div>
@@ -1501,85 +1602,32 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
         <p>macOS tarballs for arm64 + x86_64 code-signed with a Developer ID, timestamped, hardened runtime, and submitted to Apple's notary service. Gatekeeper accepts on first run.</p>
       </div>
       <div class="how-card">
-        <div class="num">1×</div>
-        <h3>nb where &lt;pattern&gt;</h3>
-        <p>Aggregates installed kegs/casks/debs, files in $PREFIX/{bin,lib,opt}, and Homebrew formula index hits in one command. Case-insensitive substring match.</p>
-      </div>
-      <div class="how-card">
-        <div class="num">🔑</div>
-        <h3>Offline verifiable</h3>
-        <p>codesign --verify confirms the Developer ID authority chain back to Apple Root CA. SHA256 sidecars remain for in-transit integrity.</p>
-      </div>
-      <div class="how-card">
-        <div class="num">📜</div>
-        <h3>scripts/notarize-macos.sh</h3>
-        <p>Local helper that uses the codedb-notary keychain profile to reproduce the signing + notarize pipeline offline. Used for this release while CI secrets are being restored.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="bench">
-    <h2>Command-speed wins</h2>
-    <p class="bench-sub">Apple Silicon, macOS, median of 3 runs — v0.1.190 baseline vs v0.1.191.</p>
-
-    <div class="bg" data-observe>
-      <div class="bg-header">
-        <div class="bg-title">nb leaves <span>cold API cache, ~100 packages</span></div>
-        <div class="bg-badge">12× faster</div>
-      </div>
-      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">10.0 s</span></div>
-      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:8.3%"></div></div><span class="br-time nb-t">0.83 s</span></div>
-    </div>
-
-    <div class="bg" data-observe>
-      <div class="bg-header">
-        <div class="bg-title">nb search curl <span>streaming JSON parse</span></div>
-        <div class="bg-badge">1.80× faster</div>
-      </div>
-      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">190 ms</span></div>
-      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:55.8%"></div></div><span class="br-time nb-t">106 ms</span></div>
-    </div>
-
-    <div class="bg" data-observe>
-      <div class="bg-header">
-        <div class="bg-title">nb info python <span>alias-resolved formula fetch</span></div>
-        <div class="bg-badge">1.68× faster</div>
-      </div>
-      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">168 ms</span></div>
-      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:59.5%"></div></div><span class="br-time nb-t">100 ms</span></div>
-    </div>
-
-    <div class="bg" data-observe>
-      <div class="bg-header">
-        <div class="bg-title">nb install graphviz <span>cold resolver phase, 15 deps</span></div>
-        <div class="bg-badge">43% faster</div>
-      </div>
-      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">3123 ms</span></div>
-      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:56.5%"></div></div><span class="br-time nb-t">1766 ms</span></div>
-    </div>
-  </section>
-
-  <section class="how">
-    <h2>Correctness + polish</h2>
-    <div class="how-grid">
-      <div class="how-card">
         <div class="num">🔒</div>
         <h3>Python dlopen codesign fix</h3>
-        <p>install_name_tool removes a binary's code signature unconditionally, and the batch codesign call SIGPIPE'd on packages with many Mach-O files. Fresh python@3.14 installs went from 60/76 broken .so + SIGKILL on import to 0/76 broken + framework re-sealed via codesign --deep.</p>
+        <p>install_name_tool strips signatures unconditionally, and the batch codesign pipe was too small on packages with many Mach-O files. python@3.14 went from 60/76 broken .so + SIGKILL to 0/76 + framework re-sealed.</p>
       </div>
       <div class="how-card">
-        <div class="num">0</div>
-        <h3>nb outdated / nb info leaks</h3>
-        <p>getOutdatedPackages duped three per-item strings on every outdated package and never freed them. runInfo captured the fetched Formula without calling deinit. Both now report zero DebugAllocator leaks per run.</p>
+        <div class="num">⚡</div>
+        <h3>Streaming JSON parse</h3>
+        <p>std.json.Scanner with skipValue() replaces full std.json.Value materialization on the 29.5 MB formula.json + 14.2 MB cask.json. 1.80× faster nb search, 1.68× faster nb info alias resolution.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">1×</div>
+        <h3>nb where &lt;pattern&gt;</h3>
+        <p>Aggregates installed kegs/casks/debs, files in $PREFIX/{bin,lib,opt}, and Homebrew formula index hits into one call. Case-insensitive substring match.</p>
       </div>
       <div class="how-card">
         <div class="num">📖</div>
-        <h3>nb info rich output</h3>
-        <p>Formula info now prints desc, homepage, license, bottle/source URL + sha256, deps, build deps, and caveats — mirroring the cask info layout. Bottled formulae are tagged (bottled); source-only formulae tag the URL as (source).</p>
+        <h3>nb info — rich output</h3>
+        <p>Formula info now prints desc, homepage, license, bottle/source URL + sha256, deps, build deps, and caveats — matching the cask info layout. Bottled formulae tag the version as (bottled); source-only tags the URL as (source).</p>
+      </div>
+      <div class="how-card">
+        <div class="num">0</div>
+        <h3>Zero allocator leaks</h3>
+        <p>nb outdated was leaking three strings per outdated package on every run. nb info was leaking every formula on the alias path. Both now report zero DebugAllocator leaks.</p>
       </div>
     </div>
   </section>
-
 
   <section class="method">
     <h2>Verify a downloaded binary</h2>
