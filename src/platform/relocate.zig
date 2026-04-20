@@ -19,3 +19,15 @@ else
 /// Replace @@HOMEBREW_*@@ placeholders in all text files within a keg.
 /// Handles shebangs, scripts, config files, etc.
 pub const replaceKegPlaceholders = placeholder.replaceKegPlaceholders;
+
+/// Re-seal every *.framework bundle inside a keg with `codesign --deep`.
+/// macOS-only; no-op on other platforms. Must be called AFTER
+/// `relocateKeg` AND `replaceKegPlaceholders`, so the final bundle seal
+/// covers every file mutation.
+pub fn sealKegBundles(alloc: std.mem.Allocator, io: std.Io, name: []const u8, version: []const u8) void {
+    if (builtin.os.tag == .macos) {
+        macho.sealKegBundles(alloc, io, name, version);
+    }
+}
+
+const std = @import("std");

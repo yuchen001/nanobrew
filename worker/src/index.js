@@ -694,6 +694,38 @@ const LANDING_HTML = `<!DOCTYPE html>
       <div class="bg-note">+47 tests &middot; path traversal &middot; JSON injection &middot; null bytes &middot; version string attacks</div>
     </div>
   </section>
+
+  <section class="bench">
+    <h2>Version timeline</h2>
+    <p class="bench-sub">What each nanobrew release actually shipped. Tree install numbers are warm, Apple Silicon, median of 3 runs.</p>
+
+    <div class="bg">
+      <div class="bg-title">v0.1.082 <span>/ jun 2025, first stable line</span></div>
+      <div class="br">
+        <span class="br-l">nb</span>
+        <div class="br-t"><div class="br-b nb" data-w="100%">39ms warm</div></div>
+      </div>
+      <div class="bg-note">21 CVEs fixed &middot; nb migrate &middot; nb info --cask &middot; nb bundle install &middot; no sudo after init</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">v0.1.190 <span>/ apr 2026, Zig 0.16 + faster everything</span></div>
+      <div class="br">
+        <span class="br-l">nb</span>
+        <div class="br-t"><div class="br-b nb" data-w="44%">17ms warm &middot; 2.3x faster than v0.1.082</div></div>
+      </div>
+      <div class="bg-note">Zig 0.16.0 compiler &middot; native tar extractor (no subprocess) &middot; persistent HTTP client &middot; O(1) resolver queue &middot; 15+ bugs fixed</div>
+    </div>
+
+    <div class="bg">
+      <div class="bg-title">v0.1.191 <span>/ apr 2026, signed + command-speed wins</span></div>
+      <div class="br">
+        <span class="br-l">nb</span>
+        <div class="br-t"><div class="br-b nb" data-w="44%">17ms warm &middot; install path unchanged</div></div>
+      </div>
+      <div class="bg-note">Apple-notarized &middot; 12x faster nb leaves &middot; 1.80x faster nb search (streaming JSON) &middot; 1.77x faster cold-install resolver &middot; Python dlopen codesign fix &middot; zero-leak nb outdated / nb info &middot; <a href="/v0.1.191">full notes</a></div>
+    </div>
+  </section>
     <div class="term">
       <div class="term-bar">
         <span class="term-dot r"></span>
@@ -1305,6 +1337,321 @@ document.querySelectorAll('[data-observe]').forEach(el => obs.observe(el));
 </body>
 </html>`;
 
+const RELEASE_191_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>nanobrew v0.1.191 — signed, notarized, 12× faster nb leaves</title>
+<meta name="description" content="nanobrew v0.1.191: macOS-signed and Apple-notarized binaries, 12× faster nb leaves, 1.8× faster nb search via streaming JSON, 43% faster cold-install resolver, Python dlopen codesign fix, zero-leak nb outdated / nb info, new nb where diagnostic subcommand.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #FFB800;
+    --gold-soft: rgba(255, 184, 0, 0.12);
+    --bg: #FFFFFF;
+    --surface: #F7F7F7;
+    --border: #E5E5E5;
+    --text: #404040;
+    --bright: #111111;
+    --muted: #777;
+    --dim: #AAAAAA;
+    --fd: 'Inter', system-ui, -apple-system, sans-serif;
+    --fm: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--fm); font-size: 15px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 2rem; }
+
+  nav { padding: 1.5rem 0; display: flex; justify-content: space-between; align-items: center; }
+  .nav-mark { font-family: var(--fd); font-weight: 700; font-size: 1rem; color: var(--bright); text-decoration: none; }
+  .nav-links { display: flex; gap: 1.5rem; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 500; }
+  .nav-links a:hover { color: var(--bright); }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+  .hero { padding: 4rem 0 3rem; text-align: center; }
+  .hero h1 {
+    font-family: var(--fd); font-weight: 700;
+    font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+    color: var(--bright); letter-spacing: -0.02em; line-height: 1.15;
+    animation: fadeUp 0.7s ease-out both;
+  }
+  .hero h1 em { color: var(--gold); font-style: normal; }
+  .hero p {
+    font-size: 1rem; color: var(--muted); margin-top: 1rem; max-width: 560px; margin-inline: auto;
+    animation: fadeUp 0.7s ease-out 0.12s both;
+  }
+  .hero p code {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+    padding: 0.1rem 0.35rem; font-size: 0.85rem; color: var(--bright);
+  }
+  .hero > code {
+    display: inline-block; margin-top: 1.5rem; padding: 0.6rem 1.4rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 0.88rem; color: var(--bright); font-weight: 500;
+    animation: fadeUp 0.7s ease-out 0.24s both;
+  }
+
+  .stat { padding: 4rem 0; text-align: center; border-top: 1px solid var(--border); }
+  .stat-num {
+    font-family: var(--fd); font-weight: 900;
+    font-size: clamp(2.2rem, 6vw, 3.4rem);
+    color: var(--gold); line-height: 1.05; letter-spacing: -0.03em;
+    text-shadow: 0 0 80px var(--gold-soft);
+    animation: fadeUp 0.8s ease-out 0.3s both;
+  }
+  .stat-num.sig { font-size: clamp(1.2rem, 3vw, 1.55rem); font-family: var(--fm); letter-spacing: 0; }
+  .stat-label { font-size: 1rem; color: var(--muted); margin-top: 0.7rem; animation: fadeUp 0.8s ease-out 0.38s both; }
+  .stat-ctx { font-size: 0.82rem; color: var(--dim); margin-top: 1.3rem; animation: fadeUp 0.8s ease-out 0.44s both; }
+  .stat-ctx em { color: var(--muted); font-style: normal; font-weight: 500; }
+
+  .demo { padding: 4rem 0; border-top: 1px solid var(--border); }
+  .demo h2 { font-family: var(--fd); font-weight: 700; font-size: 1.4rem; color: var(--bright); margin-bottom: 0.5rem; }
+  .demo-sub { font-size: 0.8rem; color: var(--dim); margin-bottom: 1.5rem; }
+  .demo-sub code { background: var(--surface); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.75rem; }
+  .demo pre {
+    background: #0e0e0f; color: #e7e7ea; border-radius: 8px; padding: 1.1rem 1.2rem;
+    font-family: var(--fm); font-size: 0.78rem; line-height: 1.55;
+    overflow-x: auto; border: 1px solid #1c1c1f;
+  }
+  .demo pre .p { color: #ffb800; font-weight: 700; }
+  .demo pre .k { color: #9ea0a4; }
+  .demo pre .h { color: #fff; font-weight: 600; }
+
+  .bench { padding: 4rem 0; border-top: 1px solid var(--border); }
+  .bench h2 { font-family: var(--fd); font-weight: 700; font-size: 1.4rem; color: var(--bright); margin-bottom: 0.5rem; }
+  .bench-sub { font-size: 0.8rem; color: var(--dim); margin-bottom: 2.5rem; }
+
+  .bg { margin-bottom: 2.8rem; }
+  .bg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; flex-wrap: wrap; gap: 0.5rem; }
+  .bg-title { font-family: var(--fd); font-weight: 700; font-size: 0.95rem; color: var(--bright); }
+  .bg-title span { color: var(--muted); font-weight: 400; font-size: 0.82rem; margin-left: 0.4rem; }
+  .bg-badge {
+    font-family: var(--fd); font-weight: 800; font-size: 0.82rem; color: #92400e;
+    background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.35);
+    padding: 0.2rem 0.75rem; border-radius: 20px;
+    opacity: 0; transform: translateY(4px); transition: opacity 0.4s 0.9s, transform 0.4s 0.9s;
+  }
+  .bg.visible .bg-badge { opacity: 1; transform: none; }
+  .br { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.45rem; }
+  .br-l { width: 5.5rem; text-align: right; font-size: 0.72rem; color: var(--muted); flex-shrink: 0; font-weight: 500; }
+  .br-t { flex: 1; height: 40px; background: var(--surface); border-radius: 6px; overflow: hidden; }
+  .br-b {
+    height: 100%; border-radius: 6px;
+    width: 0; transition: width 1.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .br-b.apt { background: #E4E4E4; }
+  .br-b.old { background: linear-gradient(90deg, #FFC84A 0%, #FFB800 100%); opacity: 0.6; }
+  .br-b.nb  { background: linear-gradient(90deg, #FFB800 0%, #FF8000 100%); box-shadow: 0 2px 16px rgba(255,140,0,0.22); }
+  .bg.visible .br:nth-child(1) .br-b { transition-delay: 0s; }
+  .bg.visible .br:nth-child(2) .br-b { transition-delay: 0.15s; }
+  .bg.visible .br:nth-child(3) .br-b { transition-delay: 0.30s; }
+  .br-time { font-size: 0.76rem; font-family: var(--fd); font-weight: 600; flex-shrink: 0; width: 4.5rem; }
+  .br-time.old-t  { color: #b45309; }
+  .br-time.nb-t   { color: #c05621; }
+
+  .how { padding: 4rem 0; border-top: 1px solid var(--border); }
+  .how h2 { font-family: var(--fd); font-weight: 700; font-size: 1.4rem; color: var(--bright); margin-bottom: 1.5rem; }
+  .how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
+  .how-card {
+    padding: 1.5rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+  }
+  .how-card h3 { font-size: 0.9rem; color: var(--bright); margin-bottom: 0.4rem; }
+  .how-card p { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+  .how-card .num { font-family: var(--fd); font-weight: 800; font-size: 1.4rem; color: var(--gold); margin-bottom: 0.3rem; }
+
+  .method { padding: 4rem 0; border-top: 1px solid var(--border); }
+  .method h2 { font-family: var(--fd); font-weight: 700; font-size: 1.4rem; color: var(--bright); margin-bottom: 0.5rem; }
+  .method-sub { font-size: 0.8rem; color: var(--dim); margin-bottom: 1.5rem; }
+  .method table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .method th { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 500; }
+  .method td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .method td code { font-size: 0.75rem; background: var(--surface); padding: 0.1rem 0.35rem; border-radius: 3px; }
+
+  footer { padding: 3rem 0; border-top: 1px solid var(--border); text-align: center; font-size: 0.75rem; color: var(--dim); }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="nav-mark" href="/">nanobrew</a>
+    <div class="nav-links">
+      <a href="https://github.com/justrach/nanobrew">GitHub</a>
+      <a href="https://github.com/justrach/nanobrew#install">Install</a>
+      <a href="/v0.1.190">v0.1.190</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>nanobrew v0.1.191<br><em>signed, searchable, leak-free</em></h1>
+    <p>macOS binaries are now code-signed with a Developer ID, hardened, and Apple-notarized. Shell commands got a round of targeted speedups, a Python <code>dlopen</code> codesign regression is fixed, and two long-running DebugAllocator leaks are gone.</p>
+    <code>nb update  # to v0.1.191</code>
+  </section>
+
+  <section class="stat">
+    <span class="stat-num">140×</span>
+    <span class="stat-label">faster than Homebrew on warm installs</span>
+    <p class="stat-ctx"><em>tree</em> warm: Homebrew 2.38s &rarr; v0.1.083 23ms &rarr; v0.1.190 17ms &rarr; <em>v0.1.191 17ms</em></p>
+  </section>
+
+  <section class="bench">
+    <h2>vs. Homebrew — install path unchanged, wins carry over</h2>
+    <p class="bench-sub">Apple Silicon (M-series), macOS, median of 3 runs. v0.1.191 does not touch the install hot path; the Homebrew speedup the previous release earned is preserved.</p>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">tree <span>warm install</span></div>
+        <div class="bg-badge">140× faster than Homebrew</div>
+      </div>
+      <div class="br"><div class="br-l">Homebrew</div><div class="br-t"><div class="br-b apt" style="width:100%"></div></div><span class="br-time brew-t">2.38s</span></div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:0.71%"></div></div><span class="br-time old-t">17ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:0.71%"></div></div><span class="br-time nb-t">17ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">tree <span>cold install</span></div>
+        <div class="bg-badge">9× faster than Homebrew</div>
+      </div>
+      <div class="br"><div class="br-l">Homebrew</div><div class="br-t"><div class="br-b apt" style="width:100%"></div></div><span class="br-time brew-t">3.13s</span></div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:11.4%"></div></div><span class="br-time old-t">356ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:11.4%"></div></div><span class="br-time nb-t">356ms</span></div>
+    </div>
+  </section>
+
+  <section class="bench">
+    <h2>Command-speed wins — v0.1.190 &rarr; v0.1.191</h2>
+    <p class="bench-sub">Targeted work on the JSON parse, BFS resolver, and <code>nb leaves</code> hot paths. Apple Silicon, macOS, median of 3 runs.</p>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb leaves <span>cold API cache, ~100 packages</span></div>
+        <div class="bg-badge">12× faster</div>
+      </div>
+      <div class="br"><div class="br-l">Homebrew</div><div class="br-t"><div class="br-b apt" style="width:11.4%"></div></div><span class="br-time brew-t">1.14s</span></div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">10.0 s</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:8.3%"></div></div><span class="br-time nb-t">0.83 s</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb search curl <span>streaming std.json.Scanner</span></div>
+        <div class="bg-badge">1.80× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">190 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:55.8%"></div></div><span class="br-time nb-t">106 ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb info python <span>alias-resolved formula fetch</span></div>
+        <div class="bg-badge">1.68× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">168 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:59.5%"></div></div><span class="br-time nb-t">100 ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb install graphviz <span>cold resolver phase, 15 deps</span></div>
+        <div class="bg-badge">1.77× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">3123 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:56.5%"></div></div><span class="br-time nb-t">1766 ms</span></div>
+    </div>
+
+    <p class="bench-sub" style="margin-top:1.5rem;"><code>brew leaves</code> reads a local prefix cache; nanobrew had been doing ~100 sequential API fetches with no shared HTTP client and O(n³) membership scans to reach the same answer. v0.1.191 parallelizes those fetches across a bounded worker pool with a per-thread persistent <code>std.http.Client</code> and replaces the scans with a <code>StringHashMap</code>. Net: nanobrew <code>nb leaves</code> is now 1.37× faster than <code>brew leaves</code> while still carrying fresh dep info.</p>
+  </section>
+
+  <section class="demo">
+    <h2>nb where — one call, three views</h2>
+    <p class="demo-sub">Replaces <code>nb list | grep X; ls $PREFIX/lib | grep X; nb search X</code> with a single aggregated subcommand.</p>
+<pre>$ <span class="p">nb where</span> opus
+<span class="h">==&gt; installed matching "opus":</span>
+  opus 1.6.1
+<span class="h">==&gt; /opt/nanobrew/prefix/bin/ matching "opus":</span>
+  <span class="k">(none)</span>
+<span class="h">==&gt; /opt/nanobrew/prefix/lib/ matching "opus":</span>
+  <span class="k">(none)</span>
+<span class="h">==&gt; /opt/nanobrew/prefix/opt/ matching "opus":</span>
+  opus@
+<span class="h">==&gt; formula index matches for "opus":</span>
+  libopusenc 0.3 - Convenience library for creating .opus files
+  opus 1.6.1 - Audio codec
+  opus-tools 0.2 - Utilities to encode, inspect, and decode .opus files
+  opusfile 0.12 - API for decoding and seeking in .opus files</pre>
+  </section>
+
+  <section class="how">
+    <h2>What changed in v0.1.191</h2>
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="num">✓</div>
+        <h3>Apple-notarized binaries</h3>
+        <p>macOS tarballs for arm64 + x86_64 code-signed with a Developer ID, timestamped, hardened runtime, and submitted to Apple's notary service. Gatekeeper accepts on first run.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">🔒</div>
+        <h3>Python dlopen codesign fix</h3>
+        <p>install_name_tool strips signatures unconditionally, and the batch codesign pipe was too small on packages with many Mach-O files. python@3.14 went from 60/76 broken .so + SIGKILL to 0/76 + framework re-sealed.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">⚡</div>
+        <h3>Streaming JSON parse</h3>
+        <p>std.json.Scanner with skipValue() replaces full std.json.Value materialization on the 29.5 MB formula.json + 14.2 MB cask.json. 1.80× faster nb search, 1.68× faster nb info alias resolution.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">1×</div>
+        <h3>nb where &lt;pattern&gt;</h3>
+        <p>Aggregates installed kegs/casks/debs, files in $PREFIX/{bin,lib,opt}, and Homebrew formula index hits into one call. Case-insensitive substring match.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">📖</div>
+        <h3>nb info — rich output</h3>
+        <p>Formula info now prints desc, homepage, license, bottle/source URL + sha256, deps, build deps, and caveats — matching the cask info layout. Bottled formulae tag the version as (bottled); source-only tags the URL as (source).</p>
+      </div>
+      <div class="how-card">
+        <div class="num">0</div>
+        <h3>Zero allocator leaks</h3>
+        <p>nb outdated was leaking three strings per outdated package on every run. nb info was leaking every formula on the alias path. Both now report zero DebugAllocator leaks.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="method">
+    <h2>Verify a downloaded binary</h2>
+    <p class="method-sub">Works offline after the notarization ticket is fetched once.</p>
+    <table>
+      <tr><th>Step</th><th>Command</th><th>Confirms</th></tr>
+      <tr><td>Checksum</td><td><code>shasum -a 256 -c nb-arm64-apple-darwin.tar.gz.sha256</code></td><td>in-transit integrity</td></tr>
+      <tr><td>Authority</td><td><code>codesign -dv --verbose=4 nb-arm64-apple-darwin</code></td><td>Developer ID + Apple Root CA</td></tr>
+      <tr><td>Runtime</td><td>same output — <code>flags=0x10000(runtime)</code></td><td>hardened runtime enforced</td></tr>
+      <tr><td>Structural</td><td><code>codesign --verify --deep --strict nb-arm64-apple-darwin</code></td><td>signature is internally consistent</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    <p>nanobrew v0.1.191 &mdash; <a href="https://github.com/justrach/nanobrew">GitHub</a> &mdash; Apache-2.0</p>
+  </footer>
+</div>
+<script>
+const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }), { threshold: 0.2 });
+document.querySelectorAll('[data-observe]').forEach(el => obs.observe(el));
+</script>
+</body>
+</html>`;
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -1333,7 +1680,7 @@ export default {
         });
         if (!gh.ok) {
           // Rate limited — return last known version
-          return new Response("0.1.082", {
+          return new Response("0.1.191", {
             headers: {
               "content-type": "text/plain; charset=utf-8",
               "cache-control": "public, max-age=60",
@@ -1355,7 +1702,7 @@ export default {
         await cache.put(cacheKey, resp.clone());
         return resp;
       } catch {
-        return new Response("0.1.082", {
+        return new Response("0.1.191", {
           headers: {
             "content-type": "text/plain; charset=utf-8",
             "cache-control": "public, max-age=60",
@@ -1379,6 +1726,15 @@ export default {
         headers: {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "public, max-age=3600",
+        },
+      });
+    }
+
+    if (url.pathname === "/v0.1.191" || url.pathname === "/v-0.1.191") {
+      return new Response(RELEASE_191_HTML, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, max-age=86400",
         },
       });
     }

@@ -542,6 +542,11 @@ fn parseFormulaJson(alloc: std.mem.Allocator, json_data: []const u8) !Formula {
     errdefer alloc.free(version);
     const desc = try allocDupe(alloc, getStr(root, "desc") orelse "");
     errdefer alloc.free(desc);
+    const homepage = try allocDupe(alloc, getStr(root, "homepage") orelse "");
+    errdefer alloc.free(homepage);
+    // license may be a string, an object (SPDX expression), or null; only capture strings.
+    const license = try allocDupe(alloc, getStr(root, "license") orelse "");
+    errdefer alloc.free(license);
 
     const revision: u32 = if (root.get("revision")) |rev|
         switch (rev) {
@@ -678,6 +683,8 @@ fn parseFormulaJson(alloc: std.mem.Allocator, json_data: []const u8) !Formula {
         .revision = revision,
         .rebuild = rebuild,
         .desc = desc,
+        .homepage = homepage,
+        .license = license,
         .dependencies = dependencies,
         .bottle_url = bottle_url,
         .bottle_sha256 = bottle_sha256,
@@ -817,6 +824,58 @@ test "parseFormulaJson - no bottle no source returns error" {
         \\"dependencies":[],"bottle":{}}
     ;
     try testing.expectError(error.NoArm64Bottle, parseFormulaJson(testing.allocator, json));
+}
+
+// Regression test for #235: when `nb info <alias>` resolves (e.g. "python" ->
+// "python@3.14") and the underlying formula is parsed from a cached JSON,
+// the returned Formula owns every duped field (name/version/desc/bottle_url/
+// bottle_sha256/source_url/source_sha256/dependencies/build_deps/caveats).
+// The caller MUST call deinit to avoid leaks reported under DebugAllocator.
+// This test verifies parseFormulaJson + deinit round-trips cleanly under
+// testing.allocator (a leak-detecting allocator), simulating the cache-hit
+// branch taken by fetchFormulaWithClient for an alias-resolved name.
+test "parseFormulaJson - alias target round-trips deinit (issue #235)" {
+    const json =
+        \\{"name":"python@3.14","desc":"Interpreted, interactive, object-oriented programming language",
+        \\"versions":{"stable":"3.14.0"},"revision":1,
+        \\"dependencies":["mpdecimal","openssl@3","sqlite","xz"],
+        \\"build_dependencies":["pkg-config"],
+        \\"uses_from_macos":["bzip2","expat","libffi","libxcrypt","ncurses","unzip","zlib"],
+        \\"urls":{"stable":{"url":"https://www.python.org/ftp/python/3.14.0/Python-3.14.0.tar.xz","checksum":"abcdef"}},
+        \\"caveats":"Python has been installed as\n  python3.14\n",
+        \\"post_install_defined":true,
+        \\"bottle":{"stable":{"rebuild":1,"files":{"all":{"url":"https://ghcr.io/v2/homebrew/core/python/3.14","sha256":"cafebabe"}}}}}
+    ;
+    const f = try parseFormulaJson(testing.allocator, json);
+    defer f.deinit(testing.allocator);
+    try testing.expectEqualStrings("python@3.14", f.name);
+    try testing.expectEqualStrings("3.14.0", f.version);
+    try testing.expectEqual(@as(u32, 1), f.revision);
+    try testing.expectEqual(@as(u32, 1), f.rebuild);
+    try testing.expect(f.bottle_sha256.len > 0);
+    try testing.expect(f.bottle_url.len > 0);
+    try testing.expect(f.caveats.len > 0);
+    try testing.expect(f.dependencies.len >= 4);
+    try testing.expect(f.build_deps.len >= 1);
+}
+
+// Regression test for #235: exercising the alias-resolution cache hit path
+// twice in a row — the failure mode pre-fix was that multiple alias calls
+// would repeatedly parse (and dup) all formula fields, and callers holding
+// references but never calling deinit would leak one Formula per call.
+// With deinit called in the caller, testing.allocator reports zero leaks.
+test "parseFormulaJson - repeated parses do not accumulate leaks (issue #235)" {
+    const json =
+        \\{"name":"python@3.14","desc":"Python","versions":{"stable":"3.14.0"},"revision":0,
+        \\"dependencies":["mpdecimal"],
+        \\"bottle":{"stable":{"rebuild":0,"files":{"all":{"url":"https://ghcr.io/bottle/python","sha256":"deadbeef"}}}}}
+    ;
+    var i: usize = 0;
+    while (i < 5) : (i += 1) {
+        const f = try parseFormulaJson(testing.allocator, json);
+        defer f.deinit(testing.allocator);
+        try testing.expectEqualStrings("python@3.14", f.name);
+    }
 }
 
 test "findBottleTag - primary tag found" {
