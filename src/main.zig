@@ -1283,6 +1283,7 @@ fn runInfo(alloc: std.mem.Allocator, args: []const []const u8) void {
                 }
                 continue;
             };
+            defer f.deinit(alloc);
             stdout.print("{s} {s}\n", .{ f.name, f.version }) catch {};
             stdout.print("  deps: ", .{}) catch {};
             for (f.dependencies, 0..) |dep, i| {
