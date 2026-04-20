@@ -1310,8 +1310,8 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>nanobrew v0.1.191 — signed, notarized, searchable</title>
-<meta name="description" content="nanobrew v0.1.191: macOS release binaries now ship code-signed with a Developer ID, hardened runtime, and a full Apple notary ticket. New nb where command aggregates installed state + prefix files + formula index hits in one call.">
+<title>nanobrew v0.1.191 — signed, notarized, 12× faster nb leaves</title>
+<meta name="description" content="nanobrew v0.1.191: macOS-signed and Apple-notarized binaries, 12× faster nb leaves, 1.8× faster nb search via streaming JSON, 43% faster cold-install resolver, Python dlopen codesign fix, zero-leak nb outdated / nb info, new nb where diagnostic subcommand.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1486,6 +1486,42 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <section class="how">
+    <h2>Perf + correctness</h2>
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="num">12×</div>
+        <h3>nb leaves 10 s → 0.8 s</h3>
+        <p>The metadata fetch for every installed keg was sequential with a throwaway HTTP client per call, and the leaf-detection loop did O(n³) membership scans. Now uses a bounded worker pool with one persistent std.http.Client per thread, plus a StringHashMap(Keg) for O(1) lookups.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">1.8×</div>
+        <h3>nb search 190 ms → 106 ms</h3>
+        <p>Streaming std.json.Scanner with skipValue() on ignored keys, instead of materializing the full 29.5 MB formula.json + 14.2 MB cask.json into std.json.Value trees. Same speedup applies to alias resolution on nb info &lt;alias&gt;.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">43%</div>
+        <h3>Cold install resolver</h3>
+        <p>BFS parallel fetch now uses a bounded work-stealing pool (≤ 8 threads), each worker keeping its std.http.Client alive across all items it picks up. Cold nb install graphviz (15 deps): resolver phase 3123 ms → 1766 ms.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">0</div>
+        <h3>nb outdated / nb info leaks</h3>
+        <p>getOutdatedPackages duped three per-item strings on every outdated package and never freed them. runInfo captured the fetched Formula without calling deinit. Both now report zero DebugAllocator leaks per run.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">🔒</div>
+        <h3>Python dlopen codesign fix</h3>
+        <p>install_name_tool removes a binary's code signature unconditionally, and the batch codesign call SIGPIPE'd on packages with many Mach-O files. Fresh python@3.14 installs went from 60/76 broken .so + SIGKILL on import to 0/76 broken + framework re-sealed via codesign --deep.</p>
+      </div>
+      <div class="how-card">
+        <div class="num">📖</div>
+        <h3>nb info rich output</h3>
+        <p>Formula info now prints desc, homepage, license, bottle/source URL + sha256, deps, build deps, and caveats — mirroring the cask info layout. Bottled formulae are tagged (bottled); source-only formulae tag the URL as (source).</p>
+      </div>
+    </div>
+  </section>
+
   <section class="method">
     <h2>Verify a downloaded binary</h2>
     <p class="method-sub">Works offline after the notarization ticket is fetched once.</p>
@@ -1533,7 +1569,7 @@ export default {
         });
         if (!gh.ok) {
           // Rate limited — return last known version
-          return new Response("0.1.082", {
+          return new Response("0.1.191", {
             headers: {
               "content-type": "text/plain; charset=utf-8",
               "cache-control": "public, max-age=60",
@@ -1555,7 +1591,7 @@ export default {
         await cache.put(cacheKey, resp.clone());
         return resp;
       } catch {
-        return new Response("0.1.082", {
+        return new Response("0.1.191", {
           headers: {
             "content-type": "text/plain; charset=utf-8",
             "cache-control": "public, max-age=60",
