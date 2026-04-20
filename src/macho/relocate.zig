@@ -36,42 +36,120 @@ const LC_RPATH: u32 = 0x8000001C;
 
 const MACHO_DIRS = [_][]const u8{ "bin", "sbin", "lib", "libexec", "Frameworks" };
 
-/// Relocate all Mach-O files in a keg.
-/// Collects modified files and codesigns them in a single batch call.
+/// Relocate all Mach-O files in a keg. Rewrites @@HOMEBREW_*@@ placeholders
+/// in load commands via install_name_tool, then ad-hoc re-signs every Mach-O
+/// file encountered — `install_name_tool` unconditionally invalidates a
+/// binary's code signature when run, and some upstream bottles ship with
+/// signatures that drift in transit, so every Mach-O gets a fresh adhoc sig.
+///
+/// Framework bundles (*.framework) carry a SEPARATE sealed-resource signature
+/// at `<bundle>/Versions/<ver>/_CodeSignature/` that tracks the hashes of
+/// every file inside the bundle. Re-signing inner binaries invalidates that
+/// seal. We therefore do NOT re-deep-sign frameworks here, because the
+/// caller still needs to run `replaceKegPlaceholders` (which rewrites text
+/// files inside Info.plist, .pc, etc. and would invalidate the seal again).
+/// Instead, the caller is expected to invoke `sealKegBundles` as the final
+/// step of the install pipeline, after every file mutation is done.
 pub fn relocateKeg(alloc: std.mem.Allocator, io: std.Io, name: []const u8, version: []const u8) !void {
     var keg_buf: [512]u8 = undefined;
     const keg_dir = std.fmt.bufPrint(&keg_buf, "{s}/{s}/{s}", .{ CELLAR_DIR, name, version }) catch return error.PathTooLong;
 
-    var modified: std.ArrayList([]const u8) = .empty;
+    var macho_files: std.ArrayList([]const u8) = .empty;
     defer {
-        for (modified.items) |p| alloc.free(p);
-        modified.deinit(alloc);
+        for (macho_files.items) |p| alloc.free(p);
+        macho_files.deinit(alloc);
+    }
+
+    // Frameworks collected here are only recorded; signing happens in
+    // sealKegBundles after all file mutation is complete.
+    var frameworks_unused: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (frameworks_unused.items) |p| alloc.free(p);
+        frameworks_unused.deinit(alloc);
     }
 
     for (MACHO_DIRS) |subdir| {
         var sub_buf: [512]u8 = undefined;
         const sub_path = std.fmt.bufPrint(&sub_buf, "{s}/{s}", .{ keg_dir, subdir }) catch continue;
-        walkAndRelocate(alloc, io, sub_path, &modified) catch {};
+        walkAndRelocate(alloc, io, sub_path, &macho_files, &frameworks_unused) catch {};
     }
 
-    // Batch codesign all modified binaries in one call
-    if (modified.items.len > 0) {
+    // Batch ad-hoc re-sign every Mach-O file in one codesign call. Capture
+    // limits are generous because codesign prints "<file>: replacing existing
+    // signature" per file — ~100 chars × N files can exceed a small buffer
+    // and SIGPIPE the subprocess mid-batch, leaving most files unsigned.
+    if (macho_files.items.len > 0) {
         var argv: std.ArrayList([]const u8) = .empty;
         defer argv.deinit(alloc);
         argv.append(alloc, "codesign") catch return;
         argv.append(alloc, "-f") catch return;
         argv.append(alloc, "-s") catch return;
         argv.append(alloc, "-") catch return;
-        for (modified.items) |p| argv.append(alloc, p) catch continue;
+        for (macho_files.items) |p| argv.append(alloc, p) catch continue;
 
-        if (std.process.run(alloc, io, .{ .argv = argv.items, .stdout_limit = .limited(4096), .stderr_limit = .limited(4096) })) |r| {
+        if (std.process.run(alloc, io, .{ .argv = argv.items, .stdout_limit = .limited(1 << 20), .stderr_limit = .limited(1 << 20) })) |r| {
             alloc.free(r.stdout);
             alloc.free(r.stderr);
         } else |_| {}
     }
 }
 
-fn walkAndRelocate(alloc: std.mem.Allocator, io: std.Io, dir_path: []const u8, modified: *std.ArrayList([]const u8)) !void {
+/// Re-seal every *.framework bundle in the keg with `codesign --deep -f -s -`.
+/// Run AFTER relocateKeg AND replaceKegPlaceholders, so the final seal
+/// covers every file mutation. This is the last step before linking.
+pub fn sealKegBundles(alloc: std.mem.Allocator, io: std.Io, name: []const u8, version: []const u8) void {
+    var keg_buf: [512]u8 = undefined;
+    const keg_dir = std.fmt.bufPrint(&keg_buf, "{s}/{s}/{s}", .{ CELLAR_DIR, name, version }) catch return;
+
+    var frameworks: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (frameworks.items) |p| alloc.free(p);
+        frameworks.deinit(alloc);
+    }
+
+    // Discover frameworks under each Mach-O-bearing subdir.
+    for (MACHO_DIRS) |subdir| {
+        var sub_buf: [512]u8 = undefined;
+        const sub_path = std.fmt.bufPrint(&sub_buf, "{s}/{s}", .{ keg_dir, subdir }) catch continue;
+        collectFrameworks(alloc, io, sub_path, &frameworks);
+    }
+
+    // `--deep` walks every nested Mach-O and prints one line per file;
+    // use generous buffers so the pipe never SIGPIPEs the subprocess.
+    for (frameworks.items) |fw| {
+        const argv = [_][]const u8{ "codesign", "-f", "-s", "-", "--deep", fw };
+        if (std.process.run(alloc, io, .{ .argv = &argv, .stdout_limit = .limited(1 << 20), .stderr_limit = .limited(1 << 20) })) |r| {
+            alloc.free(r.stdout);
+            alloc.free(r.stderr);
+        } else |_| {}
+    }
+}
+
+fn collectFrameworks(alloc: std.mem.Allocator, io: std.Io, dir_path: []const u8, frameworks: *std.ArrayList([]const u8)) void {
+    var dir = std.Io.Dir.openDirAbsolute(io, dir_path, .{ .iterate = true }) catch return;
+    defer dir.close(io);
+    var iter = dir.iterate();
+    while (iter.next(io) catch null) |entry| {
+        if (entry.kind != .directory) continue;
+        var child_buf: [2048]u8 = undefined;
+        const child_path = std.fmt.bufPrint(&child_buf, "{s}/{s}", .{ dir_path, entry.name }) catch continue;
+        if (std.mem.endsWith(u8, entry.name, ".framework")) {
+            const dup = alloc.dupe(u8, child_path) catch continue;
+            frameworks.append(alloc, dup) catch alloc.free(dup);
+            // Do not recurse into a framework; --deep handles interior.
+            continue;
+        }
+        collectFrameworks(alloc, io, child_path, frameworks);
+    }
+}
+
+fn walkAndRelocate(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    dir_path: []const u8,
+    modified: *std.ArrayList([]const u8),
+    frameworks: *std.ArrayList([]const u8),
+) !void {
     var dir = std.Io.Dir.openDirAbsolute(io, dir_path, .{ .iterate = true }) catch return;
 
     var iter = dir.iterate();
@@ -80,7 +158,17 @@ fn walkAndRelocate(alloc: std.mem.Allocator, io: std.Io, dir_path: []const u8, m
         const child_path = std.fmt.bufPrint(&child_buf, "{s}/{s}", .{ dir_path, entry.name }) catch continue;
 
         switch (entry.kind) {
-            .directory => walkAndRelocate(alloc, io, child_path, modified) catch {},
+            .directory => {
+                // Record *.framework bundles so the keg-level pass can re-seal
+                // them with `codesign --deep` after interior Mach-O rewrites.
+                if (std.mem.endsWith(u8, entry.name, ".framework")) {
+                    const dup_fw = alloc.dupe(u8, child_path) catch null;
+                    if (dup_fw) |fw| {
+                        frameworks.append(alloc, fw) catch alloc.free(fw);
+                    }
+                }
+                walkAndRelocate(alloc, io, child_path, modified, frameworks) catch {};
+            },
             .sym_link => {
                 // Resolve symlink and process target if it's a Mach-O file
                 var target_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -118,8 +206,14 @@ fn walkAndRelocate(alloc: std.mem.Allocator, io: std.Io, dir_path: []const u8, m
     dir.close(io);
 }
 
-/// Parse Mach-O headers natively and build install_name_tool args.
-/// Returns true if the file was modified.
+/// Inspect `path`; if it is a Mach-O binary, run install_name_tool for any
+/// @@HOMEBREW_*@@ placeholders found and return `true`. Returns `true` even
+/// when no install_name_tool invocation was needed, as long as the file is
+/// a Mach-O binary — the caller then ad-hoc re-signs every Mach-O in the
+/// keg, because install_name_tool unconditionally invalidates a file's
+/// code signature when invoked, AND some upstream bottles ship with sealed
+/// framework resources whose hashes drift after any bundled file changes.
+/// Returns `false` only when the file is not a Mach-O (or unreadable).
 fn relocateFile(alloc: std.mem.Allocator, io: std.Io, path: []const u8) bool {
     var file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch return false;
 
@@ -138,12 +232,14 @@ fn relocateFile(alloc: std.mem.Allocator, io: std.Io, path: []const u8) bool {
         // Check for fat binary — use fallback scan
         const magic_be = std.mem.readInt(u32, data[0..4], .big);
         if (magic_be == FAT_MAGIC or magic_be == FAT_CIGAM) {
-            return relocateFat(alloc, io, path, data);
+            _ = relocateFat(alloc, io, path, data);
+            return true;
         }
         return false;
     }
 
-    return relocateMachO64(alloc, io, path, data);
+    _ = relocateMachO64(alloc, io, path, data);
+    return true;
 }
 
 fn relocateMachO64(alloc: std.mem.Allocator, io: std.Io, path: []const u8, data: []const u8) bool {
