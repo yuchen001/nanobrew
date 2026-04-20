@@ -567,6 +567,7 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
             // placeholders and missing prefix links are healed too.
             platform.relocate.relocateKeg(alloc, g_io, f.name, actual_ver) catch {};
             platform.relocate.replaceKegPlaceholders(g_io, f.name, actual_ver);
+            platform.relocate.sealKegBundles(alloc, g_io, f.name, actual_ver);
             nb.linker.linkKeg(f.name, actual_ver) catch {};
         } else |_| {
             to_install.append(alloc, f) catch {};
@@ -896,10 +897,12 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
         phase.store(@intFromEnum(Phase.failed), .release);
         return;
     };
-
     // 4b. Replace @@HOMEBREW_*@@ placeholders in text files (shebangs, scripts, configs)
     platform.relocate.replaceKegPlaceholders(g_io, f.name, actual_ver);
-    // Save post-relocation snapshot so future reinstalls skip steps 4/4b (~1500ms → ~10ms)
+    // 4c. Re-seal framework bundles AFTER every file mutation so the
+    //     sealed-resource signature matches the final on-disk state.
+    platform.relocate.sealKegBundles(alloc, g_io, f.name, actual_ver);
+    // Save post-relocation snapshot so future reinstalls skip steps 4/4b/4c (~1500ms → ~10ms)
     nb.store.saveRelocatedEntry(f.bottle_sha256, f.name, actual_ver) catch {};
 
     // 5. Link binaries
@@ -2724,9 +2727,9 @@ fn runRollback(alloc: std.mem.Allocator, args: []const []const u8) void {
         const actual_ver = nb.cellar.detectKegVersion(name, prev.version, &ver_buf) orelse prev.version;
         platform.relocate.relocateKeg(alloc, g_io, name, actual_ver) catch {};
         platform.relocate.replaceKegPlaceholders(g_io, name, actual_ver);
+        platform.relocate.sealKegBundles(alloc, g_io, name, actual_ver);
         nb.linker.linkKeg(name, actual_ver) catch {};
         db.recordInstall(name, prev.version, prev.sha256) catch {};
-
         stdout.print("==> Rolled back {s} to {s}\n", .{ name, prev.version }) catch {};
     }
 }
