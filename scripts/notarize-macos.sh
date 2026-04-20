@@ -38,7 +38,7 @@ if [[ -z "$ARCH_TAG" ]]; then
   esac
 fi
 
-IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Rachit Pradhan (WWP9DLJ27P)}"
+IDENTITY="${CODESIGN_IDENTITY:?set CODESIGN_IDENTITY to your Developer ID Application certificate (e.g. 'Developer ID Application: Your Name (TEAMID)')}"
 PROFILE="${NOTARY_PROFILE:-codedb-notary}"
 
 OUT_DIR="$(cd "$(dirname "$BIN")" && pwd)"

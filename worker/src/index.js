@@ -1396,6 +1396,38 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
   .demo pre .k { color: #9ea0a4; }
   .demo pre .h { color: #fff; font-weight: 600; }
 
+  .bench { padding: 4rem 0; border-top: 1px solid var(--border); }
+  .bench h2 { font-family: var(--fd); font-weight: 700; font-size: 1.4rem; color: var(--bright); margin-bottom: 0.5rem; }
+  .bench-sub { font-size: 0.8rem; color: var(--dim); margin-bottom: 2.5rem; }
+
+  .bg { margin-bottom: 2.8rem; }
+  .bg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; flex-wrap: wrap; gap: 0.5rem; }
+  .bg-title { font-family: var(--fd); font-weight: 700; font-size: 0.95rem; color: var(--bright); }
+  .bg-title span { color: var(--muted); font-weight: 400; font-size: 0.82rem; margin-left: 0.4rem; }
+  .bg-badge {
+    font-family: var(--fd); font-weight: 800; font-size: 0.82rem; color: #92400e;
+    background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.35);
+    padding: 0.2rem 0.75rem; border-radius: 20px;
+    opacity: 0; transform: translateY(4px); transition: opacity 0.4s 0.9s, transform 0.4s 0.9s;
+  }
+  .bg.visible .bg-badge { opacity: 1; transform: none; }
+  .br { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.45rem; }
+  .br-l { width: 5.5rem; text-align: right; font-size: 0.72rem; color: var(--muted); flex-shrink: 0; font-weight: 500; }
+  .br-t { flex: 1; height: 40px; background: var(--surface); border-radius: 6px; overflow: hidden; }
+  .br-b {
+    height: 100%; border-radius: 6px;
+    width: 0; transition: width 1.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .br-b.apt { background: #E4E4E4; }
+  .br-b.old { background: linear-gradient(90deg, #FFC84A 0%, #FFB800 100%); opacity: 0.6; }
+  .br-b.nb  { background: linear-gradient(90deg, #FFB800 0%, #FF8000 100%); box-shadow: 0 2px 16px rgba(255,140,0,0.22); }
+  .bg.visible .br:nth-child(1) .br-b { transition-delay: 0s; }
+  .bg.visible .br:nth-child(2) .br-b { transition-delay: 0.15s; }
+  .bg.visible .br:nth-child(3) .br-b { transition-delay: 0.30s; }
+  .br-time { font-size: 0.76rem; font-family: var(--fd); font-weight: 600; flex-shrink: 0; width: 4.5rem; }
+  .br-time.old-t  { color: #b45309; }
+  .br-time.nb-t   { color: #c05621; }
+
   .how { padding: 4rem 0; border-top: 1px solid var(--border); }
   .how h2 { font-family: var(--fd); font-weight: 700; font-size: 1.4rem; color: var(--bright); margin-bottom: 1.5rem; }
   .how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
@@ -1436,7 +1468,7 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
   </section>
 
   <section class="stat">
-    <span class="stat-num sig">Developer ID Application:<br>Rachit Pradhan (WWP9DLJ27P)</span>
+    <span class="stat-num sig">Signed &amp; notarized<br>by Apple</span>
     <span class="stat-label">macOS releases now notarized by Apple</span>
     <p class="stat-ctx"><em>arm64</em> and <em>x86_64</em> tarballs accepted by Apple's notary service — Gatekeeper fetches the ticket online on first quarantined run.</p>
   </section>
@@ -1486,33 +1518,59 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <section class="bench">
+    <h2>Command-speed wins</h2>
+    <p class="bench-sub">Apple Silicon, macOS, median of 3 runs — v0.1.190 baseline vs v0.1.191.</p>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb leaves <span>cold API cache, ~100 packages</span></div>
+        <div class="bg-badge">12× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">10.0 s</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:8.3%"></div></div><span class="br-time nb-t">0.83 s</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb search curl <span>streaming JSON parse</span></div>
+        <div class="bg-badge">1.80× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">190 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:55.8%"></div></div><span class="br-time nb-t">106 ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb info python <span>alias-resolved formula fetch</span></div>
+        <div class="bg-badge">1.68× faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">168 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:59.5%"></div></div><span class="br-time nb-t">100 ms</span></div>
+    </div>
+
+    <div class="bg" data-observe>
+      <div class="bg-header">
+        <div class="bg-title">nb install graphviz <span>cold resolver phase, 15 deps</span></div>
+        <div class="bg-badge">43% faster</div>
+      </div>
+      <div class="br"><div class="br-l">v0.1.190</div><div class="br-t"><div class="br-b old" style="width:100%"></div></div><span class="br-time old-t">3123 ms</span></div>
+      <div class="br"><div class="br-l">v0.1.191</div><div class="br-t"><div class="br-b nb"  style="width:56.5%"></div></div><span class="br-time nb-t">1766 ms</span></div>
+    </div>
+  </section>
+
   <section class="how">
-    <h2>Perf + correctness</h2>
+    <h2>Correctness + polish</h2>
     <div class="how-grid">
       <div class="how-card">
-        <div class="num">12×</div>
-        <h3>nb leaves 10 s → 0.8 s</h3>
-        <p>The metadata fetch for every installed keg was sequential with a throwaway HTTP client per call, and the leaf-detection loop did O(n³) membership scans. Now uses a bounded worker pool with one persistent std.http.Client per thread, plus a StringHashMap(Keg) for O(1) lookups.</p>
-      </div>
-      <div class="how-card">
-        <div class="num">1.8×</div>
-        <h3>nb search 190 ms → 106 ms</h3>
-        <p>Streaming std.json.Scanner with skipValue() on ignored keys, instead of materializing the full 29.5 MB formula.json + 14.2 MB cask.json into std.json.Value trees. Same speedup applies to alias resolution on nb info &lt;alias&gt;.</p>
-      </div>
-      <div class="how-card">
-        <div class="num">43%</div>
-        <h3>Cold install resolver</h3>
-        <p>BFS parallel fetch now uses a bounded work-stealing pool (≤ 8 threads), each worker keeping its std.http.Client alive across all items it picks up. Cold nb install graphviz (15 deps): resolver phase 3123 ms → 1766 ms.</p>
+        <div class="num">🔒</div>
+        <h3>Python dlopen codesign fix</h3>
+        <p>install_name_tool removes a binary's code signature unconditionally, and the batch codesign call SIGPIPE'd on packages with many Mach-O files. Fresh python@3.14 installs went from 60/76 broken .so + SIGKILL on import to 0/76 broken + framework re-sealed via codesign --deep.</p>
       </div>
       <div class="how-card">
         <div class="num">0</div>
         <h3>nb outdated / nb info leaks</h3>
         <p>getOutdatedPackages duped three per-item strings on every outdated package and never freed them. runInfo captured the fetched Formula without calling deinit. Both now report zero DebugAllocator leaks per run.</p>
-      </div>
-      <div class="how-card">
-        <div class="num">🔒</div>
-        <h3>Python dlopen codesign fix</h3>
-        <p>install_name_tool removes a binary's code signature unconditionally, and the batch codesign call SIGPIPE'd on packages with many Mach-O files. Fresh python@3.14 installs went from 60/76 broken .so + SIGKILL on import to 0/76 broken + framework re-sealed via codesign --deep.</p>
       </div>
       <div class="how-card">
         <div class="num">📖</div>
@@ -1521,6 +1579,7 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
       </div>
     </div>
   </section>
+
 
   <section class="method">
     <h2>Verify a downloaded binary</h2>
@@ -1538,6 +1597,10 @@ const RELEASE_191_HTML = `<!DOCTYPE html>
     <p>nanobrew v0.1.191 &mdash; <a href="https://github.com/justrach/nanobrew">GitHub</a> &mdash; Apache-2.0</p>
   </footer>
 </div>
+<script>
+const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }), { threshold: 0.2 });
+document.querySelectorAll('[data-observe]').forEach(el => obs.observe(el));
+</script>
 </body>
 </html>`;
 

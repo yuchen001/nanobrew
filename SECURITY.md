@@ -57,7 +57,7 @@ We take security seriously — in v0.1.073 alone we found and fixed 21 vulnerabi
 
 Starting in v0.1.191, macOS release tarballs (`nb-arm64-apple-darwin.tar.gz`, `nb-x86_64-apple-darwin.tar.gz`) ship a binary that is:
 
-- **Code-signed** with `Developer ID Application: Rachit Pradhan (WWP9DLJ27P)` (team `WWP9DLJ27P`)
+- **Code-signed** with a Developer ID Application certificate (check `codesign -dv` output on your downloaded binary for the exact authority + team identifier)
 - **Hardened-runtime-enabled** (`codesign --options runtime`)
 - **Timestamped** against Apple's timestamp server
 - **Notarized** by Apple's notary service (ticket fetched online by Gatekeeper/syspolicyd on first quarantined run)
@@ -76,8 +76,8 @@ codesign -dv --verbose=4 ./nb-arm64-apple-darwin 2>&1 | \
   grep -E '^(Authority|TeamIdentifier|flags=)'
 # expect:
 #   flags=0x10000(runtime)
-#   Authority=Developer ID Application: Rachit Pradhan (WWP9DLJ27P)
-#   TeamIdentifier=WWP9DLJ27P
+#   Authority=Developer ID Application: ...
+#   TeamIdentifier=...
 
 # 4. Verify the signature structurally
 codesign --verify --deep --strict ./nb-arm64-apple-darwin
