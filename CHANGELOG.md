@@ -8,6 +8,7 @@ All notable changes to nanobrew are documented here.
 
 ### Fixed
 - **Cask DMG installs failed with `error.MountFailed` / `error.ExtractFailed` after download** — the cask installer used Zig's static `std.Io.Threaded.global_single_threaded.io()` for `hdiutil`, `cp`, `unzip`, `tar`, checksum reads, and cask downloads. On Zig 0.16 that global IO is backed by a failing allocator, so `std.process.run` could fail before spawning `hdiutil` and surface as `error.MountFailed`. Cask install/remove now receive the initialized process IO from `main`, and cask downloads use the same IO-backed HTTP client. Verified with Raycast, Google Chrome, and Firefox casks. (#242)
+- **Intel macOS release smoke coverage** — the v0.1.191 x86_64 release artifact could segfault at startup after hardened-runtime signing, and it was built with `minos 13.0` despite a macOS 12.7.6 report. The macOS release path now builds x86_64 as `x86_64-macos.12.0`, rejects newer x86 deployment targets, and runs the signed x86 usage path through Rosetta before packaging. (#243)
 
 ## [0.1.191] - 2026-04-20
 

@@ -77,6 +77,45 @@ if ! echo "$CS_OUT" | grep -q "flags=0x10000(runtime)"; then
   exit 1
 fi
 
+if [[ "$ARCH_TAG" == "x86_64" ]]; then
+  MINOS="$(otool -l "$BIN" | awk '
+    $1 == "cmd" && $2 == "LC_BUILD_VERSION" { in_build = 1; next }
+    in_build && $1 == "minos" { print $2; exit }
+  ')"
+  case "$MINOS" in
+    10.*|11.*|12.*) ;;
+    *)
+      echo "notarize-macos.sh: x86_64 binary must target macOS 12.x or older; got minos '${MINOS:-unknown}'" >&2
+      echo "notarize-macos.sh: rebuild with: zig build -Dtarget=x86_64-macos.12.0 -Doptimize=ReleaseFast" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+echo "==> smoke test signed binary"
+set +e
+if [[ "$ARCH_TAG" == "x86_64" && "$(uname -m)" == "arm64" ]]; then
+  SMOKE_OUT="$(arch -x86_64 "$BIN" 2>&1)"
+  SMOKE_STATUS=$?
+else
+  SMOKE_OUT="$("$BIN" 2>&1)"
+  SMOKE_STATUS=$?
+fi
+set -e
+case "$SMOKE_STATUS" in
+  1) ;;
+  *)
+    echo "notarize-macos.sh: signed binary smoke test exited with $SMOKE_STATUS, expected 1 from usage path" >&2
+    echo "$SMOKE_OUT" >&2
+    exit 1
+    ;;
+esac
+if ! grep -q "nanobrew" <<<"$SMOKE_OUT"; then
+  echo "notarize-macos.sh: signed binary smoke test did not print usage" >&2
+  echo "$SMOKE_OUT" >&2
+  exit 1
+fi
+
 echo "==> package $TARBALL"
 tar -czf "$TARBALL" -C "$(dirname "$BIN")" "$(basename "$BIN")"
 (cd "$OUT_DIR" && shasum -a 256 "$(basename "$TARBALL")" > "$(basename "$SHAFILE")")

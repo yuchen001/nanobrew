@@ -22,7 +22,7 @@ jobs:
           - arch: arm64
             zig_target: aarch64-macos
           - arch: x86_64
-            zig_target: x86_64-macos
+            zig_target: x86_64-macos.12.0
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +56,43 @@ jobs:
             --force \
             zig-out/bin/nb
           codesign --verify --deep --strict zig-out/bin/nb
+
+      - name: Smoke test signed binary
+        run: |
+          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then
+            MINOS="$(otool -l zig-out/bin/nb | awk '
+              $1 == "cmd" && $2 == "LC_BUILD_VERSION" { in_build = 1; next }
+              in_build && $1 == "minos" { print $2; exit }
+            ')"
+            case "$MINOS" in
+              10.*|11.*|12.*) ;;
+              *)
+                echo "x86_64 binary must target macOS 12.x or older; got minos '${MINOS:-unknown}'" >&2
+                exit 1
+                ;;
+            esac
+            set +e
+            SMOKE_OUT="$(arch -x86_64 zig-out/bin/nb 2>&1)"
+            SMOKE_STATUS=$?
+            set -e
+            if [[ "$SMOKE_STATUS" != "1" ]]; then
+              echo "signed x86 smoke test exited with $SMOKE_STATUS, expected 1 from usage path" >&2
+              echo "$SMOKE_OUT" >&2
+              exit 1
+            fi
+            grep -q "nanobrew" <<<"$SMOKE_OUT"
+          else
+            set +e
+            SMOKE_OUT="$(zig-out/bin/nb 2>&1)"
+            SMOKE_STATUS=$?
+            set -e
+            if [[ "$SMOKE_STATUS" != "1" ]]; then
+              echo "signed smoke test exited with $SMOKE_STATUS, expected 1 from usage path" >&2
+              echo "$SMOKE_OUT" >&2
+              exit 1
+            fi
+            grep -q "nanobrew" <<<"$SMOKE_OUT"
+          fi
 
       - name: Notarize
         env:
