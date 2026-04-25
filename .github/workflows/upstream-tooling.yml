@@ -33,6 +33,10 @@ on:
         description: "Timed install runs per cask/mode"
         required: false
         default: "2"
+      cask_order:
+        description: "Cask benchmark order: upstream-first, homebrew-first, or alternating"
+        required: false
+        default: "alternating"
   push:
     branches:
       - codex/issue-251-upstream-tooling
@@ -221,7 +225,7 @@ jobs:
             --kind cask \
             --tokens "${{ inputs.cask_tokens || 'font-hack-nerd-font' }}" \
             --iterations "${{ inputs.cask_iterations || '2' }}" \
-            --order alternating \
+            --order "${{ inputs.cask_order || 'alternating' }}" \
             --cold \
             --allow-casks \
             --json > upstream-install-bench-cask.json
