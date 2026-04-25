@@ -1899,6 +1899,253 @@
       "verification": {
         "sha256": "asset_digest"
       }
+    },
+    {
+      "token": "bitwarden",
+      "name": "Bitwarden",
+      "kind": "cask",
+      "homepage": "https://bitwarden.com/",
+      "desc": "Desktop password and login vault",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "bitwarden/clients",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 92,
+        "cask_install_30d_count": "5,189"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Bitwarden-{version}-universal.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "Bitwarden-{version}-universal.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Bitwarden.app"
+        }
+      ],
+      "resolved": {
+        "tag": "desktop-v2026.3.1",
+        "version": "2026.3.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/bitwarden/clients/releases/download/desktop-v2026.3.1/Bitwarden-2026.3.1-universal.dmg",
+            "sha256": "b3d3d139d67c616ec6e484454872693991e29beb42dc4fc43c0c0c28262de8ff"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/bitwarden/clients/releases/download/desktop-v2026.3.1/Bitwarden-2026.3.1-universal.dmg",
+            "sha256": "b3d3d139d67c616ec6e484454872693991e29beb42dc4fc43c0c0c28262de8ff"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "bruno",
+      "name": "Bruno",
+      "kind": "cask",
+      "homepage": "https://www.usebruno.com/",
+      "desc": "Open source IDE for exploring and testing APIs",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "usebruno/bruno",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 88,
+        "cask_install_30d_count": "5,320"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "bruno_{version}_arm64_mac.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "bruno_{version}_x64_mac.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Bruno.app"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.3.0",
+        "version": "3.3.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/usebruno/bruno/releases/download/v3.3.0/bruno_3.3.0_arm64_mac.dmg",
+            "sha256": "a09ca59f04bc703c8ab07f2062114f5ef1428b57991eecf336298a6c0d821588"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/usebruno/bruno/releases/download/v3.3.0/bruno_3.3.0_x64_mac.dmg",
+            "sha256": "63398e44b3901a557456f4fff6f8df78957dc1da35f2740dfc0b86a514f0a805"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "dockdoor",
+      "name": "DockDoor",
+      "kind": "cask",
+      "homepage": "https://dockdoor.net/",
+      "desc": "Window peeking utility app",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "ejbills/DockDoor",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 70,
+        "cask_install_30d_count": "6,379"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "DockDoor.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "DockDoor.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "DockDoor.app"
+        }
+      ],
+      "resolved": {
+        "tag": "1.37",
+        "version": "1.37",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/ejbills/DockDoor/releases/download/1.37/DockDoor.dmg",
+            "sha256": "1a2c0e824a6df4b44a78dd13394408953d4b681728e258fa5383a81f7d190bc1"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/ejbills/DockDoor/releases/download/1.37/DockDoor.dmg",
+            "sha256": "1a2c0e824a6df4b44a78dd13394408953d4b681728e258fa5383a81f7d190bc1"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "hammerspoon",
+      "name": "Hammerspoon",
+      "kind": "cask",
+      "homepage": "https://www.hammerspoon.org/",
+      "desc": "Desktop automation application",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "Hammerspoon/hammerspoon",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 91,
+        "cask_install_30d_count": "5,206"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Hammerspoon-{tag}.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "Hammerspoon-{tag}.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Hammerspoon.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Hammerspoon.app/Contents/Frameworks/hs/hs"
+        }
+      ],
+      "resolved": {
+        "tag": "1.1.1",
+        "version": "1.1.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/Hammerspoon/hammerspoon/releases/download/1.1.1/Hammerspoon-1.1.1.zip",
+            "sha256": "11bb1c90faf5427f37c7bd4fe7eab9774ae43e1d5cb020c5b3088dac32849efa"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/Hammerspoon/hammerspoon/releases/download/1.1.1/Hammerspoon-1.1.1.zip",
+            "sha256": "11bb1c90faf5427f37c7bd4fe7eab9774ae43e1d5cb020c5b3088dac32849efa"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "utm",
+      "name": "UTM",
+      "kind": "cask",
+      "homepage": "https://mac.getutm.app/",
+      "desc": "Virtual machines UI using QEMU",
+      "upstream": {
+        "type": "github_release",
+        "repo": "utmapp/UTM",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 83,
+        "cask_install_30d_count": "5,516"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "UTM.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "UTM.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "UTM.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/UTM.app/Contents/MacOS/utmctl"
+        }
+      ],
+      "resolved": {
+        "tag": "v4.7.5",
+        "version": "4.7.5",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/utmapp/UTM/releases/download/v4.7.5/UTM.dmg",
+            "sha256": "a8435c93cfb5f8bbfeea4b134cfad1ac66b67632b75e438c63b1a8ae043bef0e"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/utmapp/UTM/releases/download/v4.7.5/UTM.dmg",
+            "sha256": "a8435c93cfb5f8bbfeea4b134cfad1ac66b67632b75e438c63b1a8ae043bef0e"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
     }
   ]
 }
