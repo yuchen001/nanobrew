@@ -441,51 +441,59 @@ function formulaSeederStatus(formula) {
 }
 
 function caskSeederStatus(cask) {
-  const base = githubReleaseAssetParts(cask.url);
-  if (!base) {
-    return {
-      status: "skipped",
-      reason: "not a GitHub release asset cask",
-      expected_shape: "github_release_asset_app_cask",
-    };
-  }
-
   const artifacts = caskArtifacts(cask, { includePkg: false, includeBinaries: true });
   if (!artifacts.ok) {
     return {
       status: "skipped",
       reason: artifacts.reason,
-      expected_shape: "github_release_asset_app_cask",
-      repo: base.repo,
-      tag: base.tag,
+      expected_shape: "github_release_or_vendor_cask",
     };
   }
 
-  const downloads = collectPlatformDownloads(cask, base);
+  if (hasIncompatibleVariationArtifacts(cask, { includePkg: false, includeBinaries: true }, artifacts)) {
+    return {
+      status: "skipped",
+      reason: "platform-specific artifacts unsupported",
+      expected_shape: "github_release_or_vendor_cask",
+    };
+  }
+
+  const base = githubReleaseAssetParts(cask.url);
+  const downloads = base ? collectPlatformDownloads(cask, base) : collectVendorPlatformDownloads(cask);
   if (downloads.size === 0) {
     return {
       status: "skipped",
       reason: "no supported macOS platform downloads",
-      expected_shape: "github_release_asset_app_cask",
-      repo: base.repo,
-      tag: base.tag,
+      expected_shape: base ? "github_release_asset_cask" : "vendor_url_cask",
+      repo: base?.repo,
+      tag: base?.tag,
     };
   }
   if (!downloads.has("macos-arm64")) {
     return {
       status: "skipped",
       reason: "no macos-arm64 download",
-      expected_shape: "github_release_asset_app_cask",
-      repo: base.repo,
-      tag: base.tag,
+      expected_shape: base ? "github_release_asset_cask" : "vendor_url_cask",
+      repo: base?.repo,
+      tag: base?.tag,
       platforms: [...downloads.keys()].sort(),
+    };
+  }
+
+  if (!base) {
+    return {
+      status: "seedable",
+      reason: "pinned vendor URL with sha256",
+      expected_shape: "vendor_url_cask",
+      platforms: [...downloads.keys()].sort(),
+      artifacts: artifacts.items,
     };
   }
 
   return {
     status: "probe_required",
     reason: "requires GitHub release asset digest probe",
-    expected_shape: "github_release_asset_app_cask",
+    expected_shape: "github_release_asset_cask",
     repo: base.repo,
     tag: base.tag,
     platforms: [...downloads.keys()].sort(),
@@ -899,9 +907,14 @@ function caskArtifacts(cask, opts) {
   const items = [];
   let appCount = 0;
   let pkgCount = 0;
+  let binaryCount = 0;
 
   for (const artifact of cask.artifacts ?? []) {
     if (!artifact || typeof artifact !== "object") continue;
+    const unsupported = unsupportedArtifactKeys(artifact);
+    if (unsupported.length > 0) {
+      return { ok: false, reason: `unsupported artifact type: ${unsupported[0]}` };
+    }
     if (Array.isArray(artifact.app)) {
       if (hasObjectEntry(artifact.app)) return { ok: false, reason: "app artifact target unsupported" };
       for (const path of artifact.app) {
@@ -910,6 +923,9 @@ function caskArtifacts(cask, opts) {
         items.push({ type: "app", path });
         appCount += 1;
       }
+    }
+    if (!opts.includePkg && Array.isArray(artifact.pkg)) {
+      return { ok: false, reason: "pkg artifact requires --include-pkg" };
     }
     if (opts.includePkg && Array.isArray(artifact.pkg)) {
       if (hasObjectEntry(artifact.pkg)) return { ok: false, reason: "pkg artifact target unsupported" };
@@ -921,23 +937,63 @@ function caskArtifacts(cask, opts) {
       }
     }
     if (opts.includeBinaries && Array.isArray(artifact.binary)) {
-      if (hasObjectEntry(artifact.binary)) continue;
-      for (const path of artifact.binary) {
-        if (typeof path !== "string") continue;
-        if (!safeBinarySource(path)) continue;
-        items.push({ type: "binary", path });
+      for (const binary of binaryArtifacts(artifact.binary)) {
+        items.push(binary);
+        binaryCount += 1;
       }
     }
   }
 
-  if (appCount === 0 && pkgCount === 0) {
-    return { ok: false, reason: opts.includePkg ? "no supported app or pkg artifacts" : "no supported app artifacts" };
+  if (appCount === 0 && pkgCount === 0 && binaryCount === 0) {
+    return { ok: false, reason: opts.includePkg ? "no supported app, pkg, or binary artifacts" : "no supported app or binary artifacts" };
   }
   return { ok: true, items };
 }
 
+function unsupportedArtifactKeys(artifact) {
+  const supported = new Set(["app", "pkg", "binary", "uninstall", "zap"]);
+  return Object.entries(artifact)
+    .filter(([key, value]) => !supported.has(key) && value != null)
+    .map(([key]) => key);
+}
+
+function hasIncompatibleVariationArtifacts(cask, opts, artifacts) {
+  const baseSignature = artifactSignature(artifacts.items);
+  for (const variation of Object.values(cask.variations ?? {})) {
+    if (!variation || typeof variation !== "object" || !Array.isArray(variation.artifacts)) continue;
+    const variationArtifacts = caskArtifacts({ artifacts: variation.artifacts }, opts);
+    if (!variationArtifacts.ok) return true;
+    if (artifactSignature(variationArtifacts.items) !== baseSignature) return true;
+  }
+  return false;
+}
+
+function artifactSignature(items) {
+  return JSON.stringify(items);
+}
+
 function hasObjectEntry(items) {
   return items.some((item) => item && typeof item === "object");
+}
+
+function binaryArtifacts(entries) {
+  const binaries = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    const path = entries[i];
+    if (typeof path !== "string") continue;
+    if (!safeBinarySource(path)) continue;
+
+    const item = { type: "binary", path };
+    const next = entries[i + 1];
+    if (next && typeof next === "object" && !Array.isArray(next)) {
+      if (typeof next.target === "string" && safeBinaryTarget(next.target)) {
+        item.target = next.target;
+      }
+      i += 1;
+    }
+    binaries.push(item);
+  }
+  return binaries;
 }
 
 function safeAppPath(path) {
@@ -952,8 +1008,16 @@ function safeBinarySource(path) {
   if (path.includes("..")) return false;
   if (path.startsWith("$HOMEBREW_PREFIX")) return false;
   if (path.startsWith("$APPDIR/")) return true;
-  if (path.startsWith("/")) return true;
+  if (path.startsWith("/")) return false;
   return !path.includes("/");
+}
+
+function safeBinaryTarget(target) {
+  if (target.length === 0) return false;
+  if (target.includes("..")) return false;
+  if (target.includes("/")) return false;
+  if (target.startsWith("$")) return false;
+  return true;
 }
 
 function collectPlatformDownloads(cask, base) {
@@ -970,6 +1034,26 @@ function collectPlatformDownloads(cask, base) {
   return downloads;
 }
 
+function collectVendorPlatformDownloads(cask) {
+  if (typeof cask.url !== "string") return new Map();
+  let baseUrl;
+  try {
+    baseUrl = new URL(cask.url);
+  } catch {
+    return new Map();
+  }
+
+  const downloads = new Map();
+  addVendorPlatformDownload(downloads, cask.url, cask.sha256, "", baseUrl.hostname, false);
+
+  for (const [key, variation] of Object.entries(cask.variations ?? {})) {
+    if (!variation || typeof variation !== "object") continue;
+    if (typeof variation.url !== "string" || typeof variation.sha256 !== "string") continue;
+    addVendorPlatformDownload(downloads, variation.url, variation.sha256, key, baseUrl.hostname, true);
+  }
+  return downloads;
+}
+
 function addPlatformDownload(downloads, url, sha256, variationKey, base, isVariation) {
   if (!isSha256(sha256)) return;
   const parts = githubReleaseAssetParts(url);
@@ -981,13 +1065,39 @@ function addPlatformDownload(downloads, url, sha256, variationKey, base, isVaria
   }
 }
 
+function addVendorPlatformDownload(downloads, url, sha256, variationKey, baseHost, isVariation) {
+  if (!isSha256(sha256)) return;
+  if (!supportedCaskDownloadUrl(url)) return;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  if (parsed.hostname !== baseHost) return;
+  for (const platform of platformsForDownload(url, variationKey, isVariation)) {
+    if (!downloads.has(platform)) {
+      downloads.set(platform, { url, sha256: sha256.toLowerCase() });
+    }
+  }
+}
+
+function supportedCaskDownloadUrl(value) {
+  try {
+    const path = new URL(value).pathname.toLowerCase();
+    return path.endsWith(".dmg") || path.endsWith(".zip") || path.endsWith(".pkg") || path.endsWith(".tar.gz") || path.endsWith(".tgz");
+  } catch {
+    return false;
+  }
+}
+
 function platformsForDownload(url, variationKey, isVariation) {
   const s = `${url} ${variationKey}`.toLowerCase();
   const universal = /universal|x86_64\+arm64|arm64\+x86_64|amd64\+arm64|arm64\+amd64/.test(s);
   if (universal) return ["macos-arm64", "macos-x86_64"];
 
-  const arm = /(?:arm64|aarch64|apple[-_ ]?silicon|macos[_-]?arm)/.test(s);
-  const x86 = /(?:x86_64|amd64|x64|intel|64bit|macos[_-]?64)/.test(s);
+  const arm = /(?:arm64|aarch64|apple[-_ ]?silicon|macos[_-]?arm|mac[_-]?arm|osx[_-]?arm|darwin[_-]?arm)/.test(s);
+  const x86 = /(?:x86_64|amd64|x64|intel|64bit|macos[_-]?64|mac[_-]?x64|osx[_-]?x64|darwin[_-]?x64)/.test(s);
   if (arm && !x86) return ["macos-arm64"];
   if (x86 && !arm) return ["macos-x86_64"];
   if (/^arm64(?:_|$)/.test(variationKey)) return ["macos-arm64"];

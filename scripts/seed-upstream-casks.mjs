@@ -79,7 +79,7 @@ function usage(code) {
   const stream = code === 0 ? process.stdout : process.stderr;
   stream.write(`Usage: scripts/seed-upstream-casks.mjs [options]
 
-Seed popular GitHub-release cask records into the verified upstream registry.
+Seed popular GitHub-release and pinned vendor cask records into the verified upstream registry.
 
 Options:
   --limit N                  Records to generate (default: 5)
@@ -175,13 +175,16 @@ async function loadJson(url, file) {
 }
 
 async function seedRecordFromCask(cask, analyticsItem, opts, releaseCache) {
-  const base = githubReleaseAssetParts(cask.url);
-  if (!base) return { ok: false, reason: "not a GitHub release asset cask" };
-
   const artifacts = caskArtifacts(cask, opts);
   if (!artifacts.ok) return artifacts;
+  if (hasIncompatibleVariationArtifacts(cask, opts, artifacts)) {
+    return { ok: false, reason: "platform-specific artifacts unsupported" };
+  }
 
-  const downloads = collectPlatformDownloads(cask, base);
+  const base = githubReleaseAssetParts(cask.url);
+  if (!base) return seedVendorRecordFromCask(cask, analyticsItem, artifacts);
+
+  const downloads = collectGithubPlatformDownloads(cask, base);
   if (downloads.size === 0) return { ok: false, reason: "no supported macOS platform downloads" };
   if (!downloads.has("macos-arm64")) return { ok: false, reason: "no macos-arm64 download" };
 
@@ -238,6 +241,52 @@ async function seedRecordFromCask(cask, analyticsItem, opts, releaseCache) {
   return { ok: true, record };
 }
 
+function seedVendorRecordFromCask(cask, analyticsItem, artifacts) {
+  const downloads = collectVendorPlatformDownloads(cask);
+  if (downloads.size === 0) return { ok: false, reason: "no supported pinned vendor downloads" };
+  if (!downloads.has("macos-arm64")) return { ok: false, reason: "no macos-arm64 download" };
+
+  const resolvedAssets = {};
+  for (const [platform, download] of downloads) {
+    resolvedAssets[platform] = {
+      url: download.url,
+      sha256: download.sha256,
+    };
+  }
+
+  const allowDomains = domainsFromResolvedAssets(resolvedAssets);
+  if (allowDomains.length === 0) return { ok: false, reason: "vendor download domain missing" };
+
+  const record = {
+    token: cask.token,
+    name: caskName(cask),
+    kind: "cask",
+    homepage: cask.homepage ?? "",
+    desc: cask.desc ?? "",
+  };
+  if (cask.auto_updates === true) record.auto_updates = true;
+  record.upstream = {
+    type: "vendor_url",
+    homepage: cask.homepage ?? "",
+    release_feed: cask.url,
+    allow_domains: allowDomains,
+    verified: true,
+  };
+  record.analytics = {
+    cask_install_30d_rank: Number.parseInt(String(analyticsItem.number ?? ""), 10) || undefined,
+    cask_install_30d_count: analyticsItem.count ?? "",
+  };
+  record.artifacts = artifacts.items;
+  record.resolved = {
+    version: cask.version ?? "",
+    assets: resolvedAssets,
+  };
+  record.verification = {
+    sha256: "required",
+  };
+  return { ok: true, record };
+}
+
 function canonicalRepoFromResolvedAssets(resolvedAssets) {
   for (const asset of Object.values(resolvedAssets)) {
     const parts = githubReleaseAssetParts(asset.url);
@@ -248,11 +297,16 @@ function canonicalRepoFromResolvedAssets(resolvedAssets) {
 
 function caskArtifacts(cask, opts) {
   const items = [];
-  var appCount = 0;
-  var pkgCount = 0;
+  let appCount = 0;
+  let pkgCount = 0;
+  let binaryCount = 0;
 
   for (const artifact of cask.artifacts ?? []) {
     if (!artifact || typeof artifact !== "object") continue;
+    const unsupported = unsupportedArtifactKeys(artifact);
+    if (unsupported.length > 0) {
+      return { ok: false, reason: `unsupported artifact type: ${unsupported[0]}` };
+    }
     if (Array.isArray(artifact.app)) {
       if (hasObjectEntry(artifact.app)) return { ok: false, reason: "app artifact target unsupported" };
       for (const path of artifact.app) {
@@ -261,6 +315,9 @@ function caskArtifacts(cask, opts) {
         items.push({ type: "app", path });
         appCount += 1;
       }
+    }
+    if (!opts.includePkg && Array.isArray(artifact.pkg)) {
+      return { ok: false, reason: "pkg artifact requires --include-pkg" };
     }
     if (opts.includePkg && Array.isArray(artifact.pkg)) {
       if (hasObjectEntry(artifact.pkg)) return { ok: false, reason: "pkg artifact target unsupported" };
@@ -272,23 +329,63 @@ function caskArtifacts(cask, opts) {
       }
     }
     if (opts.includeBinaries && Array.isArray(artifact.binary)) {
-      if (hasObjectEntry(artifact.binary)) continue;
-      for (const path of artifact.binary) {
-        if (typeof path !== "string") continue;
-        if (!safeBinarySource(path)) continue;
-        items.push({ type: "binary", path });
+      for (const binary of binaryArtifacts(artifact.binary)) {
+        items.push(binary);
+        binaryCount += 1;
       }
     }
   }
 
-  if (appCount === 0 && pkgCount === 0) {
-    return { ok: false, reason: opts.includePkg ? "no supported app or pkg artifacts" : "no supported app artifacts" };
+  if (appCount === 0 && pkgCount === 0 && binaryCount === 0) {
+    return { ok: false, reason: opts.includePkg ? "no supported app, pkg, or binary artifacts" : "no supported app or binary artifacts" };
   }
   return { ok: true, items };
 }
 
+function unsupportedArtifactKeys(artifact) {
+  const supported = new Set(["app", "pkg", "binary", "uninstall", "zap"]);
+  return Object.entries(artifact)
+    .filter(([key, value]) => !supported.has(key) && value != null)
+    .map(([key]) => key);
+}
+
+function hasIncompatibleVariationArtifacts(cask, opts, artifacts) {
+  const baseSignature = artifactSignature(artifacts.items);
+  for (const variation of Object.values(cask.variations ?? {})) {
+    if (!variation || typeof variation !== "object" || !Array.isArray(variation.artifacts)) continue;
+    const variationArtifacts = caskArtifacts({ artifacts: variation.artifacts }, opts);
+    if (!variationArtifacts.ok) return true;
+    if (artifactSignature(variationArtifacts.items) !== baseSignature) return true;
+  }
+  return false;
+}
+
+function artifactSignature(items) {
+  return JSON.stringify(items);
+}
+
 function hasObjectEntry(items) {
   return items.some((item) => item && typeof item === "object");
+}
+
+function binaryArtifacts(entries) {
+  const binaries = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    const path = entries[i];
+    if (typeof path !== "string") continue;
+    if (!safeBinarySource(path)) continue;
+
+    const item = { type: "binary", path };
+    const next = entries[i + 1];
+    if (next && typeof next === "object" && !Array.isArray(next)) {
+      if (typeof next.target === "string" && safeBinaryTarget(next.target)) {
+        item.target = next.target;
+      }
+      i += 1;
+    }
+    binaries.push(item);
+  }
+  return binaries;
 }
 
 function safeAppPath(path) {
@@ -303,11 +400,19 @@ function safeBinarySource(path) {
   if (path.includes("..")) return false;
   if (path.startsWith("$HOMEBREW_PREFIX")) return false;
   if (path.startsWith("$APPDIR/")) return true;
-  if (path.startsWith("/")) return true;
+  if (path.startsWith("/")) return false;
   return !path.includes("/");
 }
 
-function collectPlatformDownloads(cask, base) {
+function safeBinaryTarget(target) {
+  if (target.length === 0) return false;
+  if (target.includes("..")) return false;
+  if (target.includes("/")) return false;
+  if (target.startsWith("$")) return false;
+  return true;
+}
+
+function collectGithubPlatformDownloads(cask, base) {
   const downloads = new Map();
   addPlatformDownload(downloads, cask.url, cask.sha256, "", base, false);
 
@@ -317,6 +422,26 @@ function collectPlatformDownloads(cask, base) {
     const parts = githubReleaseAssetParts(variation.url);
     if (!parts || parts.repo !== base.repo || parts.tag !== base.tag) continue;
     addPlatformDownload(downloads, variation.url, variation.sha256, key, base, true);
+  }
+  return downloads;
+}
+
+function collectVendorPlatformDownloads(cask) {
+  if (typeof cask.url !== "string") return new Map();
+  let baseUrl;
+  try {
+    baseUrl = new URL(cask.url);
+  } catch {
+    return new Map();
+  }
+
+  const downloads = new Map();
+  addVendorPlatformDownload(downloads, cask.url, cask.sha256, "", baseUrl.hostname, false);
+
+  for (const [key, variation] of Object.entries(cask.variations ?? {})) {
+    if (!variation || typeof variation !== "object") continue;
+    if (typeof variation.url !== "string" || typeof variation.sha256 !== "string") continue;
+    addVendorPlatformDownload(downloads, variation.url, variation.sha256, key, baseUrl.hostname, true);
   }
   return downloads;
 }
@@ -332,13 +457,51 @@ function addPlatformDownload(downloads, url, sha256, variationKey, base, isVaria
   }
 }
 
+function addVendorPlatformDownload(downloads, url, sha256, variationKey, baseHost, isVariation) {
+  if (!isSha256(sha256)) return;
+  if (!supportedCaskDownloadUrl(url)) return;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  if (parsed.hostname !== baseHost) return;
+  for (const platform of platformsForDownload(url, variationKey, isVariation)) {
+    if (!downloads.has(platform)) {
+      downloads.set(platform, { url, sha256: sha256.toLowerCase() });
+    }
+  }
+}
+
+function supportedCaskDownloadUrl(value) {
+  try {
+    const path = new URL(value).pathname.toLowerCase();
+    return path.endsWith(".dmg") || path.endsWith(".zip") || path.endsWith(".pkg") || path.endsWith(".tar.gz") || path.endsWith(".tgz");
+  } catch {
+    return false;
+  }
+}
+
+function domainsFromResolvedAssets(resolvedAssets) {
+  const domains = new Set();
+  for (const asset of Object.values(resolvedAssets)) {
+    try {
+      domains.add(new URL(asset.url).hostname);
+    } catch {
+      // Ignore invalid URLs; registry validation will catch malformed assets.
+    }
+  }
+  return [...domains].sort();
+}
+
 function platformsForDownload(url, variationKey, isVariation) {
   const s = `${url} ${variationKey}`.toLowerCase();
   const universal = /universal|x86_64\+arm64|arm64\+x86_64|amd64\+arm64|arm64\+amd64/.test(s);
   if (universal) return ["macos-arm64", "macos-x86_64"];
 
-  const arm = /(?:arm64|aarch64|apple[-_ ]?silicon|macos[_-]?arm)/.test(s);
-  const x86 = /(?:x86_64|amd64|x64|intel|64bit|macos[_-]?64)/.test(s);
+  const arm = /(?:arm64|aarch64|apple[-_ ]?silicon|macos[_-]?arm|mac[_-]?arm|osx[_-]?arm|darwin[_-]?arm)/.test(s);
+  const x86 = /(?:x86_64|amd64|x64|intel|64bit|macos[_-]?64|mac[_-]?x64|osx[_-]?x64|darwin[_-]?x64)/.test(s);
   if (arm && !x86) return ["macos-arm64"];
   if (x86 && !arm) return ["macos-x86_64"];
   if (/^arm64(?:_|$)/.test(variationKey)) return ["macos-arm64"];
@@ -450,11 +613,26 @@ function caskName(cask) {
 }
 
 function mergeRecords(existing, generated, replace) {
-  const generatedKeys = new Set(generated.map((record) => `${record.kind}:${record.token}`));
-  const kept = replace
-    ? existing.filter((record) => !generatedKeys.has(`${record.kind}:${record.token}`))
-    : existing;
-  return [...kept, ...generated.sort((a, b) => String(a.token).localeCompare(String(b.token)))];
+  const existingKeys = new Set(existing.map((record) => `${record.kind}:${record.token}`));
+  const generatedByKey = new Map(generated.map((record) => [`${record.kind}:${record.token}`, record]));
+  const seenGenerated = new Set();
+  const merged = existing.map((record) => {
+    const key = `${record.kind}:${record.token}`;
+    if (replace && generatedByKey.has(key)) {
+      seenGenerated.add(key);
+      return generatedByKey.get(key);
+    }
+    return record;
+  });
+  const additions = generated
+    .filter((record) => {
+      const key = `${record.kind}:${record.token}`;
+      if (seenGenerated.has(key)) return false;
+      if (!replace && existingKeys.has(key)) return false;
+      return true;
+    })
+    .sort((a, b) => String(a.token).localeCompare(String(b.token)));
+  return [...merged, ...additions];
 }
 
 main().catch((err) => {

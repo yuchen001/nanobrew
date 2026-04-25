@@ -400,7 +400,8 @@ fn caskArtifactsFromRecord(alloc: std.mem.Allocator, rules: []const registry_mod
             .binary => {
                 const source = try alloc.dupe(u8, rule.path);
                 errdefer alloc.free(source);
-                const target = try alloc.dupe(u8, std.fs.path.basename(rule.path));
+                const target_value = if (rule.target.len > 0) rule.target else std.fs.path.basename(rule.path);
+                const target = try alloc.dupe(u8, target_value);
                 errdefer alloc.free(target);
                 try artifacts.append(alloc, .{ .binary = .{ .source = source, .target = target } });
             },
@@ -788,7 +789,8 @@ test "fetchCaskFromRecord maps resolved vendor cask with no_check sha" {
         \\      "verified": true
         \\    },
         \\    "artifacts": [
-        \\      { "type": "app", "path": "Google Chrome.app" }
+        \\      { "type": "app", "path": "Google Chrome.app" },
+        \\      { "type": "binary", "path": "$APPDIR/Google Chrome.app/Contents/MacOS/google-chrome", "target": "chrome" }
         \\    ],
         \\    "resolved": {
         \\      "version": "147.0.7727.117",
@@ -829,8 +831,10 @@ test "fetchCaskFromRecord maps resolved vendor cask with no_check sha" {
     try testing.expectEqualStrings("Google Chrome", cask.name);
     try testing.expectEqualStrings("147.0.7727.117", cask.version);
     try testing.expectEqualStrings("no_check", cask.sha256);
-    try testing.expectEqual(@as(usize, 1), cask.artifacts.len);
+    try testing.expectEqual(@as(usize, 2), cask.artifacts.len);
     try testing.expectEqualStrings("Google Chrome.app", cask.artifacts[0].app);
+    try testing.expectEqualStrings("$APPDIR/Google Chrome.app/Contents/MacOS/google-chrome", cask.artifacts[1].binary.source);
+    try testing.expectEqualStrings("chrome", cask.artifacts[1].binary.target);
 }
 
 test "formulaFromReleaseJson maps GitHub release asset to source formula" {

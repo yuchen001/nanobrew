@@ -56,6 +56,10 @@
         "repo": "lwouis/alt-tab-macos",
         "verified": true
       },
+      "analytics": {
+        "cask_install_30d_rank": 71,
+        "cask_install_30d_count": "6,340"
+      },
       "assets": {
         "macos-arm64": {
           "pattern": "AltTab-{version}.zip"
@@ -141,11 +145,15 @@
       "upstream": {
         "type": "vendor_url",
         "homepage": "https://www.mozilla.org/firefox/",
-        "release_feed": "https://download-installer.cdn.mozilla.net/pub/firefox/releases/{version}/mac/en-US/Firefox%20{version}.dmg",
+        "release_feed": "https://download-installer.cdn.mozilla.net/pub/firefox/releases/150.0/mac/en-US/Firefox%20150.0.dmg",
         "allow_domains": [
           "download-installer.cdn.mozilla.net"
         ],
         "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 27,
+        "cask_install_30d_count": "17,128"
       },
       "artifacts": [
         {
@@ -823,8 +831,8 @@
         "verified": true
       },
       "analytics": {
-        "cask_install_30d_rank": 57,
-        "cask_install_30d_count": "8,567"
+        "cask_install_30d_rank": 56,
+        "cask_install_30d_count": "8,629"
       },
       "assets": {
         "macos-arm64": {
@@ -870,8 +878,8 @@
         "verified": true
       },
       "analytics": {
-        "cask_install_30d_rank": 36,
-        "cask_install_30d_count": "12,138"
+        "cask_install_30d_rank": 33,
+        "cask_install_30d_count": "12,713"
       },
       "assets": {
         "macos-arm64": {
@@ -918,8 +926,8 @@
         "verified": true
       },
       "analytics": {
-        "cask_install_30d_rank": 39,
-        "cask_install_30d_count": "11,390"
+        "cask_install_30d_rank": 41,
+        "cask_install_30d_count": "11,147"
       },
       "assets": {
         "macos-arm64": {
@@ -971,7 +979,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 51,
-        "cask_install_30d_count": "9,702"
+        "cask_install_30d_count": "9,672"
       },
       "assets": {
         "macos-arm64": {
@@ -1019,7 +1027,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 16,
-        "cask_install_30d_count": "25,529"
+        "cask_install_30d_count": "25,609"
       },
       "assets": {
         "macos-arm64": {
@@ -1033,6 +1041,11 @@
         {
           "type": "app",
           "path": "Obsidian.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Obsidian.app/Contents/MacOS/obsidian-cli",
+          "target": "obsidian"
         }
       ],
       "resolved": {
@@ -1067,7 +1080,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 32,
-        "cask_install_30d_count": "12,977"
+        "cask_install_30d_count": "13,055"
       },
       "assets": {
         "macos-arm64": {
@@ -1118,8 +1131,8 @@
         "verified": true
       },
       "analytics": {
-        "cask_install_30d_rank": 47,
-        "cask_install_30d_count": "9,907"
+        "cask_install_30d_rank": 48,
+        "cask_install_30d_count": "9,782"
       },
       "assets": {
         "macos-arm64": {
@@ -1166,8 +1179,8 @@
         "verified": true
       },
       "analytics": {
-        "cask_install_30d_rank": 56,
-        "cask_install_30d_count": "8,573"
+        "cask_install_30d_rank": 55,
+        "cask_install_30d_count": "8,636"
       },
       "assets": {
         "macos-arm64": {
@@ -1184,16 +1197,16 @@
         }
       ],
       "resolved": {
-        "tag": "v1.14.23",
-        "version": "1.14.23",
+        "tag": "v1.14.24",
+        "version": "1.14.24",
         "assets": {
           "macos-arm64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.23/opencode-desktop-darwin-aarch64.dmg",
-            "sha256": "a15d33cd5c24294d3f91a97d4814243d6d9e7582f504ca5a295c4f0edacf3809"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.24/opencode-desktop-darwin-aarch64.dmg",
+            "sha256": "4378e56ad2f58e074d839bf0cc48965da34950a25a34feb004ef018d6f8c5968"
           },
           "macos-x86_64": {
-            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.23/opencode-desktop-darwin-x64.dmg",
-            "sha256": "0bb74f3f6c9e4001428d3b7269603de73250b3a9619339eac57c49301e2fc1aa"
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.24/opencode-desktop-darwin-x64.dmg",
+            "sha256": "5c045d37ab82750231f1e92a0e923acb8dbd2d70afaf1ebfbb86b02615f252fb"
           }
         }
       },
@@ -1215,7 +1228,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 42,
-        "cask_install_30d_count": "11,095"
+        "cask_install_30d_count": "11,083"
       },
       "assets": {
         "macos-arm64": {
@@ -1262,8 +1275,8 @@
         "verified": true
       },
       "analytics": {
-        "cask_install_30d_rank": 31,
-        "cask_install_30d_count": "15,053"
+        "cask_install_30d_rank": 30,
+        "cask_install_30d_count": "15,042"
       },
       "assets": {
         "macos-arm64": {
@@ -1914,7 +1927,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 92,
-        "cask_install_30d_count": "5,189"
+        "cask_install_30d_count": "5,179"
       },
       "assets": {
         "macos-arm64": {
@@ -1962,7 +1975,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 88,
-        "cask_install_30d_count": "5,320"
+        "cask_install_30d_count": "5,279"
       },
       "assets": {
         "macos-arm64": {
@@ -2010,7 +2023,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 70,
-        "cask_install_30d_count": "6,379"
+        "cask_install_30d_count": "6,391"
       },
       "assets": {
         "macos-arm64": {
@@ -2058,7 +2071,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 91,
-        "cask_install_30d_count": "5,206"
+        "cask_install_30d_count": "5,213"
       },
       "assets": {
         "macos-arm64": {
@@ -2109,7 +2122,7 @@
       },
       "analytics": {
         "cask_install_30d_rank": 83,
-        "cask_install_30d_count": "5,516"
+        "cask_install_30d_count": "5,509"
       },
       "assets": {
         "macos-arm64": {
@@ -2145,6 +2158,1182 @@
       },
       "verification": {
         "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "1password",
+      "name": "1Password",
+      "kind": "cask",
+      "homepage": "https://1password.com/",
+      "desc": "Password manager that keeps all passwords secure behind one password",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://1password.com/",
+        "release_feed": "https://downloads.1password.com/mac/1Password-8.12.12-aarch64.zip",
+        "allow_domains": [
+          "downloads.1password.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 80,
+        "cask_install_30d_count": "5,736"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "1Password.app"
+        }
+      ],
+      "resolved": {
+        "version": "8.12.12",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://downloads.1password.com/mac/1Password-8.12.12-aarch64.zip",
+            "sha256": "22a330e1d80c8479338cc55b999cbf877962ef8259c5b63c0f808e78c120fb5a"
+          },
+          "macos-x86_64": {
+            "url": "https://downloads.1password.com/mac/1Password-8.12.12-x86_64.zip",
+            "sha256": "eaf54c92b6bb4f891546b567f107b104c4641c3ad4a195cffde00bc813d83e8c"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "1password-cli",
+      "name": "1Password CLI",
+      "kind": "cask",
+      "homepage": "https://developer.1password.com/docs/cli",
+      "desc": "Command-line interface for 1Password",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://developer.1password.com/docs/cli",
+        "release_feed": "https://cache.agilebits.com/dist/1P/op2/pkg/v2.34.0/op_darwin_arm64_v2.34.0.zip",
+        "allow_domains": [
+          "cache.agilebits.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 10,
+        "cask_install_30d_count": "38,474"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "op"
+        }
+      ],
+      "resolved": {
+        "version": "2.34.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://cache.agilebits.com/dist/1P/op2/pkg/v2.34.0/op_darwin_arm64_v2.34.0.zip",
+            "sha256": "a9c93d45ad62665c6350ed8958f281a94034a79c94e88077e530f6d129699a5d"
+          },
+          "macos-x86_64": {
+            "url": "https://cache.agilebits.com/dist/1P/op2/pkg/v2.34.0/op_darwin_amd64_v2.34.0.zip",
+            "sha256": "d2e4cbdf8b5d2d421a411e5251c6956f3ffce90adde82b2a429435645c9bc91d"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "android-studio",
+      "name": "Android Studio",
+      "kind": "cask",
+      "homepage": "https://developer.android.com/studio/",
+      "desc": "Tools for building Android applications",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://developer.android.com/studio/",
+        "release_feed": "https://edgedl.me.gvt1.com/android/studio/install/2025.3.4.6/android-studio-panda4-mac_arm.dmg",
+        "allow_domains": [
+          "edgedl.me.gvt1.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 39,
+        "cask_install_30d_count": "11,263"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Android Studio.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Android Studio.app/Contents/MacOS/studio"
+        }
+      ],
+      "resolved": {
+        "version": "2025.3.4.6,panda4",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://edgedl.me.gvt1.com/android/studio/install/2025.3.4.6/android-studio-panda4-mac_arm.dmg",
+            "sha256": "070d8065ef4eeb9561cbbb10674a2433376e91eb7646cb592ebe4f3d734b603a"
+          },
+          "macos-x86_64": {
+            "url": "https://edgedl.me.gvt1.com/android/studio/install/2025.3.4.6/android-studio-panda4-mac.dmg",
+            "sha256": "5000f4119312cbd6e08e54df3ab8c2fa262248fafda179aff34211f8f5fe5ff9"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "antigravity",
+      "name": "Google Antigravity",
+      "kind": "cask",
+      "homepage": "https://antigravity.google/",
+      "desc": "AI Coding Agent IDE",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://antigravity.google/",
+        "release_feed": "https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/darwin-arm/Antigravity.dmg",
+        "allow_domains": [
+          "edgedl.me.gvt1.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 96,
+        "cask_install_30d_count": "4,984"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Antigravity.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.23.2,4781536860569600",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/darwin-arm/Antigravity.dmg",
+            "sha256": "caa35ad282741cc9350fb6234e9b86aef54cd4d2f75715a21ef27180182aa50f"
+          },
+          "macos-x86_64": {
+            "url": "https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/darwin-x64/Antigravity.dmg",
+            "sha256": "4ec781e8e94ec714c307a06c4ce925bf761dd0e610ba45e173747fbbe3423ad6"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "brave-browser",
+      "name": "Brave",
+      "kind": "cask",
+      "homepage": "https://brave.com/",
+      "desc": "Web browser focusing on privacy",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://brave.com/",
+        "release_feed": "https://updates-cdn.bravesoftware.com/sparkle/Brave-Browser/stable-arm64/189.143/Brave-Browser-arm64.dmg",
+        "allow_domains": [
+          "updates-cdn.bravesoftware.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 62,
+        "cask_install_30d_count": "7,605"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Brave Browser.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.89.143.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://updates-cdn.bravesoftware.com/sparkle/Brave-Browser/stable-arm64/189.143/Brave-Browser-arm64.dmg",
+            "sha256": "1c0a35392a998ca214499c6192d3ec2bf6219bbb1da45c6c661cdb4c16f25ec2"
+          },
+          "macos-x86_64": {
+            "url": "https://updates-cdn.bravesoftware.com/sparkle/Brave-Browser/stable/189.143/Brave-Browser-x64.dmg",
+            "sha256": "77139d9a0e776478c3ea548e733b60407da209f340adc47a6caf8f545849d9be"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "chatgpt",
+      "name": "ChatGPT",
+      "kind": "cask",
+      "homepage": "https://chatgpt.com/",
+      "desc": "OpenAI's official ChatGPT desktop app",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://chatgpt.com/",
+        "release_feed": "https://persistent.oaistatic.com/sidekick/public/ChatGPT_Desktop_public_1.2026.104_1776709323.dmg",
+        "allow_domains": [
+          "persistent.oaistatic.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 74,
+        "cask_install_30d_count": "6,158"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "ChatGPT.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.2026.104,1776709323",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://persistent.oaistatic.com/sidekick/public/ChatGPT_Desktop_public_1.2026.104_1776709323.dmg",
+            "sha256": "aec119a7a536caa3c35757e27ff9ba4628726ac140a207c85bf025b292173285"
+          },
+          "macos-x86_64": {
+            "url": "https://persistent.oaistatic.com/sidekick/public/ChatGPT_Desktop_public_1.2026.104_1776709323.dmg",
+            "sha256": "aec119a7a536caa3c35757e27ff9ba4628726ac140a207c85bf025b292173285"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "claude",
+      "name": "Claude",
+      "kind": "cask",
+      "homepage": "https://claude.com/download",
+      "desc": "Anthropic's official Claude AI desktop app",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://claude.com/download",
+        "release_feed": "https://downloads.claude.ai/releases/darwin/universal/1.4758.0/Claude-fb266c24b61d94290860a3945b138d6d249425f6.zip",
+        "allow_domains": [
+          "downloads.claude.ai"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 15,
+        "cask_install_30d_count": "27,423"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Claude.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.4758.0,fb266c24b61d94290860a3945b138d6d249425f6",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://downloads.claude.ai/releases/darwin/universal/1.4758.0/Claude-fb266c24b61d94290860a3945b138d6d249425f6.zip",
+            "sha256": "24efbb82cbcdf76213bbfeb2d12542d0e2315b45d1edd13252f9b7ad85f42652"
+          },
+          "macos-x86_64": {
+            "url": "https://downloads.claude.ai/releases/darwin/universal/1.4758.0/Claude-fb266c24b61d94290860a3945b138d6d249425f6.zip",
+            "sha256": "24efbb82cbcdf76213bbfeb2d12542d0e2315b45d1edd13252f9b7ad85f42652"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "codex-app",
+      "name": "Codex",
+      "kind": "cask",
+      "homepage": "https://openai.com/codex",
+      "desc": "OpenAI's Codex desktop app for managing coding agents",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://openai.com/codex",
+        "release_feed": "https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.422.30944.zip",
+        "allow_domains": [
+          "persistent.oaistatic.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 75,
+        "cask_install_30d_count": "6,114"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Codex.app"
+        }
+      ],
+      "resolved": {
+        "version": "26.422.30944",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.422.30944.zip",
+            "sha256": "5705b030cbb557c84fd2fdbd7c64693867d17c9c5ff56a3060891ca05d55f852"
+          },
+          "macos-x86_64": {
+            "url": "https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-x64-26.422.30944.zip",
+            "sha256": "b8c4b310ac2578e3f564d97adc3cf53fb72fbc391d0e3eaf03fbb48745fcab2b"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "copilot-cli",
+      "name": "GitHub Copilot CLI",
+      "kind": "cask",
+      "homepage": "https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli",
+      "desc": "Brings the power of Copilot coding agent directly to your terminal",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "github/copilot-cli",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 9,
+        "cask_install_30d_count": "38,863"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "copilot-darwin-arm64.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "copilot-darwin-x64.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "copilot"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.0.36",
+        "version": "1.0.36",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/github/copilot-cli/releases/download/v1.0.36/copilot-darwin-arm64.tar.gz",
+            "sha256": "288ee088bb57c3853089147f7dc7ef7d1ecca5f7f2f9ee613f1365232e277a19"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/github/copilot-cli/releases/download/v1.0.36/copilot-darwin-x64.tar.gz",
+            "sha256": "bac9f4811f5266943d6f6c53c28d01e865c08740d1a258201170c4fb8bd0cfb0"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "cursor",
+      "name": "Cursor",
+      "kind": "cask",
+      "homepage": "https://www.cursor.com/",
+      "desc": "Write, edit, and chat about your code with AI",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.cursor.com/",
+        "release_feed": "https://downloads.cursor.com/production/e9ee1339915a927dfb2df4a836dd9c8337e17cc2/darwin/arm64/Cursor-darwin-arm64.zip",
+        "allow_domains": [
+          "downloads.cursor.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 37,
+        "cask_install_30d_count": "11,585"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Cursor.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Cursor.app/Contents/Resources/app/bin/code",
+          "target": "cursor"
+        }
+      ],
+      "resolved": {
+        "version": "3.2.11,e9ee1339915a927dfb2df4a836dd9c8337e17cc2",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://downloads.cursor.com/production/e9ee1339915a927dfb2df4a836dd9c8337e17cc2/darwin/arm64/Cursor-darwin-arm64.zip",
+            "sha256": "3a0d735f00e21d97a415fa7b89cc10af66c6cd02841ad3f0d55b11582c486710"
+          },
+          "macos-x86_64": {
+            "url": "https://downloads.cursor.com/production/e9ee1339915a927dfb2df4a836dd9c8337e17cc2/darwin/x64/Cursor-darwin-x64.zip",
+            "sha256": "f0580f0a9c3cd55430ba6fcd50a78cfb03f0a8249fc8f061eaac388b85457969"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "dbeaver-community",
+      "name": "DBeaver Community Edition",
+      "kind": "cask",
+      "homepage": "https://dbeaver.io/",
+      "desc": "Universal database tool and SQL client",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://dbeaver.io/",
+        "release_feed": "https://dbeaver.io/files/26.0.3/dbeaver-ce-26.0.3-macos-aarch64.dmg",
+        "allow_domains": [
+          "dbeaver.io"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 43,
+        "cask_install_30d_count": "10,984"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "DBeaver.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/DBeaver.app/Contents/MacOS/dbeaver"
+        }
+      ],
+      "resolved": {
+        "version": "26.0.3",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dbeaver.io/files/26.0.3/dbeaver-ce-26.0.3-macos-aarch64.dmg",
+            "sha256": "bfc0902d04403b32d8d4fab120417368aa374622dbfe2f508713d06474ae82e2"
+          },
+          "macos-x86_64": {
+            "url": "https://dbeaver.io/files/26.0.3/dbeaver-ce-26.0.3-macos-x86_64.dmg",
+            "sha256": "039ba9899d2db6cf8fca0d530e1bc45586c6aa7031a28523b19c4c1b62fd4554"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "discord",
+      "name": "Discord",
+      "kind": "cask",
+      "homepage": "https://discord.com/",
+      "desc": "Voice and text chat software",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://discord.com/",
+        "release_feed": "https://dl.discordapp.net/apps/osx/0.0.387/Discord.dmg",
+        "allow_domains": [
+          "dl.discordapp.net"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 60,
+        "cask_install_30d_count": "8,424"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Discord.app"
+        }
+      ],
+      "resolved": {
+        "version": "0.0.387",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl.discordapp.net/apps/osx/0.0.387/Discord.dmg",
+            "sha256": "1fe39dc2dd91cb70b5f8e32155dafd3e30173a723cbe6b1491204bf1d89e6a47"
+          },
+          "macos-x86_64": {
+            "url": "https://dl.discordapp.net/apps/osx/0.0.387/Discord.dmg",
+            "sha256": "1fe39dc2dd91cb70b5f8e32155dafd3e30173a723cbe6b1491204bf1d89e6a47"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "ghostty",
+      "name": "Ghostty",
+      "kind": "cask",
+      "homepage": "https://ghostty.org/",
+      "desc": "Terminal emulator that uses platform-native UI and GPU acceleration",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://ghostty.org/",
+        "release_feed": "https://release.files.ghostty.org/1.3.1/Ghostty.dmg",
+        "allow_domains": [
+          "release.files.ghostty.org"
+        ],
+        "verified": true
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Ghostty.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.3.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://release.files.ghostty.org/1.3.1/Ghostty.dmg",
+            "sha256": "18cff2b0a6cee90eead9c7d3064e808a252a40baf214aa752c1ecb793b8f5f69"
+          },
+          "macos-x86_64": {
+            "url": "https://release.files.ghostty.org/1.3.1/Ghostty.dmg",
+            "sha256": "18cff2b0a6cee90eead9c7d3064e808a252a40baf214aa752c1ecb793b8f5f69"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "github",
+      "name": "GitHub Desktop",
+      "kind": "cask",
+      "homepage": "https://desktop.github.com/",
+      "desc": "Desktop client for GitHub repositories",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://desktop.github.com/",
+        "release_feed": "https://desktop.githubusercontent.com/releases/3.5.8-b1d863ab/GitHubDesktop-arm64.zip",
+        "allow_domains": [
+          "desktop.githubusercontent.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 93,
+        "cask_install_30d_count": "5,093"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "GitHub Desktop.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/GitHub Desktop.app/Contents/Resources/app/static/github.sh",
+          "target": "github"
+        }
+      ],
+      "resolved": {
+        "version": "3.5.8-b1d863ab",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://desktop.githubusercontent.com/releases/3.5.8-b1d863ab/GitHubDesktop-arm64.zip",
+            "sha256": "7b1278f06231ea4a429da5055ccef44347b4c06f6b5bde35d97bba898911fbda"
+          },
+          "macos-x86_64": {
+            "url": "https://desktop.githubusercontent.com/releases/3.5.8-b1d863ab/GitHubDesktop-x64.zip",
+            "sha256": "182c48006cce4654d4c8042151e1f35089319d3bc5c99e7bf249b07d4d75120e"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "iina",
+      "name": "IINA",
+      "kind": "cask",
+      "homepage": "https://iina.io/",
+      "desc": "Free and open-source media player",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://iina.io/",
+        "release_feed": "https://dl-portal.iina.io/IINA.v1.4.2-build164.dmg",
+        "allow_domains": [
+          "dl-portal.iina.io"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 69,
+        "cask_install_30d_count": "6,884"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "IINA.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/IINA.app/Contents/MacOS/iina-cli",
+          "target": "iina"
+        }
+      ],
+      "resolved": {
+        "version": "1.4.2,164",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl-portal.iina.io/IINA.v1.4.2-build164.dmg",
+            "sha256": "804e3368518f19039ebfbc3d698e1fabc9cd20f15fc4e42de635456cdf6a7f58"
+          },
+          "macos-x86_64": {
+            "url": "https://dl-portal.iina.io/IINA.v1.4.2-build164.dmg",
+            "sha256": "804e3368518f19039ebfbc3d698e1fabc9cd20f15fc4e42de635456cdf6a7f58"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "iterm2",
+      "name": "iTerm2",
+      "kind": "cask",
+      "homepage": "https://iterm2.com/",
+      "desc": "Terminal emulator as alternative to Apple's Terminal app",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://iterm2.com/",
+        "release_feed": "https://iterm2.com/downloads/stable/iTerm2-3_6_10.zip",
+        "allow_domains": [
+          "iterm2.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 12,
+        "cask_install_30d_count": "33,666"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "iTerm.app"
+        }
+      ],
+      "resolved": {
+        "version": "3.6.10",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://iterm2.com/downloads/stable/iTerm2-3_6_10.zip",
+            "sha256": "f62ce1cb28ac85a99b17447bebebbc2b2e4f6dd59ad7d64a612e39e07ce223ca"
+          },
+          "macos-x86_64": {
+            "url": "https://iterm2.com/downloads/stable/iTerm2-3_6_10.zip",
+            "sha256": "f62ce1cb28ac85a99b17447bebebbc2b2e4f6dd59ad7d64a612e39e07ce223ca"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "libreoffice",
+      "name": "LibreOffice",
+      "kind": "cask",
+      "homepage": "https://www.libreoffice.org/",
+      "desc": "Free cross-platform office suite, fresh version",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.libreoffice.org/",
+        "release_feed": "https://download.documentfoundation.org/libreoffice/stable/26.2.2/mac/aarch64/LibreOffice_26.2.2_MacOS_aarch64.dmg",
+        "allow_domains": [
+          "download.documentfoundation.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 13,
+        "cask_install_30d_count": "28,728"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "LibreOffice.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/regview"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/senddoc"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/uno"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/unoinfo"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/uri-encode"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/xpdfimport"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/unopkg"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/LibreOffice.app/Contents/MacOS/gengal"
+        }
+      ],
+      "resolved": {
+        "version": "26.2.2",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://download.documentfoundation.org/libreoffice/stable/26.2.2/mac/aarch64/LibreOffice_26.2.2_MacOS_aarch64.dmg",
+            "sha256": "2a603303b0a7a17c2f6dd381d2039ca79fecc73cb7c25a13ebea15cf0919c751"
+          },
+          "macos-x86_64": {
+            "url": "https://download.documentfoundation.org/libreoffice/stable/26.2.2/mac/x86_64/LibreOffice_26.2.2_MacOS_x86-64.dmg",
+            "sha256": "3fd198d2af8d715a8f7def300f8882422332022babb96f97a4d59f99d07370c2"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "linearmouse",
+      "name": "LinearMouse",
+      "kind": "cask",
+      "homepage": "https://linearmouse.org/",
+      "desc": "Customise mouse behavior",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://linearmouse.org/",
+        "release_feed": "https://dl.linearmouse.org/v0.11.0/LinearMouse.dmg",
+        "allow_domains": [
+          "dl.linearmouse.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 86,
+        "cask_install_30d_count": "5,404"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "LinearMouse.app"
+        }
+      ],
+      "resolved": {
+        "version": "0.11.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl.linearmouse.org/v0.11.0/LinearMouse.dmg",
+            "sha256": "528aae8495e0c3763d7c7180b5964f400e13df6aa0f66d403cb71c510a97426f"
+          },
+          "macos-x86_64": {
+            "url": "https://dl.linearmouse.org/v0.11.0/LinearMouse.dmg",
+            "sha256": "528aae8495e0c3763d7c7180b5964f400e13df6aa0f66d403cb71c510a97426f"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "lm-studio",
+      "name": "LM Studio",
+      "kind": "cask",
+      "homepage": "https://lmstudio.ai/",
+      "desc": "Discover, download, and run local LLMs",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://lmstudio.ai/",
+        "release_feed": "https://installers.lmstudio.ai/darwin/arm64/0.4.12-1/LM-Studio-0.4.12-1-arm64.dmg",
+        "allow_domains": [
+          "installers.lmstudio.ai"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 66,
+        "cask_install_30d_count": "7,180"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "LM Studio.app"
+        }
+      ],
+      "resolved": {
+        "version": "0.4.12,1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://installers.lmstudio.ai/darwin/arm64/0.4.12-1/LM-Studio-0.4.12-1-arm64.dmg",
+            "sha256": "4b85e3d66ce3c4604a0040a66b25672f8a756b61eebd0973f812873b8a0f3375"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "ngrok",
+      "name": "ngrok",
+      "kind": "cask",
+      "homepage": "https://ngrok.com/",
+      "desc": "Reverse proxy, secure introspectable tunnels to localhost",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://ngrok.com/",
+        "release_feed": "https://bin.ngrok.com/a/7EMiwS51we7/ngrok-v3-3.38.0-darwin-arm64.zip",
+        "allow_domains": [
+          "bin.ngrok.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 7,
+        "cask_install_30d_count": "43,504"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "ngrok"
+        }
+      ],
+      "resolved": {
+        "version": "3.38.0,7EMiwS51we7,a",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://bin.ngrok.com/a/7EMiwS51we7/ngrok-v3-3.38.0-darwin-arm64.zip",
+            "sha256": "02035c72c8af47a680db9aeaa40c41c18303074ba470fd721b941d2ee9fc532a"
+          },
+          "macos-x86_64": {
+            "url": "https://bin.ngrok.com/a/kTApLwEXM1k/ngrok-v3-3.38.0-darwin-amd64.zip",
+            "sha256": "3c213892aa993dbc8b8b51f464af7414171631ecc540f71df3a5f35d4c9b12e9"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "notion",
+      "name": "Notion",
+      "kind": "cask",
+      "homepage": "https://www.notion.com/",
+      "desc": "App to write, plan, collaborate, and get organised",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.notion.com/",
+        "release_feed": "https://desktop-release.notion-static.com/Notion-7.12.0-arm64.dmg",
+        "allow_domains": [
+          "desktop-release.notion-static.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 79,
+        "cask_install_30d_count": "5,753"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Notion.app"
+        }
+      ],
+      "resolved": {
+        "version": "7.12.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://desktop-release.notion-static.com/Notion-7.12.0-arm64.dmg",
+            "sha256": "8c2a603a731cf95be644d1d810558661f251d23c134d3e008f5ed59aa9babea7"
+          },
+          "macos-x86_64": {
+            "url": "https://desktop-release.notion-static.com/Notion-7.12.0.dmg",
+            "sha256": "83d9df65d25b4633d4b2a71acab8b27f76214bec41011aa1c1d8c94e51e9a900"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "slack",
+      "name": "Slack",
+      "kind": "cask",
+      "homepage": "https://slack.com/",
+      "desc": "Team communication and collaboration software",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://slack.com/",
+        "release_feed": "https://downloads.slack-edge.com/desktop-releases/mac/arm64/4.49.81/Slack-4.49.81-macOS.dmg",
+        "allow_domains": [
+          "downloads.slack-edge.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 63,
+        "cask_install_30d_count": "7,418"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Slack.app"
+        }
+      ],
+      "resolved": {
+        "version": "4.49.81",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://downloads.slack-edge.com/desktop-releases/mac/arm64/4.49.81/Slack-4.49.81-macOS.dmg",
+            "sha256": "579b758b81a63ab11d214f13b650914b64188ad524a21d3661a3738ac2fec80b"
+          },
+          "macos-x86_64": {
+            "url": "https://downloads.slack-edge.com/desktop-releases/mac/x64/4.49.81/Slack-4.49.81-macOS.dmg",
+            "sha256": "a930362a1db71f40c4b3db7df9942b03286bbdd93e735bb798f77b3820f63743"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "sublime-text",
+      "name": "Sublime Text",
+      "kind": "cask",
+      "homepage": "https://www.sublimetext.com/",
+      "desc": "Text editor for code, markup and prose",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.sublimetext.com/",
+        "release_feed": "https://download.sublimetext.com/sublime_text_build_4200_mac.zip",
+        "allow_domains": [
+          "download.sublimetext.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 82,
+        "cask_install_30d_count": "5,605"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Sublime Text.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Sublime Text.app/Contents/SharedSupport/bin/subl"
+        }
+      ],
+      "resolved": {
+        "version": "4200",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://download.sublimetext.com/sublime_text_build_4200_mac.zip",
+            "sha256": "4835eb2a5d3f2b223ce93a27149f360ef158af9f8dd708b6f501d708c081d319"
+          },
+          "macos-x86_64": {
+            "url": "https://download.sublimetext.com/sublime_text_build_4200_mac.zip",
+            "sha256": "4835eb2a5d3f2b223ce93a27149f360ef158af9f8dd708b6f501d708c081d319"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "telegram",
+      "name": "Telegram for macOS",
+      "kind": "cask",
+      "homepage": "https://macos.telegram.org/",
+      "desc": "Messaging app with a focus on speed and security",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://macos.telegram.org/",
+        "release_feed": "https://osx.telegram.org/updates/Telegram-12.6.279903.app.zip",
+        "allow_domains": [
+          "osx.telegram.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 99,
+        "cask_install_30d_count": "4,758"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Telegram.app"
+        }
+      ],
+      "resolved": {
+        "version": "12.6,279903",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://osx.telegram.org/updates/Telegram-12.6.279903.app.zip",
+            "sha256": "b8a09a297a4b72ea4ea4de1ac71ded507f4215c0f443c02f897c04966fce2ebe"
+          },
+          "macos-x86_64": {
+            "url": "https://osx.telegram.org/updates/Telegram-12.6.279903.app.zip",
+            "sha256": "b8a09a297a4b72ea4ea4de1ac71ded507f4215c0f443c02f897c04966fce2ebe"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "vlc",
+      "name": "VLC media player",
+      "kind": "cask",
+      "homepage": "https://www.videolan.org/vlc/",
+      "desc": "Multimedia player",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.videolan.org/vlc/",
+        "release_feed": "https://get.videolan.org/vlc/3.0.23/macosx/vlc-3.0.23-arm64.dmg",
+        "allow_domains": [
+          "get.videolan.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 47,
+        "cask_install_30d_count": "9,917"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "VLC.app"
+        }
+      ],
+      "resolved": {
+        "version": "3.0.23",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://get.videolan.org/vlc/3.0.23/macosx/vlc-3.0.23-arm64.dmg",
+            "sha256": "fc6fac08d87f538517d44aca0c5e7a244b67c8c4cb589bf478363a7315fd5e0d"
+          },
+          "macos-x86_64": {
+            "url": "https://get.videolan.org/vlc/3.0.23/macosx/vlc-3.0.23-intel64.dmg",
+            "sha256": "ec01530ce69d849dd057fba8876e68ac39bf279dc28de4e9c04e4aec11fc98db"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "zed",
+      "name": "Zed",
+      "kind": "cask",
+      "homepage": "https://zed.dev/",
+      "desc": "Multiplayer code editor",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://zed.dev/",
+        "release_feed": "https://zed.dev/api/releases/stable/0.233.10/Zed-aarch64.dmg",
+        "allow_domains": [
+          "zed.dev"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 49,
+        "cask_install_30d_count": "9,739"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Zed.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Zed.app/Contents/MacOS/cli",
+          "target": "zed"
+        }
+      ],
+      "resolved": {
+        "version": "0.233.10",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://zed.dev/api/releases/stable/0.233.10/Zed-aarch64.dmg",
+            "sha256": "9bfda8ebe4d17c9cb95f5a1861bcc06a52b73077b34dd7214b1ef2be53a8b546"
+          },
+          "macos-x86_64": {
+            "url": "https://zed.dev/api/releases/stable/0.233.10/Zed-x86_64.dmg",
+            "sha256": "da8d0a128752c9b382d452e1fe06a3e849a60eb4e3f9bd839733e8cc99d59cf2"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
       }
     }
   ]

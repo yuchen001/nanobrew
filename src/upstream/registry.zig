@@ -92,9 +92,11 @@ pub const AssetRule = struct {
 pub const ArtifactRule = struct {
     type: ArtifactKind,
     path: []const u8,
+    target: []const u8,
 
     pub fn deinit(self: ArtifactRule, alloc: std.mem.Allocator) void {
         alloc.free(self.path);
+        alloc.free(self.target);
     }
 };
 
@@ -572,7 +574,9 @@ fn parseArtifacts(alloc: std.mem.Allocator, items: []const std.json.Value) ![]Ar
         const artifact_type = try parseArtifactKind(getString(item.object, "type") orelse return error.MissingField);
         const path = try dupRequiredString(alloc, item.object, "path");
         errdefer alloc.free(path);
-        try artifacts.append(alloc, .{ .type = artifact_type, .path = path });
+        const target = try dupOptionalString(alloc, item.object, "target");
+        errdefer alloc.free(target);
+        try artifacts.append(alloc, .{ .type = artifact_type, .path = path, .target = target });
     }
 
     return artifacts.toOwnedSlice(alloc);
@@ -988,7 +992,8 @@ test "parseRegistry parses cask artifacts and vendor allowlist" {
         \\      "verified": true
         \\    },
         \\    "artifacts": [
-        \\      { "type": "app", "path": "Raycast.app" }
+        \\      { "type": "app", "path": "Raycast.app" },
+        \\      { "type": "binary", "path": "$APPDIR/Raycast.app/Contents/MacOS/raycast", "target": "raycast" }
         \\    ],
         \\    "resolved": {
         \\      "version": "1.2.3",
@@ -1012,9 +1017,13 @@ test "parseRegistry parses cask artifacts and vendor allowlist" {
     try testing.expectEqual(Kind.cask, record.kind);
     try testing.expectEqual(UpstreamType.vendor_url, record.upstream.type);
     try testing.expectEqualStrings("releases.raycast.com", record.upstream.allow_domains[0]);
-    try testing.expectEqual(@as(usize, 1), record.artifacts.len);
+    try testing.expectEqual(@as(usize, 2), record.artifacts.len);
     try testing.expectEqual(ArtifactKind.app, record.artifacts[0].type);
     try testing.expectEqualStrings("Raycast.app", record.artifacts[0].path);
+    try testing.expectEqualStrings("", record.artifacts[0].target);
+    try testing.expectEqual(ArtifactKind.binary, record.artifacts[1].type);
+    try testing.expectEqualStrings("$APPDIR/Raycast.app/Contents/MacOS/raycast", record.artifacts[1].path);
+    try testing.expectEqualStrings("raycast", record.artifacts[1].target);
     try testing.expect(record.resolved != null);
     try testing.expectEqualStrings("no_check", record.resolved.?.assets[0].sha256);
 }
