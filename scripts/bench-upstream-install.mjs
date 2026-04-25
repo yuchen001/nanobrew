@@ -13,6 +13,7 @@ function parseArgs(argv) {
     kind: "formula",
     tokens: [],
     iterations: 1,
+    order: "upstream-first",
     json: false,
     cold: false,
     allowCasks: false,
@@ -42,6 +43,10 @@ function parseArgs(argv) {
       opts.iterations = Number.parseInt(argv[++i] ?? "", 10);
     } else if (arg.startsWith("--iterations=")) {
       opts.iterations = Number.parseInt(arg.slice("--iterations=".length), 10);
+    } else if (arg === "--order") {
+      opts.order = argv[++i] ?? "";
+    } else if (arg.startsWith("--order=")) {
+      opts.order = arg.slice("--order=".length);
     } else if (arg === "--cold") {
       opts.cold = true;
     } else if (arg === "--allow-casks") {
@@ -72,6 +77,9 @@ function parseArgs(argv) {
   }
   if (opts.tokens.length === 0) die("--tokens is required");
   if (!Number.isInteger(opts.iterations) || opts.iterations < 1) die("--iterations must be a positive integer");
+  if (!["upstream-first", "homebrew-first", "alternating"].includes(opts.order)) {
+    die("--order must be one of: upstream-first, homebrew-first, alternating");
+  }
   opts.tokens = [...new Set(opts.tokens)];
   return opts;
 }
@@ -88,6 +96,7 @@ Options:
   --kind formula|cask
   --tokens a,b       Package tokens to install and remove
   --iterations N     Timed installs per mode/token (default: 1)
+  --order MODE       upstream-first, homebrew-first, or alternating (default: upstream-first)
   --cold             Remove package-specific cache/store entries before each timed install
   --upstream-registry-url URL
                      Upstream registry URL to benchmark, e.g. a beta registry
@@ -123,10 +132,13 @@ async function main() {
     const homebrewRuns = [];
     try {
       for (let i = 0; i < opts.iterations; i += 1) {
-        upstreamRuns.push(await installOnce(opts, token, "upstream"));
-        await removeToken(opts.nb, token, opts.kind);
-        homebrewRuns.push(await installOnce(opts, token, "homebrew"));
-        await removeToken(opts.nb, token, opts.kind);
+        const order = iterationOrder(opts.order, i);
+        for (const mode of order) {
+          const ms = await installOnce(opts, token, mode);
+          if (mode === "upstream") upstreamRuns.push(ms);
+          else homebrewRuns.push(ms);
+          await removeToken(opts.nb, token, opts.kind);
+        }
       }
     } finally {
       await removeToken(opts.nb, token, opts.kind);
@@ -150,6 +162,7 @@ async function main() {
     generated_at: new Date().toISOString(),
     kind: opts.kind,
     iterations: opts.iterations,
+    order: opts.order,
     cold: opts.cold,
     upstream_registry_url: opts.upstreamRegistryUrl || null,
     upstream_registry_cache: opts.upstreamRegistryCache || null,
@@ -162,6 +175,12 @@ async function main() {
     return;
   }
   printHuman(result);
+}
+
+function iterationOrder(order, iteration) {
+  if (order === "homebrew-first") return ["homebrew", "upstream"];
+  if (order === "alternating" && iteration % 2 === 1) return ["homebrew", "upstream"];
+  return ["upstream", "homebrew"];
 }
 
 async function installOnce(opts, token, mode) {

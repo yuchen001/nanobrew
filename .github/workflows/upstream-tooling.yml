@@ -29,6 +29,10 @@ on:
         description: "Comma-separated cask tokens for actual install benchmarks"
         required: false
         default: "font-hack-nerd-font"
+      cask_iterations:
+        description: "Timed install runs per cask/mode"
+        required: false
+        default: "2"
   push:
     branches:
       - codex/issue-251-upstream-tooling
@@ -216,7 +220,8 @@ jobs:
           scripts/bench-upstream-install.mjs \
             --kind cask \
             --tokens "${{ inputs.cask_tokens || 'font-hack-nerd-font' }}" \
-            --iterations "1" \
+            --iterations "${{ inputs.cask_iterations || '2' }}" \
+            --order alternating \
             --cold \
             --allow-casks \
             --json > upstream-install-bench-cask.json
