@@ -177,6 +177,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             artifacts/nb-arm64-apple-darwin.tar.gz
             artifacts/nb-arm64-apple-darwin.tar.gz.sha256
@@ -189,6 +190,7 @@ jobs:
 
   update-formula:
     needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

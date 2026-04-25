@@ -4,6 +4,18 @@ All notable changes to nanobrew are documented here.
 
 ## Unreleased
 
+### Added
+- **Verified upstream speed registry path** — nanobrew can now resolve selected formulae and casks from a curated verified upstream registry before falling back to Homebrew metadata. GitHub Release formulae install through the native source-archive path with declared binary artifacts, while GitHub/vendor casks reuse the native cask install pipeline. The registry is loaded from a local cache, then the hosted registry, then the embedded fallback.
+- **Seeded upstream coverage** — embedded registry now includes 20 formulae (`gh`, `uv`, `mise`, `ripgrep`, `just`, `lazygit`, `atuin`, `actionlint`, `podman`, `fd`, `bat`, `chezmoi`, `fastfetch`, `git-delta`, `git-lfs`, `golangci-lint`, `k9s`, `llmfit`, `ruff`, `zoxide`) and 20 casks (`alacritty`, `alt-tab`, `actual`, `firefox`, `google-chrome`, `betterdisplay`, `bitwarden`, `bruno`, `cc-switch`, `cmux`, `dockdoor`, `hammerspoon`, `maccy`, `obsidian`, `ollama-app`, `openclaw`, `opencode-desktop`, `rectangle`, `stats`, `utm`).
+- **Programmatic upstream seeding tools** — added seeders for popular formulae and casks using Homebrew analytics, GitHub release assets, checksums, platform matching, and artifact inference.
+- **Coverage and benchmark tooling** — added scripts to report top-N upstream registry coverage, compare metadata resolution, and benchmark actual `nb install` wall time for verified upstream versus Homebrew fallback.
+
+### Performance
+- **Native upstream formula installs are faster for self-contained binaries** — cold package-cache install benchmarks show `actionlint` installing in 728 ms through verified upstream vs 4665 ms through Homebrew fallback (6.41x faster), and `fd` in 623 ms vs 1703 ms (2.74x faster).
+
+### Changed
+- **Upstream registry scaling direction** — documented the speed-first registry shape: hosted resolved install locks, Zig local caching, and fallback to live metadata only when a token is not covered.
+
 ## [0.1.192] - 2026-04-21
 
 ### Fixed

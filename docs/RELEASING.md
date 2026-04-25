@@ -18,6 +18,19 @@ https://github.com/justrach/nanobrew/releases/download/v<VERSION>/nb-<arch>-appl
 
 The `update-formula` job runs **after** the release is created, so tag-driven releases keep the formula aligned.
 
+## Beta releases
+
+Use prerelease tags for beta builds:
+
+```bash
+git tag v0.1.193-beta.1
+git push origin v0.1.193-beta.1
+```
+
+Publish the GitHub Release as a **pre-release** and do not update `Formula/nanobrew.rb` for that tag. `nb update` installs from GitHub's latest stable release endpoint, so prereleases are not selected by the self-update install path. The background update banner reads `https://nanobrew.trilok.ai/version`; keep that endpoint pointed at the latest stable version only.
+
+If the release workflow is re-enabled, beta tags must not run the formula-update job. Tags containing a prerelease suffix such as `-beta.1`, `-rc.1`, or any other hyphenated SemVer suffix should create a GitHub prerelease and skip Homebrew formula promotion.
+
 ### Manual formula edits
 
 If you edit `Formula/nanobrew.rb` by hand:
