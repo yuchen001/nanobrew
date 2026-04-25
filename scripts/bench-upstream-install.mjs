@@ -238,6 +238,7 @@ async function removeToken(nb, token, kind) {
 
 async function purgePackageCache(opts, token, mode) {
   await removeTmpArchives(opts.root, token);
+  if (opts.kind === "cask") return;
   const sha = await shaFromInfo(opts, token, mode).catch(() => "");
   if (!sha) return;
   await rm(`${opts.root}/cache/blobs/${sha}`, { force: true, recursive: true });
