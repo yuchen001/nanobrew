@@ -197,6 +197,11 @@ async function installOnce(opts, token, mode) {
 
 function envFor(opts, mode) {
   const env = { ...process.env };
+  if (opts.kind === "cask" && opts.cold) {
+    env.NANOBREW_DISABLE_CASK_BLOB_CACHE = "1";
+  } else {
+    delete env.NANOBREW_DISABLE_CASK_BLOB_CACHE;
+  }
   if (mode === "upstream") {
     delete env.NANOBREW_DISABLE_UPSTREAM;
     if (opts.upstreamRegistryUrl) {

@@ -392,6 +392,23 @@ pub fn removeCask(
 
 fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest: []const u8, cask: Cask) !void {
     const lib_io = io;
+    const use_cache = caskBlobCacheEnabled(cask.sha256);
+
+    if (use_cache) {
+        var cached_buf: [512]u8 = undefined;
+        const cached_path = std.fmt.bufPrint(&cached_buf, "{s}/{s}", .{ paths.BLOBS_DIR, cask.sha256 }) catch return error.PathTooLong;
+        const cache_available = blk: {
+            std.Io.Dir.accessAbsolute(lib_io, cached_path, .{}) catch break :blk false;
+            break :blk true;
+        };
+        if (cache_available) copy_cached: {
+            std.Io.Dir.copyFileAbsolute(cached_path, dest, lib_io, .{}) catch {
+                std.Io.Dir.deleteFileAbsolute(lib_io, cached_path) catch {};
+                break :copy_cached;
+            };
+            return;
+        }
+    }
 
     // Native HTTP download (no curl dependency)
     var client: std.http.Client = .{ .allocator = alloc, .io = io };
@@ -414,6 +431,22 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
         std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
         return err;
     };
+
+    if (use_cache) {
+        std.Io.Dir.createDirAbsolute(lib_io, paths.BLOBS_DIR, .default_dir) catch {};
+        var cached_buf: [512]u8 = undefined;
+        const cached_path = std.fmt.bufPrint(&cached_buf, "{s}/{s}", .{ paths.BLOBS_DIR, cask.sha256 }) catch return;
+        std.Io.Dir.copyFileAbsolute(dest, cached_path, lib_io, .{}) catch {};
+    }
+}
+
+fn caskBlobCacheEnabled(sha256: []const u8) bool {
+    if (std.c.getenv("NANOBREW_DISABLE_CASK_BLOB_CACHE") != null) return false;
+    if (sha256.len != 64) return false;
+    for (sha256) |c| {
+        if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) return false;
+    }
+    return true;
 }
 
 fn mountDmg(alloc: std.mem.Allocator, io: std.Io, dmg_path: []const u8, out_buf: []u8) ![]const u8 {
