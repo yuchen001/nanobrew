@@ -38,6 +38,13 @@ const PLATFORM_MATCHERS = {
   ],
 };
 
+const BOTTLE_PLATFORM_TAGS = {
+  "macos-arm64": ["arm64_tahoe", "arm64_sequoia", "arm64_sonoma", "arm64_ventura", "arm64_monterey", "all"],
+  "macos-x86_64": ["tahoe", "sequoia", "sonoma", "ventura", "monterey", "big_sur", "all"],
+  "linux-x86_64": ["x86_64_linux", "all"],
+  "linux-aarch64": ["aarch64_linux", "arm64_linux", "all"],
+};
+
 const BINARY_NAME_OVERRIDES = new Map([
   ["ripgrep", ["rg"]],
   ["uv", ["uv", "uvx"]],
@@ -159,21 +166,27 @@ async function main() {
       continue;
     }
 
+    const bottleSeeded = seedBottleRecordFromFormula(formula, item);
+    if (bottleSeeded.ok) {
+      candidates.push(bottleSeeded.record);
+      continue;
+    }
+
     const repo = githubRepoForFormula(formula);
     if (!repo) {
-      skipped.push({ token, reason: "no GitHub upstream repo" });
+      skipped.push({ token, reason: `no GitHub upstream repo; ${bottleSeeded.reason}` });
       continue;
     }
 
     const release = await fetchLatestRelease(repo);
     if (!release.ok) {
-      skipped.push({ token, reason: release.reason });
+      skipped.push({ token, reason: `${release.reason}; ${bottleSeeded.reason}` });
       continue;
     }
 
     const seeded = await seedRecordFromRelease(formula, item, repo, release.data);
     if (!seeded.ok) {
-      skipped.push({ token, reason: seeded.reason });
+      skipped.push({ token, reason: `${seeded.reason}; ${bottleSeeded.reason}` });
       continue;
     }
     candidates.push(seeded.record);
@@ -193,6 +206,71 @@ async function main() {
   await writeFile(opts.registry, rendered);
   await writeFile(opts.embeddedRegistry, rendered);
   console.error(`seeded ${candidates.length} formula record(s): ${candidates.map((record) => record.token).join(", ")}`);
+}
+
+function seedBottleRecordFromFormula(formula, analyticsItem) {
+  const version = formula?.versions?.stable ?? "";
+  const bottle = formula?.bottle?.stable;
+  const files = bottle?.files;
+  if (!version) return { ok: false, reason: "stable version missing" };
+  if (!files || typeof files !== "object") return { ok: false, reason: "bottle metadata missing" };
+
+  const resolvedAssets = {};
+  for (const [platform, tags] of Object.entries(BOTTLE_PLATFORM_TAGS)) {
+    const bottleFile = bottleFileForPlatform(files, tags);
+    if (!bottleFile) continue;
+    resolvedAssets[platform] = {
+      url: bottleFile.url,
+      sha256: bottleFile.sha256,
+    };
+  }
+
+  if (!resolvedAssets["macos-arm64"]) {
+    return { ok: false, reason: "no macos-arm64 bottle with sha256" };
+  }
+
+  return {
+    ok: true,
+    record: {
+      token: formula.name,
+      name: formula.full_name ?? formula.name,
+      kind: "formula",
+      homepage: formula.homepage ?? "",
+      desc: formula.desc ?? "",
+      revision: numberOrZero(formula.revision),
+      rebuild: numberOrZero(bottle.rebuild),
+      dependencies: stringArray(formula.dependencies),
+      build_dependencies: stringArray(formula.build_dependencies),
+      upstream: {
+        type: "homebrew_bottle",
+        verified: true,
+      },
+      analytics: {
+        install_on_request_30d_rank: Number.parseInt(String(analyticsItem.number ?? ""), 10) || undefined,
+        install_on_request_30d_count: analyticsItem.count ?? "",
+      },
+      resolved: {
+        version,
+        assets: resolvedAssets,
+      },
+      verification: {
+        sha256: "required",
+      },
+    },
+  };
+}
+
+function bottleFileForPlatform(files, tags) {
+  for (const tag of tags) {
+    const file = files[tag];
+    if (typeof file?.url === "string" && file.url.length > 0 && isSha256(file.sha256)) {
+      return {
+        url: file.url,
+        sha256: file.sha256.toLowerCase(),
+      };
+    }
+  }
+  return null;
 }
 
 async function readJson(path) {
@@ -312,6 +390,10 @@ function sha256FromDigest(value) {
   return match?.[1]?.toLowerCase() ?? "";
 }
 
+function isSha256(value) {
+  return typeof value === "string" && /^[0-9a-f]{64}$/i.test(value);
+}
+
 function patternFromAsset(name, tag, version) {
   let pattern = name;
   if (tag) pattern = pattern.split(tag).join("{tag}");
@@ -427,6 +509,16 @@ function basename(path) {
   return path.split("/").filter(Boolean).at(-1) ?? "";
 }
 
+function numberOrZero(value) {
+  return Number.isInteger(value) && value > 0 ? value : 0;
+}
+
+function stringArray(value) {
+  return Array.isArray(value)
+    ? value.filter((item) => typeof item === "string" && item.length > 0)
+    : [];
+}
+
 function githubRepoForFormula(formula) {
   for (const value of [formula?.urls?.stable?.url, formula?.homepage]) {
     const repo = githubRepoFromUrl(value);
@@ -455,11 +547,26 @@ function versionFromTag(tag) {
 }
 
 function mergeRecords(existing, generated, replace) {
-  const generatedKeys = new Set(generated.map((record) => `${record.kind}:${record.token}`));
-  const kept = replace
-    ? existing.filter((record) => !generatedKeys.has(`${record.kind}:${record.token}`))
-    : existing;
-  return [...kept, ...generated.sort((a, b) => String(a.token).localeCompare(String(b.token)))];
+  const existingKeys = new Set(existing.map((record) => `${record.kind}:${record.token}`));
+  const generatedByKey = new Map(generated.map((record) => [`${record.kind}:${record.token}`, record]));
+  const seenGenerated = new Set();
+  const merged = existing.map((record) => {
+    const key = `${record.kind}:${record.token}`;
+    if (replace && generatedByKey.has(key)) {
+      seenGenerated.add(key);
+      return generatedByKey.get(key);
+    }
+    return record;
+  });
+  const additions = generated
+    .filter((record) => {
+      const key = `${record.kind}:${record.token}`;
+      if (seenGenerated.has(key)) return false;
+      if (!replace && existingKeys.has(key)) return false;
+      return true;
+    })
+    .sort((a, b) => String(a.token).localeCompare(String(b.token)));
+  return [...merged, ...additions];
 }
 
 main().catch((err) => {

@@ -33,6 +33,7 @@ pub const Kind = enum {
 pub const UpstreamType = enum {
     github_release,
     vendor_url,
+    homebrew_bottle,
 };
 
 pub const Platform = enum {
@@ -171,8 +172,12 @@ pub const Record = struct {
     desc: []const u8,
     homepage: []const u8,
     auto_updates: bool,
+    revision: u32,
+    rebuild: u32,
     kind: Kind,
     upstream: Upstream,
+    dependencies: []const []const u8,
+    build_dependencies: []const []const u8,
     assets: []const AssetRule,
     artifacts: []const ArtifactRule,
     resolved: ?Resolved,
@@ -183,6 +188,10 @@ pub const Record = struct {
         alloc.free(self.name);
         alloc.free(self.desc);
         alloc.free(self.homepage);
+        for (self.dependencies) |dep| alloc.free(dep);
+        alloc.free(self.dependencies);
+        for (self.build_dependencies) |dep| alloc.free(dep);
+        alloc.free(self.build_dependencies);
         self.upstream.deinit(alloc);
         for (self.assets) |asset| asset.deinit(alloc);
         alloc.free(self.assets);
@@ -427,6 +436,18 @@ fn parseRecord(alloc: std.mem.Allocator, obj: std.json.ObjectMap) !Record {
     const homepage = try dupOptionalString(alloc, obj, "homepage");
     errdefer alloc.free(homepage);
     const auto_updates = getBool(obj, "auto_updates") orelse false;
+    const revision = if (obj.get("revision")) |v| parseU32(v) orelse return error.InvalidField else 0;
+    const rebuild = if (obj.get("rebuild")) |v| parseU32(v) orelse return error.InvalidField else 0;
+    const dependencies = try parseOptionalStringArray(alloc, obj, "dependencies");
+    errdefer {
+        for (dependencies) |dep| alloc.free(dep);
+        alloc.free(dependencies);
+    }
+    const build_dependencies = try parseOptionalStringArray(alloc, obj, "build_dependencies");
+    errdefer {
+        for (build_dependencies) |dep| alloc.free(dep);
+        alloc.free(build_dependencies);
+    }
 
     const kind = try parseKind(getString(obj, "kind") orelse return error.MissingField);
 
@@ -449,11 +470,14 @@ fn parseRecord(alloc: std.mem.Allocator, obj: std.json.ObjectMap) !Record {
 
     switch (kind) {
         .formula => {
-            alloc.free(assets);
-            const assets_val = obj.get("assets") orelse return error.MissingField;
-            if (assets_val != .object) return error.InvalidField;
-            assets = try parseAssets(alloc, assets_val.object);
-            if (assets.len == 0) return error.MissingAssets;
+            if (obj.get("assets")) |assets_val| {
+                alloc.free(assets);
+                if (assets_val != .object) return error.InvalidField;
+                assets = try parseAssets(alloc, assets_val.object);
+                if (upstream.type == .github_release and assets.len == 0) return error.MissingAssets;
+            } else if (upstream.type == .github_release) {
+                return error.MissingAssets;
+            }
 
             if (obj.get("artifacts")) |artifacts_val| {
                 alloc.free(artifacts);
@@ -493,8 +517,12 @@ fn parseRecord(alloc: std.mem.Allocator, obj: std.json.ObjectMap) !Record {
         .desc = desc,
         .homepage = homepage,
         .auto_updates = auto_updates,
+        .revision = revision,
+        .rebuild = rebuild,
         .kind = kind,
         .upstream = upstream,
+        .dependencies = dependencies,
+        .build_dependencies = build_dependencies,
         .assets = assets,
         .artifacts = artifacts,
         .resolved = resolved,
@@ -526,6 +554,7 @@ fn parseUpstream(alloc: std.mem.Allocator, obj: std.json.ObjectMap) !Upstream {
         .vendor_url => {
             if (allow_domains.len == 0) return error.MissingUpstreamAllowlist;
         },
+        .homebrew_bottle => {},
     }
 
     return .{
@@ -715,6 +744,7 @@ fn parseKind(value: []const u8) !Kind {
 fn parseUpstreamType(value: []const u8) !UpstreamType {
     if (std.mem.eql(u8, value, "github_release")) return .github_release;
     if (std.mem.eql(u8, value, "vendor_url")) return .vendor_url;
+    if (std.mem.eql(u8, value, "homebrew_bottle")) return .homebrew_bottle;
     return error.UnsupportedUpstreamType;
 }
 
@@ -975,6 +1005,55 @@ test "parseRegistry parses formula asset rules" {
     try testing.expectEqualStrings("ripgrep-{version}-aarch64-apple-darwin.tar.gz", record.assets[0].pattern);
     try testing.expectEqual(@as(u32, 1), record.assets[0].strip_components);
     try testing.expectEqual(Sha256Mode.asset_or_sidecar, record.verification.sha256);
+}
+
+test "parseRegistry parses Homebrew bottle formula locks" {
+    const json =
+        \\{
+        \\  "schema_version": 1,
+        \\  "records": [{
+        \\    "token": "cmake",
+        \\    "name": "cmake",
+        \\    "kind": "formula",
+        \\    "homepage": "https://cmake.org/",
+        \\    "desc": "Cross-platform make",
+        \\    "revision": 1,
+        \\    "rebuild": 2,
+        \\    "dependencies": ["openssl@3"],
+        \\    "build_dependencies": ["pkgconf"],
+        \\    "upstream": {
+        \\      "type": "homebrew_bottle",
+        \\      "verified": true
+        \\    },
+        \\    "resolved": {
+        \\      "version": "4.3.2",
+        \\      "assets": {
+        \\        "macos-arm64": {
+        \\          "url": "https://ghcr.io/v2/homebrew/core/cmake/blobs/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        \\          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        \\        }
+        \\      }
+        \\    },
+        \\    "verification": {
+        \\      "sha256": "required"
+        \\    }
+        \\  }]
+        \\}
+    ;
+    const registry = try parseRegistry(testing.allocator, json);
+    defer registry.deinit(testing.allocator);
+
+    const record = registry.find("cmake", .formula).?;
+    try testing.expectEqual(UpstreamType.homebrew_bottle, record.upstream.type);
+    try testing.expectEqual(@as(u32, 1), record.revision);
+    try testing.expectEqual(@as(u32, 2), record.rebuild);
+    try testing.expectEqual(@as(usize, 1), record.dependencies.len);
+    try testing.expectEqualStrings("openssl@3", record.dependencies[0]);
+    try testing.expectEqual(@as(usize, 1), record.build_dependencies.len);
+    try testing.expectEqualStrings("pkgconf", record.build_dependencies[0]);
+    try testing.expectEqual(@as(usize, 0), record.assets.len);
+    try testing.expect(record.resolved != null);
+    try testing.expectEqualStrings("4.3.2", record.resolved.?.version);
 }
 
 test "parseRegistry parses cask artifacts and vendor allowlist" {

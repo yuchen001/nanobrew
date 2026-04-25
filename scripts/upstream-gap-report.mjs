@@ -9,6 +9,12 @@ const FORMULA_URL = "https://formulae.brew.sh/api/formula.json";
 const CASK_URL = "https://formulae.brew.sh/api/cask.json";
 const JSON_FETCH_TIMEOUT_MS = 30_000;
 const USER_AGENT = "nanobrew-upstream-gap-report";
+const BOTTLE_PLATFORM_TAGS = {
+  "macos-arm64": ["arm64_tahoe", "arm64_sequoia", "arm64_sonoma", "arm64_ventura", "arm64_monterey", "all"],
+  "macos-x86_64": ["tahoe", "sequoia", "sonoma", "ventura", "monterey", "big_sur", "all"],
+  "linux-x86_64": ["x86_64_linux", "all"],
+  "linux-aarch64": ["aarch64_linux", "arm64_linux", "all"],
+};
 
 function parseArgs(argv) {
   const opts = {
@@ -317,7 +323,7 @@ function classifyFormulaGap(row, formula) {
     skip_reason: currentSeeder.reason,
     skip_bucket: currentSeeder.status === "skipped"
       ? bucketizeReason(currentSeeder.reason)
-      : "github_latest_release_probe_required",
+      : currentSeeder.expected_shape,
     current_shape: currentShape,
     resolver_class: resolverClass,
     verification: verification.status,
@@ -424,20 +430,49 @@ function baseGapRow(row) {
 }
 
 function formulaSeederStatus(formula) {
+  const bottlePlatforms = bottleSeedPlatforms(formula);
+  if (bottlePlatforms.includes("macos-arm64")) {
+    return {
+      status: "seedable",
+      reason: "homebrew bottle with sha256",
+      expected_shape: "homebrew_bottle_lock",
+      platforms: bottlePlatforms,
+    };
+  }
+
   const repo = githubRepoForFormula(formula);
   if (!repo) {
     return {
       status: "skipped",
-      reason: "no GitHub upstream repo",
-      expected_shape: "github_release",
+      reason: bottlePlatforms.length > 0
+        ? "no macos-arm64 bottle with sha256 and no GitHub upstream repo"
+        : "no Homebrew bottle with sha256 and no GitHub upstream repo",
+      expected_shape: "homebrew_bottle_lock_or_github_release",
     };
   }
   return {
     status: "probe_required",
-    reason: "requires GitHub latest release probe",
+    reason: bottlePlatforms.length > 0
+      ? "no macos-arm64 bottle with sha256; requires GitHub latest release probe"
+      : "no Homebrew bottle with sha256; requires GitHub latest release probe",
     expected_shape: "github_release",
     repo,
   };
+}
+
+function bottleSeedPlatforms(formula) {
+  const files = formula?.bottle?.stable?.files;
+  if (!files || typeof files !== "object") return [];
+  const platforms = [];
+  for (const [platform, tags] of Object.entries(BOTTLE_PLATFORM_TAGS)) {
+    if (tags.some((tag) => {
+      const file = files[tag];
+      return typeof file?.url === "string" && file.url.length > 0 && isSha256(file.sha256);
+    })) {
+      platforms.push(platform);
+    }
+  }
+  return platforms;
 }
 
 function caskSeederStatus(cask) {

@@ -45,7 +45,11 @@ pub fn fetchFormula(alloc: std.mem.Allocator, token: []const u8) !Formula {
 
 pub fn fetchFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_mod.Record) !Formula {
     if (record.kind != .formula) return error.UnsupportedKind;
-    if (record.upstream.type != .github_release) return error.UnsupportedUpstreamType;
+    switch (record.upstream.type) {
+        .github_release => {},
+        .homebrew_bottle => return fetchBottleFormulaFromRecord(alloc, record),
+        .vendor_url => return error.UnsupportedUpstreamType,
+    }
 
     if (record.resolved) |resolved| {
         const platform = currentPlatform() orelse return error.UnsupportedPlatform;
@@ -59,11 +63,19 @@ pub fn fetchFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_
     return formulaFromReleaseJson(alloc, record, release_json);
 }
 
+fn fetchBottleFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_mod.Record) !Formula {
+    const resolved = record.resolved orelse return error.MissingAsset;
+    const platform = currentPlatform() orelse return error.UnsupportedPlatform;
+    const asset = resolved.findAsset(platform) orelse return error.UnsupportedPlatform;
+    return formulaFromBottleResolvedFields(alloc, record, resolved.version, asset.url, asset.sha256);
+}
+
 pub fn fetchCaskFromRecord(alloc: std.mem.Allocator, record: *const registry_mod.Record) !Cask {
     if (record.kind != .cask) return error.UnsupportedKind;
     switch (record.upstream.type) {
         .github_release => {},
         .vendor_url => return fetchVendorCaskFromRecord(alloc, record),
+        .homebrew_bottle => return error.UnsupportedUpstreamType,
     }
 
     if (record.resolved) |resolved| {
@@ -147,6 +159,61 @@ fn formulaFromResolvedFields(
     return .{
         .name = name,
         .version = owned_version,
+        .desc = desc,
+        .homepage = homepage,
+        .license = license,
+        .dependencies = dependencies,
+        .bottle_url = bottle_url,
+        .bottle_sha256 = bottle_sha256,
+        .source_url = source_url,
+        .source_sha256 = source_sha256,
+        .build_deps = build_deps,
+        .install_binaries = install_binaries,
+        .caveats = caveats,
+    };
+}
+
+fn formulaFromBottleResolvedFields(
+    alloc: std.mem.Allocator,
+    record: *const registry_mod.Record,
+    version: []const u8,
+    url_value: []const u8,
+    sha256_value: []const u8,
+) !Formula {
+    if (!isSha256Hex(sha256_value)) return error.AssetDigestInvalid;
+
+    const name = try alloc.dupe(u8, record.token);
+    errdefer alloc.free(name);
+    const owned_version = try alloc.dupe(u8, version);
+    errdefer alloc.free(owned_version);
+    const desc = try alloc.dupe(u8, record.desc);
+    errdefer alloc.free(desc);
+    const homepage = try alloc.dupe(u8, if (record.homepage.len > 0) record.homepage else record.upstream.homepage);
+    errdefer alloc.free(homepage);
+    const license = try alloc.dupe(u8, "");
+    errdefer alloc.free(license);
+    const dependencies = try dupeStringList(alloc, record.dependencies);
+    errdefer freeStringList(alloc, dependencies);
+    const bottle_url = try alloc.dupe(u8, url_value);
+    errdefer alloc.free(bottle_url);
+    const bottle_sha256 = try alloc.dupe(u8, sha256_value);
+    errdefer alloc.free(bottle_sha256);
+    const source_url = try alloc.dupe(u8, "");
+    errdefer alloc.free(source_url);
+    const source_sha256 = try alloc.dupe(u8, "");
+    errdefer alloc.free(source_sha256);
+    const build_deps = try dupeStringList(alloc, record.build_dependencies);
+    errdefer freeStringList(alloc, build_deps);
+    const install_binaries = try alloc.alloc([]const u8, 0);
+    errdefer alloc.free(install_binaries);
+    const caveats = try alloc.dupe(u8, "");
+    errdefer alloc.free(caveats);
+
+    return .{
+        .name = name,
+        .version = owned_version,
+        .revision = record.revision,
+        .rebuild = record.rebuild,
         .desc = desc,
         .homepage = homepage,
         .license = license,
@@ -431,6 +498,20 @@ fn freeStringList(alloc: std.mem.Allocator, items: []const []const u8) void {
     if (items.len > 0) alloc.free(items);
 }
 
+fn dupeStringList(alloc: std.mem.Allocator, items: []const []const u8) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    defer out.deinit(alloc);
+    errdefer {
+        for (out.items) |item| alloc.free(item);
+    }
+
+    for (items) |item| {
+        try out.append(alloc, try alloc.dupe(u8, item));
+    }
+
+    return out.toOwnedSlice(alloc);
+}
+
 fn selectCurrentPlatformAsset(assets: []const registry_mod.AssetRule) ?registry_mod.AssetRule {
     const platform = currentPlatform() orelse return null;
 
@@ -561,34 +642,40 @@ fn readCachedFormulaInner(alloc: std.mem.Allocator, token: []const u8) !Formula 
     errdefer alloc.free(name);
     const version = try alloc.dupe(u8, getStr(root, "version") orelse "");
     errdefer alloc.free(version);
+    const revision = parseCachedU32(root.get("revision")) orelse 0;
+    const rebuild = parseCachedU32(root.get("rebuild")) orelse 0;
     const desc = try alloc.dupe(u8, getStr(root, "desc") orelse "");
     errdefer alloc.free(desc);
     const homepage = try alloc.dupe(u8, getStr(root, "homepage") orelse "");
     errdefer alloc.free(homepage);
     const license = try alloc.dupe(u8, "");
     errdefer alloc.free(license);
-    const dependencies = try alloc.alloc([]const u8, 0);
-    errdefer alloc.free(dependencies);
-    const bottle_url = try alloc.dupe(u8, "");
+    const dependencies = try parseCachedStringList(alloc, root.get("dependencies"));
+    errdefer freeStringList(alloc, dependencies);
+    const bottle_url = try alloc.dupe(u8, getStr(root, "bottle_url") orelse "");
     errdefer alloc.free(bottle_url);
-    const bottle_sha256 = try alloc.dupe(u8, "");
+    const bottle_sha256 = try alloc.dupe(u8, getStr(root, "bottle_sha256") orelse "");
     errdefer alloc.free(bottle_sha256);
     const source_url = try alloc.dupe(u8, getStr(root, "source_url") orelse "");
     errdefer alloc.free(source_url);
     const source_sha256 = try alloc.dupe(u8, getStr(root, "source_sha256") orelse "");
     errdefer alloc.free(source_sha256);
-    const build_deps = try alloc.alloc([]const u8, 0);
-    errdefer alloc.free(build_deps);
+    const build_deps = try parseCachedStringList(alloc, root.get("build_deps"));
+    errdefer freeStringList(alloc, build_deps);
     const install_binaries = try parseCachedStringList(alloc, root.get("install_binaries"));
     errdefer freeStringList(alloc, install_binaries);
     const caveats = try alloc.dupe(u8, "");
     errdefer alloc.free(caveats);
 
-    if (version.len == 0 or source_url.len == 0 or !isSha256Hex(source_sha256)) return error.InvalidField;
+    const has_source = source_url.len > 0 and isSha256Hex(source_sha256);
+    const has_bottle = bottle_url.len > 0 and isSha256Hex(bottle_sha256);
+    if (version.len == 0 or (!has_source and !has_bottle)) return error.InvalidField;
 
     return .{
         .name = name,
         .version = version,
+        .revision = revision,
+        .rebuild = rebuild,
         .desc = desc,
         .homepage = homepage,
         .license = license,
@@ -618,7 +705,14 @@ fn parseCachedStringList(alloc: std.mem.Allocator, value: ?std.json.Value) ![]co
     return list.toOwnedSlice(alloc);
 }
 
+fn parseCachedU32(value: ?std.json.Value) ?u32 {
+    const val = value orelse return null;
+    if (val != .integer or val.integer < 0 or val.integer > std.math.maxInt(u32)) return null;
+    return @intCast(val.integer);
+}
+
 fn writeCachedFormula(token: []const u8, formula: *const Formula) void {
+    if (formula.source_url.len == 0 and formula.bottle_url.len == 0) return;
     var path_buf: [512]u8 = undefined;
     const cache_path = upstreamFormulaCachePath(token, &path_buf) catch return;
     const io = std.Io.Threaded.global_single_threaded.io();
@@ -632,16 +726,18 @@ fn writeCachedFormula(token: []const u8, formula: *const Formula) void {
     writeJsonField(writer, "registry_channel", currentRegistryChannel(), true) catch return;
     writeJsonField(writer, "name", formula.name, true) catch return;
     writeJsonField(writer, "version", formula.version, true) catch return;
+    writeJsonNumberField(writer, "revision", formula.revision, true) catch return;
+    writeJsonNumberField(writer, "rebuild", formula.rebuild, true) catch return;
     writeJsonField(writer, "desc", formula.desc, true) catch return;
     writeJsonField(writer, "homepage", formula.homepage, true) catch return;
+    writeJsonField(writer, "bottle_url", formula.bottle_url, true) catch return;
+    writeJsonField(writer, "bottle_sha256", formula.bottle_sha256, true) catch return;
     writeJsonField(writer, "source_url", formula.source_url, true) catch return;
     writeJsonField(writer, "source_sha256", formula.source_sha256, true) catch return;
-    writer.writeAll("  \"install_binaries\": [") catch return;
-    for (formula.install_binaries, 0..) |binary, i| {
-        if (i > 0) writer.writeAll(", ") catch return;
-        writeJsonString(writer, binary) catch return;
-    }
-    writer.writeAll("]\n}\n") catch return;
+    writeJsonStringArrayField(writer, "dependencies", formula.dependencies, true) catch return;
+    writeJsonStringArrayField(writer, "build_deps", formula.build_deps, true) catch return;
+    writeJsonStringArrayField(writer, "install_binaries", formula.install_binaries, false) catch return;
+    writer.writeAll("}\n") catch return;
 
     const body = out.toOwnedSlice() catch return;
     defer std.heap.smp_allocator.free(body);
@@ -650,6 +746,27 @@ fn writeCachedFormula(token: []const u8, formula: *const Formula) void {
         defer file.close(io);
         file.writeStreamingAll(io, body) catch {};
     } else |_| {}
+}
+
+fn writeJsonNumberField(writer: *std.Io.Writer, key: []const u8, value: u32, comma: bool) !void {
+    try writer.writeAll("  ");
+    try writeJsonString(writer, key);
+    try writer.print(": {d}", .{value});
+    if (comma) try writer.writeAll(",");
+    try writer.writeAll("\n");
+}
+
+fn writeJsonStringArrayField(writer: *std.Io.Writer, key: []const u8, items: []const []const u8, comma: bool) !void {
+    try writer.writeAll("  ");
+    try writeJsonString(writer, key);
+    try writer.writeAll(": [");
+    for (items, 0..) |item, i| {
+        if (i > 0) try writer.writeAll(", ");
+        try writeJsonString(writer, item);
+    }
+    try writer.writeAll("]");
+    if (comma) try writer.writeAll(",");
+    try writer.writeAll("\n");
 }
 
 fn writeJsonField(writer: *std.Io.Writer, key: []const u8, value: []const u8, comma: bool) !void {
@@ -908,6 +1025,72 @@ test "formulaFromReleaseJson maps GitHub release asset to source formula" {
     try testing.expect(isSha256Hex(formula.source_sha256));
     try testing.expectEqual(@as(usize, 1), formula.install_binaries.len);
     try testing.expectEqualStrings("just", formula.install_binaries[0]);
+}
+
+test "fetchFormulaFromRecord maps resolved Homebrew bottle formula" {
+    const registry_json =
+        \\{
+        \\  "schema_version": 1,
+        \\  "records": [{
+        \\    "token": "cmake",
+        \\    "name": "cmake",
+        \\    "kind": "formula",
+        \\    "homepage": "https://cmake.org/",
+        \\    "desc": "Cross-platform make",
+        \\    "revision": 1,
+        \\    "rebuild": 2,
+        \\    "dependencies": ["openssl@3"],
+        \\    "build_dependencies": ["pkgconf"],
+        \\    "upstream": {
+        \\      "type": "homebrew_bottle",
+        \\      "verified": true
+        \\    },
+        \\    "resolved": {
+        \\      "version": "4.3.2",
+        \\      "assets": {
+        \\        "macos-arm64": {
+        \\          "url": "https://ghcr.io/v2/homebrew/core/cmake/blobs/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        \\          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        \\        },
+        \\        "macos-x86_64": {
+        \\          "url": "https://ghcr.io/v2/homebrew/core/cmake/blobs/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        \\          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        \\        },
+        \\        "linux-x86_64": {
+        \\          "url": "https://ghcr.io/v2/homebrew/core/cmake/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        \\          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        \\        },
+        \\        "linux-aarch64": {
+        \\          "url": "https://ghcr.io/v2/homebrew/core/cmake/blobs/sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        \\          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        \\        }
+        \\      }
+        \\    },
+        \\    "verification": {
+        \\      "sha256": "required"
+        \\    }
+        \\  }]
+        \\}
+    ;
+
+    const reg = try registry_mod.parseRegistry(testing.allocator, registry_json);
+    defer reg.deinit(testing.allocator);
+    const record = reg.find("cmake", .formula).?;
+    const formula = try fetchFormulaFromRecord(testing.allocator, record);
+    defer formula.deinit(testing.allocator);
+
+    try testing.expectEqualStrings("cmake", formula.name);
+    try testing.expectEqualStrings("4.3.2", formula.version);
+    try testing.expectEqual(@as(u32, 1), formula.revision);
+    try testing.expectEqual(@as(u32, 2), formula.rebuild);
+    try testing.expectEqualStrings("", formula.source_url);
+    try testing.expect(isSha256Hex(formula.bottle_sha256));
+    try testing.expect(std.mem.indexOf(u8, formula.bottle_url, "https://ghcr.io/v2/homebrew/core/cmake/blobs/sha256:") == 0);
+    try testing.expectEqual(@as(usize, 1), formula.dependencies.len);
+    try testing.expectEqualStrings("openssl@3", formula.dependencies[0]);
+    try testing.expectEqual(@as(usize, 1), formula.build_deps.len);
+    try testing.expectEqualStrings("pkgconf", formula.build_deps[0]);
+    try testing.expectEqual(@as(usize, 0), formula.install_binaries.len);
 }
 
 fn caskFromReleaseJsonAllocationProbe(alloc: std.mem.Allocator) !void {
