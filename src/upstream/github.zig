@@ -24,11 +24,9 @@ const GithubAsset = struct {
 };
 
 pub fn fetchCask(alloc: std.mem.Allocator, token: []const u8) !Cask {
-    const registry = try registry_mod.loadRegistry(alloc);
-    defer registry.deinit(alloc);
-
-    const record = registry.find(token, .cask) orelse return error.UpstreamRecordNotFound;
-    return fetchCaskFromRecord(alloc, record);
+    const record = try registry_mod.loadRecord(alloc, token, .cask);
+    defer record.deinit(alloc);
+    return fetchCaskFromRecord(alloc, &record);
 }
 
 pub fn fetchFormula(alloc: std.mem.Allocator, token: []const u8) !Formula {

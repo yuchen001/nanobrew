@@ -140,3 +140,73 @@ pub fn downloadWithClient(client: *std.http.Client, url: []const u8, dest_path: 
     file.close(_dl_io);
     req.deinit();
 }
+
+/// Download using an existing client while computing SHA256 in the same pass.
+pub fn downloadWithClientSha256(
+    client: *std.http.Client,
+    url: []const u8,
+    dest_path: []const u8,
+    expected_sha256: []const u8,
+) !void {
+    if (expected_sha256.len < 64) return error.ChecksumMismatch;
+
+    const uri = std.Uri.parse(url) catch return error.InvalidUrl;
+    var req = client.request(.GET, uri, .{
+        // Reduced from 5; HTTPS-to-HTTP downgrade not yet detectable in std.http
+        .redirect_behavior = @enumFromInt(3),
+    }) catch return error.FetchFailed;
+
+    req.sendBodiless() catch {
+        req.deinit();
+        return error.FetchFailed;
+    };
+
+    var head_buf: [32768]u8 = undefined;
+    var response = req.receiveHead(&head_buf) catch {
+        req.deinit();
+        return error.FetchFailed;
+    };
+    if (response.head.status != .ok) {
+        req.deinit();
+        return error.FetchFailed;
+    }
+
+    const _dl_io = std.Io.Threaded.global_single_threaded.io();
+    var file = std.Io.Dir.createFileAbsolute(_dl_io, dest_path, .{}) catch {
+        req.deinit();
+        return error.FetchFailed;
+    };
+    var file_writer_buf: [65536]u8 = undefined;
+    var file_writer = file.writer(_dl_io, &file_writer_buf);
+    var reader = response.reader(&.{});
+    var hash_buf: [65536]u8 = undefined;
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    var hashed = reader.hashed(&hasher, &hash_buf);
+
+    _ = hashed.reader.streamRemaining(&file_writer.interface) catch {
+        file.close(_dl_io);
+        req.deinit();
+        std.Io.Dir.deleteFileAbsolute(_dl_io, dest_path) catch {};
+        return error.FetchFailed;
+    };
+    file_writer.interface.flush() catch {
+        file.close(_dl_io);
+        req.deinit();
+        std.Io.Dir.deleteFileAbsolute(_dl_io, dest_path) catch {};
+        return error.FetchFailed;
+    };
+    file.close(_dl_io);
+    req.deinit();
+
+    const digest = hasher.finalResult();
+    const charset = "0123456789abcdef";
+    var hex: [64]u8 = undefined;
+    for (digest, 0..) |byte, idx| {
+        hex[idx * 2] = charset[byte >> 4];
+        hex[idx * 2 + 1] = charset[byte & 0x0f];
+    }
+    if (!std.mem.eql(u8, &hex, expected_sha256[0..64])) {
+        std.Io.Dir.deleteFileAbsolute(_dl_io, dest_path) catch {};
+        return error.ChecksumMismatch;
+    }
+}

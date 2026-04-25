@@ -231,29 +231,15 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                     var caskroom_bin_buf: [1024]u8 = undefined;
                     const caskroom_bin = std.fmt.bufPrint(&caskroom_bin_buf, "{s}/{s}", .{ caskroom_path, bin.target }) catch continue;
 
-                    // Copy binary to Caskroom
-                    const cp_result = std.process.run(alloc, lib_io, .{
-                        .argv = &.{ "cp", extract_src, caskroom_bin },
+                    // Copy binary to Caskroom without spawning cp/chmod.
+                    std.Io.Dir.copyFileAbsolute(extract_src, caskroom_bin, lib_io, .{
+                        .permissions = .executable_file,
                     }) catch {
                         var _b: [512]u8 = undefined;
                         const _m = std.fmt.bufPrint(&_b, "nb: failed to copy binary {s}\n", .{bin.source}) catch "nb: failed to copy binary\n";
                         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
                         continue;
                     };
-                    alloc.free(cp_result.stdout);
-                    alloc.free(cp_result.stderr);
-
-                    // Make executable
-                    const chmod_result = std.process.run(alloc, lib_io, .{
-                        .argv = &.{ "chmod", "+x", caskroom_bin },
-                    }) catch {
-                        var _b: [512]u8 = undefined;
-                        const _m = std.fmt.bufPrint(&_b, "nb: failed to chmod binary {s}\n", .{bin.source}) catch "nb: failed to chmod binary\n";
-                        std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
-                        continue;
-                    };
-                    alloc.free(chmod_result.stdout);
-                    alloc.free(chmod_result.stderr);
 
                     source = std.fmt.bufPrint(&resolved_buf, "{s}", .{caskroom_bin}) catch continue;
                 }
@@ -351,7 +337,7 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                 std.Io.Dir.createDirAbsolute(lib_io, font_dir, .default_dir) catch {};
                 var dst_buf: [1024]u8 = undefined;
                 const dst = std.fmt.bufPrint(&dst_buf, "{s}/{s}", .{ font_dir, std.fs.path.basename(font_path) }) catch continue;
-                copyPath(alloc, lib_io, src, dst) catch {
+                std.Io.Dir.copyFileAbsolute(src, dst, lib_io, .{}) catch {
                     writeArtifactWarning(lib_io, "nb: failed to install font artifact\n");
                     any_artifact_failed = true;
                 };
@@ -426,17 +412,17 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
     // Native HTTP download (no curl dependency)
     var client: std.http.Client = .{ .allocator = alloc, .io = io };
     defer client.deinit();
-    fetch.downloadWithClient(&client, url, dest) catch return error.DownloadFailed;
 
     // Verify SHA256 if available
     if (cask.sha256.len == 0 or std.mem.eql(u8, cask.sha256, "no_check")) {
+        fetch.downloadWithClient(&client, url, dest) catch return error.DownloadFailed;
         var _b: [512]u8 = undefined;
         const _m = std.fmt.bufPrint(&_b, "nb: warning: skipping SHA256 verification for {s} (no checksum available)\n", .{cask.token}) catch "nb: warning: skipping SHA256 verification\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
         return;
     }
 
-    verifySha256(io, dest, cask.sha256) catch |err| {
+    fetch.downloadWithClientSha256(&client, url, dest, cask.sha256) catch |err| {
         var _b: [512]u8 = undefined;
         const _m = std.fmt.bufPrint(&_b, "nb: error: SHA256 verification failed for {s}\n", .{cask.token}) catch "nb: error: SHA256 verification failed\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
@@ -444,36 +430,6 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
         std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
         return err;
     };
-}
-
-fn verifySha256(io: std.Io, path: []const u8, expected: []const u8) !void {
-    const lib_io = io;
-    var file = std.Io.Dir.openFileAbsolute(lib_io, path, .{}) catch return error.VerifyFailed;
-
-    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
-    var buf: [65536]u8 = undefined;
-    var offset: u64 = 0;
-    while (true) {
-        const bytes_read = file.readPositional(lib_io, &.{buf[0..]}, offset) catch {
-            file.close(lib_io);
-            return error.VerifyFailed;
-        };
-        if (bytes_read == 0) break;
-        hasher.update(buf[0..bytes_read]);
-        offset += @intCast(bytes_read);
-    }
-    file.close(lib_io);
-
-    const digest = hasher.finalResult();
-    const charset = "0123456789abcdef";
-    var hex: [64]u8 = undefined;
-    for (digest, 0..) |byte, idx| {
-        hex[idx * 2] = charset[byte >> 4];
-        hex[idx * 2 + 1] = charset[byte & 0x0f];
-    }
-
-    if (expected.len < 64) return error.VerifyFailed;
-    if (!std.mem.eql(u8, &hex, expected[0..64])) return error.Sha256Mismatch;
 }
 
 fn mountDmg(alloc: std.mem.Allocator, io: std.Io, dmg_path: []const u8, out_buf: []u8) ![]const u8 {
