@@ -55,19 +55,26 @@ pub fn fetchFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_
     switch (record.upstream.type) {
         .github_release => {},
         .homebrew_bottle => return fetchBottleFormulaFromRecord(alloc, record),
-        .vendor_url => return error.UnsupportedUpstreamType,
+        .vendor_url => return fetchVendorFormulaFromRecord(alloc, record),
     }
 
     if (record.resolved) |resolved| {
         const platform = currentPlatform() orelse return error.UnsupportedPlatform;
         if (resolved.findAsset(platform)) |asset| {
-            return formulaFromResolvedFields(alloc, record, resolved.version, asset.url, asset.sha256);
+            return formulaFromResolvedFields(alloc, record, resolved.version, asset.url, asset.sha256, resolvedArtifactRules(record, asset));
         }
     }
 
     const release_json = try fetchLatestReleaseJson(alloc, record.upstream.repo);
     defer alloc.free(release_json);
     return formulaFromReleaseJson(alloc, record, release_json);
+}
+
+fn fetchVendorFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_mod.Record) !Formula {
+    const resolved = record.resolved orelse return error.MissingAsset;
+    const platform = currentPlatform() orelse return error.UnsupportedPlatform;
+    const asset = resolved.findAsset(platform) orelse return error.UnsupportedPlatform;
+    return formulaFromResolvedFields(alloc, record, resolved.version, asset.url, asset.sha256, resolvedArtifactRules(record, asset));
 }
 
 fn fetchBottleFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_mod.Record) !Formula {
@@ -124,7 +131,7 @@ fn formulaFromReleaseJson(alloc: std.mem.Allocator, record: *const registry_mod.
     const sha256 = try sha256FromAssetDigest(alloc, record.verification, asset);
     defer alloc.free(sha256);
 
-    return formulaFromResolvedFields(alloc, record, version, asset.url, sha256);
+    return formulaFromResolvedFields(alloc, record, version, asset.url, sha256, record.artifacts);
 }
 
 fn formulaFromResolvedFields(
@@ -133,10 +140,11 @@ fn formulaFromResolvedFields(
     version: []const u8,
     url_value: []const u8,
     sha256_value: []const u8,
+    artifact_rules: []const registry_mod.ArtifactRule,
 ) !Formula {
     if (!isSha256Hex(sha256_value)) return error.AssetDigestInvalid;
 
-    const name = try alloc.dupe(u8, record.token);
+    const name = try alloc.dupe(u8, if (record.name.len > 0) record.name else record.token);
     errdefer alloc.free(name);
     const owned_version = try alloc.dupe(u8, version);
     errdefer alloc.free(owned_version);
@@ -158,7 +166,7 @@ fn formulaFromResolvedFields(
     errdefer alloc.free(source_sha256);
     const build_deps = try alloc.alloc([]const u8, 0);
     errdefer alloc.free(build_deps);
-    const install_binaries = try formulaInstallBinariesFromRecord(alloc, record.artifacts);
+    const install_binaries = try formulaInstallBinariesFromRecord(alloc, artifact_rules);
     errdefer freeStringList(alloc, install_binaries);
     const caveats = try alloc.dupe(u8, "");
     errdefer alloc.free(caveats);
@@ -189,7 +197,7 @@ fn formulaFromBottleResolvedFields(
 ) !Formula {
     if (!isSha256Hex(sha256_value)) return error.AssetDigestInvalid;
 
-    const name = try alloc.dupe(u8, record.token);
+    const name = try alloc.dupe(u8, if (record.name.len > 0) record.name else record.token);
     errdefer alloc.free(name);
     const owned_version = try alloc.dupe(u8, version);
     errdefer alloc.free(owned_version);
@@ -280,7 +288,11 @@ fn caskFromReleaseJson(alloc: std.mem.Allocator, record: *const registry_mod.Rec
     const sha256 = try sha256FromAssetDigest(alloc, record.verification, asset);
     defer alloc.free(sha256);
 
-    return caskFromResolvedFields(alloc, record, version, asset.url, sha256, &.{});
+    return caskFromResolvedFields(alloc, record, version, asset.url, sha256, &.{}, record.artifacts);
+}
+
+fn resolvedArtifactRules(record: *const registry_mod.Record, asset: *const registry_mod.ResolvedAsset) []const registry_mod.ArtifactRule {
+    return if (asset.artifacts.len > 0) asset.artifacts else record.artifacts;
 }
 
 fn caskFromResolvedAsset(
@@ -296,7 +308,7 @@ fn caskFromResolvedAsset(
             else => return error.AssetDigestInvalid,
         }
     } else if (!isSha256Hex(asset.sha256)) return error.AssetDigestInvalid;
-    return caskFromResolvedFields(alloc, record, version, asset.url, asset.sha256, warnings);
+    return caskFromResolvedFields(alloc, record, version, asset.url, asset.sha256, warnings, resolvedArtifactRules(record, asset));
 }
 
 fn caskFromResolvedFields(
@@ -306,6 +318,7 @@ fn caskFromResolvedFields(
     url_value: []const u8,
     sha256_value: []const u8,
     warnings_value: []const registry_mod.SecurityWarning,
+    artifact_rules: []const registry_mod.ArtifactRule,
 ) !Cask {
     const token = try alloc.dupe(u8, record.token);
     errdefer alloc.free(token);
@@ -323,12 +336,26 @@ fn caskFromResolvedFields(
     errdefer alloc.free(sha256);
     const security_warnings = try caskSecurityWarningsFromRegistry(alloc, warnings_value);
     errdefer freeCaskSecurityWarnings(alloc, security_warnings);
-    const artifacts = try caskArtifactsFromRecord(alloc, record.artifacts);
+    const artifacts = try caskArtifactsFromRecord(alloc, artifact_rules);
     errdefer {
         for (artifacts) |artifact| {
             switch (artifact) {
                 .app => |app| alloc.free(app),
                 .pkg => |pkg| alloc.free(pkg),
+                .font => |font| alloc.free(font),
+                .artifact => |artifact_rule| {
+                    alloc.free(artifact_rule.source);
+                    alloc.free(artifact_rule.target);
+                },
+                .suite => |suite| {
+                    alloc.free(suite.source);
+                    alloc.free(suite.target);
+                },
+                .installer_script => |script| {
+                    alloc.free(script.executable);
+                    for (script.args) |arg| alloc.free(arg);
+                    alloc.free(script.args);
+                },
                 .binary => |bin| {
                     alloc.free(bin.source);
                     alloc.free(bin.target);
@@ -447,6 +474,20 @@ fn caskArtifactsFromRecord(alloc: std.mem.Allocator, rules: []const registry_mod
             switch (artifact) {
                 .app => |app| alloc.free(app),
                 .pkg => |pkg| alloc.free(pkg),
+                .font => |font| alloc.free(font),
+                .artifact => |artifact_rule| {
+                    alloc.free(artifact_rule.source);
+                    alloc.free(artifact_rule.target);
+                },
+                .suite => |suite| {
+                    alloc.free(suite.source);
+                    alloc.free(suite.target);
+                },
+                .installer_script => |script| {
+                    alloc.free(script.executable);
+                    for (script.args) |arg| alloc.free(arg);
+                    alloc.free(script.args);
+                },
                 .binary => |bin| {
                     alloc.free(bin.source);
                     alloc.free(bin.target);
@@ -478,6 +519,32 @@ fn caskArtifactsFromRecord(alloc: std.mem.Allocator, rules: []const registry_mod
                 const target = try alloc.dupe(u8, target_value);
                 errdefer alloc.free(target);
                 try artifacts.append(alloc, .{ .binary = .{ .source = source, .target = target } });
+            },
+            .font => {
+                const font = try alloc.dupe(u8, rule.path);
+                errdefer alloc.free(font);
+                try artifacts.append(alloc, .{ .font = font });
+            },
+            .artifact => {
+                const source = try alloc.dupe(u8, rule.path);
+                errdefer alloc.free(source);
+                const target = try alloc.dupe(u8, rule.target);
+                errdefer alloc.free(target);
+                try artifacts.append(alloc, .{ .artifact = .{ .source = source, .target = target } });
+            },
+            .suite => {
+                const source = try alloc.dupe(u8, rule.path);
+                errdefer alloc.free(source);
+                const target = try alloc.dupe(u8, rule.target);
+                errdefer alloc.free(target);
+                try artifacts.append(alloc, .{ .suite = .{ .source = source, .target = target } });
+            },
+            .installer_script => {
+                const executable = try alloc.dupe(u8, rule.path);
+                errdefer alloc.free(executable);
+                const args = try dupeStringList(alloc, rule.args);
+                errdefer freeStringList(alloc, args);
+                try artifacts.append(alloc, .{ .installer_script = .{ .executable = executable, .args = args } });
             },
         }
     }

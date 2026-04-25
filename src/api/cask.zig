@@ -10,6 +10,8 @@ pub const DownloadFormat = enum {
     zip,
     pkg,
     tar_gz,
+    tar_xz,
+    shell_script,
     binary,
     unknown,
 };
@@ -23,6 +25,10 @@ pub const Artifact = union(enum) {
     app: []const u8, // e.g. "Firefox.app"
     binary: struct { source: []const u8, target: []const u8 },
     pkg: []const u8, // pkg filename
+    font: []const u8,
+    artifact: struct { source: []const u8, target: []const u8 },
+    suite: struct { source: []const u8, target: []const u8 },
+    installer_script: struct { executable: []const u8, args: []const []const u8 },
     uninstall: struct { quit: []const u8, pkgutil: []const u8 },
 };
 
@@ -66,6 +72,11 @@ pub const Cask = struct {
         if (std.mem.endsWith(u8, self.url, ".pkg")) return .pkg;
         if (std.mem.endsWith(u8, self.url, ".tar.gz")) return .tar_gz;
         if (std.mem.endsWith(u8, self.url, ".tgz")) return .tar_gz;
+        if (std.mem.endsWith(u8, self.url, ".tar.xz")) return .tar_xz;
+        if (std.mem.endsWith(u8, self.url, ".sh")) return .shell_script;
+        if (std.mem.indexOf(u8, self.url, "extension=zip") != null) return .zip;
+        if (std.mem.indexOf(u8, self.url, "update.code.visualstudio.com/") != null) return .zip;
+        if (std.mem.indexOf(u8, self.url, "download-chromium.appspot.com/") != null) return .zip;
         if (self.hasOnlyBinaryArtifacts()) return .binary;
         return .unknown;
     }
@@ -76,7 +87,7 @@ pub const Cask = struct {
             switch (artifact) {
                 .binary => binary_count += 1,
                 .uninstall => {},
-                .app, .pkg => return false,
+                .app, .pkg, .font, .artifact, .suite, .installer_script => return false,
             }
         }
         return binary_count == 1;
@@ -106,6 +117,20 @@ pub const Cask = struct {
                     alloc.free(b.target);
                 },
                 .pkg => |p| alloc.free(p),
+                .font => |f| alloc.free(f),
+                .artifact => |a| {
+                    alloc.free(a.source);
+                    alloc.free(a.target);
+                },
+                .suite => |s| {
+                    alloc.free(s.source);
+                    alloc.free(s.target);
+                },
+                .installer_script => |script| {
+                    alloc.free(script.executable);
+                    for (script.args) |arg| alloc.free(arg);
+                    alloc.free(script.args);
+                },
                 .uninstall => |u| {
                     alloc.free(u.quit);
                     alloc.free(u.pkgutil);

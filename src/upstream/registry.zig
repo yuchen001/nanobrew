@@ -47,6 +47,10 @@ pub const ArtifactKind = enum {
     app,
     pkg,
     binary,
+    font,
+    artifact,
+    suite,
+    installer_script,
 };
 
 pub const Sha256Mode = enum {
@@ -94,10 +98,13 @@ pub const ArtifactRule = struct {
     type: ArtifactKind,
     path: []const u8,
     target: []const u8,
+    args: []const []const u8,
 
     pub fn deinit(self: ArtifactRule, alloc: std.mem.Allocator) void {
         alloc.free(self.path);
         alloc.free(self.target);
+        for (self.args) |arg| alloc.free(arg);
+        alloc.free(self.args);
     }
 };
 
@@ -105,10 +112,13 @@ pub const ResolvedAsset = struct {
     platform: Platform,
     url: []const u8,
     sha256: []const u8,
+    artifacts: []const ArtifactRule,
 
     pub fn deinit(self: ResolvedAsset, alloc: std.mem.Allocator) void {
         alloc.free(self.url);
         alloc.free(self.sha256);
+        for (self.artifacts) |artifact| artifact.deinit(alloc);
+        alloc.free(self.artifacts);
     }
 };
 
@@ -731,7 +741,12 @@ fn parseArtifacts(alloc: std.mem.Allocator, items: []const std.json.Value) ![]Ar
         errdefer alloc.free(path);
         const target = try dupOptionalString(alloc, item.object, "target");
         errdefer alloc.free(target);
-        try artifacts.append(alloc, .{ .type = artifact_type, .path = path, .target = target });
+        const args = try parseOptionalStringArray(alloc, item.object, "args");
+        errdefer {
+            for (args) |arg| alloc.free(arg);
+            alloc.free(args);
+        }
+        try artifacts.append(alloc, .{ .type = artifact_type, .path = path, .target = target, .args = args });
     }
 
     return artifacts.toOwnedSlice(alloc);
@@ -759,10 +774,19 @@ fn parseResolved(alloc: std.mem.Allocator, obj: std.json.ObjectMap) !Resolved {
         const sha256 = try dupRequiredString(alloc, entry.value_ptr.*.object, "sha256");
         errdefer alloc.free(sha256);
         if (!isSha256Hex(sha256) and !std.mem.eql(u8, sha256, "no_check")) return error.InvalidField;
+        const artifact_rules = if (entry.value_ptr.*.object.get("artifacts")) |artifacts_val| blk: {
+            if (artifacts_val != .array) return error.InvalidField;
+            break :blk try parseArtifacts(alloc, artifacts_val.array.items);
+        } else try alloc.alloc(ArtifactRule, 0);
+        errdefer {
+            for (artifact_rules) |artifact| artifact.deinit(alloc);
+            alloc.free(artifact_rules);
+        }
         try assets.append(alloc, .{
             .platform = platform,
             .url = url,
             .sha256 = sha256,
+            .artifacts = artifact_rules,
         });
     }
     if (assets.items.len == 0) return error.MissingAssets;
@@ -886,6 +910,10 @@ fn parseArtifactKind(value: []const u8) !ArtifactKind {
     if (std.mem.eql(u8, value, "app")) return .app;
     if (std.mem.eql(u8, value, "pkg")) return .pkg;
     if (std.mem.eql(u8, value, "binary")) return .binary;
+    if (std.mem.eql(u8, value, "font")) return .font;
+    if (std.mem.eql(u8, value, "artifact")) return .artifact;
+    if (std.mem.eql(u8, value, "suite")) return .suite;
+    if (std.mem.eql(u8, value, "installer_script")) return .installer_script;
     return error.UnsupportedArtifactType;
 }
 

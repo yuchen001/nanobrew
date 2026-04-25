@@ -37,6 +37,8 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
         .zip => ".zip",
         .pkg => ".pkg",
         .tar_gz => ".tar.gz",
+        .tar_xz => ".tar.xz",
+        .shell_script => ".sh",
         .binary => "",
         .unknown => ".dmg", // try dmg as default
     };
@@ -61,7 +63,7 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
     var temp_extract_buf: [512]u8 = undefined;
 
     switch (format) {
-        .dmg, .unknown => {
+        .dmg => {
             // Remove Gatekeeper quarantine from .dmg before mounting
             if (comptime builtin.os.tag == .macos) {
                 if (std.process.run(alloc, lib_io, .{
@@ -72,6 +74,26 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                 } else |_| {}
             }
             mount_point = try mountDmg(alloc, io, dl_path, &mount_point_buf);
+        },
+        .unknown => {
+            if (comptime builtin.os.tag == .macos) {
+                if (std.process.run(alloc, lib_io, .{
+                    .argv = &.{ "xattr", "-dr", "com.apple.quarantine", dl_path },
+                })) |r| {
+                    alloc.free(r.stdout);
+                    alloc.free(r.stderr);
+                } else |_| {}
+            }
+            mount_point = mountDmg(alloc, io, dl_path, &mount_point_buf) catch null;
+            if (mount_point == null) {
+                const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
+                std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
+                extractZip(alloc, io, dl_path, tmp_dir) catch {
+                    std.Io.Dir.cwd().deleteTree(lib_io, tmp_dir) catch {};
+                    return error.UnsupportedArchive;
+                };
+                temp_extract_dir = tmp_dir;
+            }
         },
         .zip => {
             const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
@@ -85,7 +107,14 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
             try extractTarGz(alloc, io, dl_path, tmp_dir);
             temp_extract_dir = tmp_dir;
         },
+        .tar_xz => {
+            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
+            std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
+            try extractTarXz(alloc, io, dl_path, tmp_dir);
+            temp_extract_dir = tmp_dir;
+        },
         .pkg => {}, // standalone, handled directly in artifact processing
+        .shell_script => {}, // standalone installer script
         .binary => {}, // direct executable download, handled as a binary artifact
     }
 
@@ -122,7 +151,7 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                 var src_buf: [1024]u8 = undefined;
                 const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, app_name }) catch continue;
                 var dst_buf: [512]u8 = undefined;
-                const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{app_name}) catch continue;
+                const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{std.fs.path.basename(app_name)}) catch continue;
 
                 // Verify source app exists before attempting copy (#60)
                 std.Io.Dir.accessAbsolute(lib_io, src, .{}) catch {
@@ -186,6 +215,8 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                 if (std.mem.startsWith(u8, bin.source, "$APPDIR")) {
                     // $APPDIR expansion for app-bundled binaries
                     source = std.fmt.bufPrint(&resolved_buf, "/Applications{s}", .{bin.source["$APPDIR".len..]}) catch continue;
+                } else if (std.mem.startsWith(u8, bin.source, "$HOMEBREW_PREFIX/")) {
+                    source = std.fmt.bufPrint(&resolved_buf, "{s}/{s}", .{ PREFIX, bin.source["$HOMEBREW_PREFIX/".len..] }) catch continue;
                 } else if (std.mem.startsWith(u8, bin.source, "/")) {
                     // Absolute path
                     source = bin.source;
@@ -239,7 +270,8 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                 const is_app_path = std.mem.startsWith(u8, source, "/Applications");
                 const is_caskroom_path = std.mem.startsWith(u8, source, paths.CASKROOM_DIR);
                 const is_extract_path = std.mem.startsWith(u8, source, source_dir);
-                if (!is_app_path and !is_caskroom_path and !is_extract_path) {
+                const is_prefix_path = std.mem.startsWith(u8, source, PREFIX);
+                if (!is_app_path and !is_caskroom_path and !is_extract_path and !is_prefix_path) {
                     var _b: [512]u8 = undefined;
                     const _m = std.fmt.bufPrint(&_b, "nb: refusing to symlink binary outside allowed directories: {s}\n", .{bin.source}) catch "nb: refusing to symlink binary\n";
                     std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
@@ -301,6 +333,46 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                     std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
                     any_artifact_failed = true;
                 }
+            },
+            .font => |font_path| {
+                if (!safeRelativePath(font_path)) {
+                    writeArtifactWarning(lib_io, "nb: skipping unsafe font artifact\n");
+                    continue;
+                }
+                const home = std.c.getenv("HOME") orelse {
+                    writeArtifactWarning(lib_io, "nb: HOME is not set; skipping font artifact\n");
+                    continue;
+                };
+                const home_slice = std.mem.span(home);
+                var src_buf: [1024]u8 = undefined;
+                const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, font_path }) catch continue;
+                var font_dir_buf: [1024]u8 = undefined;
+                const font_dir = std.fmt.bufPrint(&font_dir_buf, "{s}/Library/Fonts", .{home_slice}) catch continue;
+                std.Io.Dir.createDirAbsolute(lib_io, font_dir, .default_dir) catch {};
+                var dst_buf: [1024]u8 = undefined;
+                const dst = std.fmt.bufPrint(&dst_buf, "{s}/{s}", .{ font_dir, std.fs.path.basename(font_path) }) catch continue;
+                copyPath(alloc, lib_io, src, dst) catch {
+                    writeArtifactWarning(lib_io, "nb: failed to install font artifact\n");
+                    any_artifact_failed = true;
+                };
+            },
+            .artifact => |artifact_rule| {
+                copyGenericArtifact(alloc, lib_io, source_dir, artifact_rule.source, artifact_rule.target) catch {
+                    writeArtifactWarning(lib_io, "nb: failed to install artifact\n");
+                    any_artifact_failed = true;
+                };
+            },
+            .suite => |suite| {
+                copyGenericArtifact(alloc, lib_io, source_dir, suite.source, suite.target) catch {
+                    writeArtifactWarning(lib_io, "nb: failed to install suite artifact\n");
+                    any_artifact_failed = true;
+                };
+            },
+            .installer_script => |script| {
+                runInstallerScript(alloc, lib_io, format, dl_path, source_dir, script.executable, script.args) catch {
+                    writeArtifactWarning(lib_io, "nb: installer script failed\n");
+                    any_artifact_failed = true;
+                };
             },
             .uninstall => {}, // only used during removal
         }
@@ -447,6 +519,96 @@ fn unmountDmg(alloc: std.mem.Allocator, io: std.Io, mount_point: []const u8) voi
     alloc.free(result.stderr);
 }
 
+fn writeArtifactWarning(io: std.Io, message: []const u8) void {
+    std.Io.File.stderr().writeStreamingAll(io, message) catch {};
+}
+
+fn safeRelativePath(path: []const u8) bool {
+    return path.len > 0 and
+        !std.mem.startsWith(u8, path, "/") and
+        std.mem.indexOf(u8, path, "..") == null;
+}
+
+fn expandInstallPath(alloc: std.mem.Allocator, value: []const u8) ![]u8 {
+    if (std.mem.startsWith(u8, value, "$HOMEBREW_PREFIX/")) {
+        return std.fmt.allocPrint(alloc, "{s}/{s}", .{ PREFIX, value["$HOMEBREW_PREFIX/".len..] });
+    }
+    return alloc.dupe(u8, value);
+}
+
+fn parentPath(path: []const u8) []const u8 {
+    return std.fs.path.dirname(path) orelse "/";
+}
+
+fn copyPath(alloc: std.mem.Allocator, io: std.Io, src: []const u8, dst: []const u8) !void {
+    const parent = parentPath(dst);
+    const mkdir = try std.process.run(alloc, io, .{ .argv = &.{ "mkdir", "-p", parent } });
+    defer alloc.free(mkdir.stdout);
+    defer alloc.free(mkdir.stderr);
+    if (switch (mkdir.term) { .exited => |c| c != 0, else => true }) return error.CopyFailed;
+
+    std.Io.Dir.cwd().deleteTree(io, dst) catch {};
+    const cp = try std.process.run(alloc, io, .{ .argv = &.{ "cp", "-R", src, dst } });
+    defer alloc.free(cp.stdout);
+    defer alloc.free(cp.stderr);
+    if (switch (cp.term) { .exited => |c| c != 0, else => true }) return error.CopyFailed;
+}
+
+fn copyGenericArtifact(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    source_dir: []const u8,
+    source_path: []const u8,
+    target_path: []const u8,
+) !void {
+    if (!safeRelativePath(source_path) or std.mem.indexOf(u8, target_path, "..") != null) {
+        return error.UnsafePath;
+    }
+    const expanded_target = try expandInstallPath(alloc, target_path);
+    defer alloc.free(expanded_target);
+    if (!std.mem.startsWith(u8, expanded_target, PREFIX)) return error.UnsafePath;
+
+    var src_buf: [1024]u8 = undefined;
+    const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, source_path }) catch return error.PathTooLong;
+    try copyPath(alloc, io, src, expanded_target);
+}
+
+fn runInstallerScript(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    format: DownloadFormat,
+    dl_path: []const u8,
+    source_dir: []const u8,
+    executable: []const u8,
+    args: []const []const u8,
+) !void {
+    if (!safeRelativePath(executable)) return error.UnsafePath;
+    const exe_path = if (format == .shell_script) blk: {
+        const chmod = try std.process.run(alloc, io, .{ .argv = &.{ "chmod", "+x", dl_path } });
+        alloc.free(chmod.stdout);
+        alloc.free(chmod.stderr);
+        break :blk dl_path;
+    } else blk: {
+        var exe_buf: [1024]u8 = undefined;
+        break :blk std.fmt.bufPrint(&exe_buf, "{s}/{s}", .{ source_dir, executable }) catch return error.PathTooLong;
+    };
+
+    var argv = try alloc.alloc([]const u8, args.len + 1);
+    defer alloc.free(argv);
+    argv[0] = exe_path;
+    for (args, 0..) |arg, i| {
+        argv[i + 1] = try expandInstallPath(alloc, arg);
+    }
+    defer {
+        for (argv[1..]) |arg| alloc.free(arg);
+    }
+
+    const result = try std.process.run(alloc, io, .{ .argv = argv });
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.InstallerFailed;
+}
+
 fn extractZip(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, dest: []const u8) !void {
     const lib_io = io;
     // Pre-list ZIP contents and check for path traversal
@@ -506,6 +668,21 @@ fn extractTarGz(alloc: std.mem.Allocator, io: std.Io, tar_path: []const u8, dest
     const lib_io = io;
     const result = std.process.run(alloc, lib_io, .{
         .argv = &.{ "tar", "-xzf", tar_path, "--no-same-permissions", "-C", dest },
+        .stdout_limit = .limited(4096),
+    }) catch return error.ExtractFailed;
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.ExtractFailed;
+}
+
+fn extractTarXz(alloc: std.mem.Allocator, io: std.Io, tar_path: []const u8, dest: []const u8) !void {
+    const lib_io = io;
+    const result = std.process.run(alloc, lib_io, .{
+        .argv = &.{ "tar", "-xJf", tar_path, "--no-same-permissions", "-C", dest },
         .stdout_limit = .limited(4096),
     }) catch return error.ExtractFailed;
     defer alloc.free(result.stdout);

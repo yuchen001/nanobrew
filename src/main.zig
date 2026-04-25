@@ -1450,6 +1450,10 @@ fn showCaskInfo(alloc: std.mem.Allocator, stdout: anytype, stderr: anytype, name
                 .app => |a| stdout.print("    app: {s}\n", .{a}) catch {},
                 .binary => |b| stdout.print("    binary: {s} -> {s}\n", .{ b.source, b.target }) catch {},
                 .pkg => |p| stdout.print("    pkg: {s}\n", .{p}) catch {},
+                .font => |f| stdout.print("    font: {s}\n", .{f}) catch {},
+                .artifact => |a| stdout.print("    artifact: {s} -> {s}\n", .{ a.source, a.target }) catch {},
+                .suite => |s| stdout.print("    suite: {s} -> {s}\n", .{ s.source, s.target }) catch {},
+                .installer_script => |script| stdout.print("    installer: {s} ({d} args)\n", .{ script.executable, script.args.len }) catch {},
                 .uninstall => |u| {
                     if (u.quit.len > 0) stdout.print("    uninstall quit: {s}\n", .{u.quit}) catch {};
                     if (u.pkgutil.len > 0) stdout.print("    uninstall pkgutil: {s}\n", .{u.pkgutil}) catch {};
@@ -2229,7 +2233,7 @@ fn runCaskInstall(alloc: std.mem.Allocator, tokens: []const []const u8) void {
             switch (art) {
                 .app => |a| apps.append(alloc, a) catch {},
                 .binary => |b| binaries.append(alloc, b.target) catch {},
-                .pkg, .uninstall => {},
+                .pkg, .font, .artifact, .suite, .installer_script, .uninstall => {},
             }
         }
 

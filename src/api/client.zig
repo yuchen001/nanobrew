@@ -217,10 +217,7 @@ pub fn fetchFormulaWithClientAndUpstreamRegistry(
     name: []const u8,
     registry: ?*const upstream_registry.Registry,
 ) !Formula {
-    // Tap formula: "user/tap/formula" -> fetch from GitHub
-    if (isTapRef(name)) {
-        return tap.fetchTapFormula(alloc, client, name);
-    }
+    const tap_ref = isTapRef(name);
 
     if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM") == null) {
         const upstream_result = if (registry) |loaded_registry|
@@ -232,13 +229,18 @@ pub fn fetchFormulaWithClientAndUpstreamRegistry(
         } else |err| switch (err) {
             error.UpstreamRecordNotFound,
             error.UnsupportedPlatform,
-            error.UnsupportedUpstreamType,
             error.MissingAsset,
             error.FetchFailed,
             error.InvalidGithubRelease,
             => {},
             else => return err,
         }
+    }
+
+    // Tap formula: "user/tap/formula" -> fetch from GitHub when no verified
+    // upstream record exists for the tap token.
+    if (tap_ref) {
+        return tap.fetchTapFormula(alloc, client, name);
     }
 
     // Check cache first (5 minute TTL)
@@ -279,10 +281,7 @@ fn isTapRef(name: []const u8) bool {
 }
 
 pub fn fetchCask(alloc: std.mem.Allocator, token: []const u8) !Cask {
-    // Tap cask: "user/tap/cask" -> fetch from GitHub
-    if (tap.parseTapRef(token) != null) {
-        return tap.fetchTapCask(alloc, token);
-    }
+    const tap_ref = tap.parseTapRef(token) != null;
 
     if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM") == null) {
         if (upstream_github.fetchCask(alloc, token)) |upstream_cask| {
@@ -297,6 +296,12 @@ pub fn fetchCask(alloc: std.mem.Allocator, token: []const u8) !Cask {
             => {},
             else => return err,
         }
+    }
+
+    // Tap cask: "user/tap/cask" -> fetch from GitHub when no verified
+    // upstream record exists for the tap token.
+    if (tap_ref) {
+        return tap.fetchTapCask(alloc, token);
     }
 
     var cache_path_buf: [512]u8 = undefined;
@@ -454,6 +459,20 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
                     alloc.free(b.target);
                 },
                 .pkg => |p| alloc.free(p),
+                .font => |f| alloc.free(f),
+                .artifact => |a| {
+                    alloc.free(a.source);
+                    alloc.free(a.target);
+                },
+                .suite => |s| {
+                    alloc.free(s.source);
+                    alloc.free(s.target);
+                },
+                .installer_script => |script| {
+                    alloc.free(script.executable);
+                    for (script.args) |arg| alloc.free(arg);
+                    alloc.free(script.args);
+                },
                 .uninstall => |u| {
                     alloc.free(u.quit);
                     alloc.free(u.pkgutil);

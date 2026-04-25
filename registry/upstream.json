@@ -14513,6 +14513,3854 @@
       "verification": {
         "sha256": "required"
       }
+    },
+    {
+      "token": "adobe-acrobat-reader",
+      "name": "Adobe Acrobat Reader",
+      "kind": "cask",
+      "homepage": "https://www.adobe.com/acrobat/pdf-reader.html",
+      "desc": "View, print, and comment on PDF documents",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.adobe.com/acrobat/pdf-reader.html",
+        "release_feed": "https://ardownload2.adobe.com/pub/adobe/reader/mac/AcrobatDC/2600121431/AcroRdrDC_2600121431_MUI.dmg",
+        "allow_domains": [
+          "ardownload2.adobe.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 76,
+        "cask_install_30d_count": "5,894"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "AcroRdrDC_2600121431_MUI.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "26.001.21431",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://ardownload2.adobe.com/pub/adobe/reader/mac/AcrobatDC/2600121431/AcroRdrDC_2600121431_MUI.dmg",
+            "sha256": "49c83275e03d5eb275a651a605fb887efa44b532ddad1191bfc50256f0764659"
+          },
+          "macos-x86_64": {
+            "url": "https://ardownload2.adobe.com/pub/adobe/reader/mac/AcrobatDC/2600121431/AcroRdrDC_2600121431_MUI.dmg",
+            "sha256": "49c83275e03d5eb275a651a605fb887efa44b532ddad1191bfc50256f0764659"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "basictex",
+      "name": "BasicTeX",
+      "kind": "cask",
+      "homepage": "https://www.tug.org/mactex/morepackages.html",
+      "desc": "Compact TeX distribution as alternative to the full TeX Live / MacTeX",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.tug.org/mactex/morepackages.html",
+        "release_feed": "https://mirror.ctan.org/systems/mac/mactex/mactex-basictex-20260301.pkg",
+        "allow_domains": [
+          "mirror.ctan.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 61,
+        "cask_install_30d_count": "8,327"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "mactex-basictex-20260301.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "2026.0301",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://mirror.ctan.org/systems/mac/mactex/mactex-basictex-20260301.pkg",
+            "sha256": "19164fbfef08c30fd433f59203c8804abbbd685d3a344ef7f0ba8c1fd4157cb3"
+          },
+          "macos-x86_64": {
+            "url": "https://mirror.ctan.org/systems/mac/mactex/mactex-basictex-20260301.pkg",
+            "sha256": "19164fbfef08c30fd433f59203c8804abbbd685d3a344ef7f0ba8c1fd4157cb3"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "blackhole-2ch",
+      "name": "BlackHole 2ch",
+      "kind": "cask",
+      "homepage": "https://existential.audio/blackhole/",
+      "desc": "Virtual Audio Driver",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://existential.audio/blackhole/",
+        "release_feed": "https://existential.audio/downloads/BlackHole2ch-0.6.1.pkg",
+        "allow_domains": [
+          "existential.audio"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 64,
+        "cask_install_30d_count": "7,278"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "BlackHole2ch-0.6.1.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "0.6.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://existential.audio/downloads/BlackHole2ch-0.6.1.pkg",
+            "sha256": "c829afa041a9f6e1b369c01953c8f079740dd1f02421109855829edc0d3c1988"
+          },
+          "macos-x86_64": {
+            "url": "https://existential.audio/downloads/BlackHole2ch-0.6.1.pkg",
+            "sha256": "c829afa041a9f6e1b369c01953c8f079740dd1f02421109855829edc0d3c1988"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "gstreamer-runtime",
+      "name": "GStreamer runtime package",
+      "kind": "cask",
+      "homepage": "https://gstreamer.freedesktop.org/",
+      "desc": "Open Source Multimedia Framework",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://gstreamer.freedesktop.org/",
+        "release_feed": "https://gstreamer.freedesktop.org/data/pkg/osx/1.28.2/gstreamer-1.0-1.28.2-universal.pkg",
+        "allow_domains": [
+          "gstreamer.freedesktop.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 57,
+        "cask_install_30d_count": "8,605"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "gstreamer-1.0-1.28.2-universal.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "1.28.2",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://gstreamer.freedesktop.org/data/pkg/osx/1.28.2/gstreamer-1.0-1.28.2-universal.pkg",
+            "sha256": "964ff693002aaa69b2908f79967609b424ddc61210849e1afe5e8d8810f68b91"
+          },
+          "macos-x86_64": {
+            "url": "https://gstreamer.freedesktop.org/data/pkg/osx/1.28.2/gstreamer-1.0-1.28.2-universal.pkg",
+            "sha256": "964ff693002aaa69b2908f79967609b424ddc61210849e1afe5e8d8810f68b91"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "macfuse",
+      "name": "macFUSE",
+      "kind": "cask",
+      "homepage": "https://macfuse.github.io/",
+      "desc": "File system integration",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "macfuse/macfuse",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 34,
+        "cask_install_30d_count": "12,374"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "{tag}.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "{tag}.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "Extras/macFUSE 5.2.0.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "macfuse-5.2.0",
+        "version": "5.2.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/macfuse/macfuse/releases/download/macfuse-5.2.0/macfuse-5.2.0.dmg",
+            "sha256": "09a4b4c23c1930af45335fc119696797da41562dec1630602d2db637f4804f27"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/macfuse/macfuse/releases/download/macfuse-5.2.0/macfuse-5.2.0.dmg",
+            "sha256": "09a4b4c23c1930af45335fc119696797da41562dec1630602d2db637f4804f27"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "session-manager-plugin",
+      "name": "Session Manager Plugin for the AWS CLI",
+      "kind": "cask",
+      "homepage": "https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html",
+      "desc": "Plugin for AWS CLI to start and end sessions that connect to managed instances",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html",
+        "release_feed": "https://session-manager-downloads.s3.amazonaws.com/plugin/1.2.804.0/mac_arm64/session-manager-plugin.pkg",
+        "allow_domains": [
+          "session-manager-downloads.s3.amazonaws.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 54,
+        "cask_install_30d_count": "8,861"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "session-manager-plugin.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "1.2.804.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://session-manager-downloads.s3.amazonaws.com/plugin/1.2.804.0/mac_arm64/session-manager-plugin.pkg",
+            "sha256": "986f37bad62c9bea257de3f2a8189a8c07aae6c498f83afe7d9e688be07fda24"
+          },
+          "macos-x86_64": {
+            "url": "https://session-manager-downloads.s3.amazonaws.com/plugin/1.2.804.0/mac/session-manager-plugin.pkg",
+            "sha256": "cd9a0249d9f451e41902f5a27c4cab40cc7beda85ba6635fe409de36d9e0d797"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "tailscale-app",
+      "name": "Tailscale",
+      "kind": "cask",
+      "homepage": "https://tailscale.com/",
+      "desc": "Mesh VPN based on WireGuard",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://tailscale.com/",
+        "release_feed": "https://pkgs.tailscale.com/stable/Tailscale-1.96.5-macos.pkg",
+        "allow_domains": [
+          "pkgs.tailscale.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 29,
+        "cask_install_30d_count": "16,063"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "Tailscale-1.96.5-macos.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "1.96.5",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://pkgs.tailscale.com/stable/Tailscale-1.96.5-macos.pkg",
+            "sha256": "7aac0d5f9b8118e8b2d73f7578c32413af3dda8b7e79794ce7fea31e6f6e17c8"
+          },
+          "macos-x86_64": {
+            "url": "https://pkgs.tailscale.com/stable/Tailscale-1.96.5-macos.pkg",
+            "sha256": "7aac0d5f9b8118e8b2d73f7578c32413af3dda8b7e79794ce7fea31e6f6e17c8"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "zoom",
+      "name": "Zoom",
+      "kind": "cask",
+      "homepage": "https://www.zoom.us/",
+      "desc": "Video communication and virtual meeting platform",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.zoom.us/",
+        "release_feed": "https://cdn.zoom.us/prod/7.0.0.77593/arm64/zoomusInstallerFull.pkg",
+        "allow_domains": [
+          "cdn.zoom.us"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 86,
+        "cask_install_30d_count": "5,397"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "zoomusInstallerFull.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "7.0.0.77593",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://cdn.zoom.us/prod/7.0.0.77593/arm64/zoomusInstallerFull.pkg",
+            "sha256": "61251a33c6002478a09b833d5b7e3f6c3d7ae0cf1ffe16e1b5c987c94c05376d"
+          },
+          "macos-x86_64": {
+            "url": "https://cdn.zoom.us/prod/7.0.0.77593/zoomusInstallerFull.pkg",
+            "sha256": "8c82810ab9ef175d355899bc4dca62d91e6346ca915c7ecd4151a44939c078c0"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "zulu@17",
+      "name": "Azul Zulu Java Standard Edition Development Kit",
+      "kind": "cask",
+      "homepage": "https://www.azul.com/downloads/",
+      "desc": "OpenJDK distribution from Azul",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.azul.com/downloads/",
+        "release_feed": "https://cdn.azul.com/zulu/bin/zulu17.66.19-ca-jdk17.0.19-macosx_aarch64.dmg",
+        "allow_domains": [
+          "cdn.azul.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 65,
+        "cask_install_30d_count": "7,210"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "Double-Click to Install Azul Zulu JDK 17.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "17.0.19,17.66.19",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://cdn.azul.com/zulu/bin/zulu17.66.19-ca-jdk17.0.19-macosx_aarch64.dmg",
+            "sha256": "7e77365033a131316d58f30434ab29fd466482891fe3de799c1e03860500438e"
+          },
+          "macos-x86_64": {
+            "url": "https://cdn.azul.com/zulu/bin/zulu17.66.19-ca-jdk17.0.19-macosx_x64.dmg",
+            "sha256": "e4b403d44b122b2ee6db90bcd293a75eff8891ed1dff8d2adc9f2f09c19ab4ca"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "android-commandlinetools",
+      "name": "Android SDK Command-line Tools",
+      "kind": "cask",
+      "homepage": "https://developer.android.com/studio",
+      "desc": "Command-line tools for building and debugging Android apps",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://developer.android.com/studio",
+        "release_feed": "https://dl.google.com/android/repository/commandlinetools-mac-14742923_latest.zip",
+        "allow_domains": [
+          "dl.google.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 17,
+        "cask_install_30d_count": "24,102"
+      },
+      "artifacts": [
+        {
+          "type": "artifact",
+          "path": "cmdline-tools",
+          "target": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest/bin/avdmanager"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest/bin/lint"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest/bin/retrace"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest/bin/screenshot2"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/share/android-commandlinetools/cmdline-tools/latest/bin/apkanalyzer"
+        }
+      ],
+      "resolved": {
+        "version": "14742923",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl.google.com/android/repository/commandlinetools-mac-14742923_latest.zip",
+            "sha256": "ed304c5ede3718541e4f978e4ae870a4d853db74af6c16d920588d48523b9dee"
+          },
+          "macos-x86_64": {
+            "url": "https://dl.google.com/android/repository/commandlinetools-mac-14742923_latest.zip",
+            "sha256": "ed304c5ede3718541e4f978e4ae870a4d853db74af6c16d920588d48523b9dee"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "chromedriver",
+      "name": "ChromeDriver",
+      "kind": "cask",
+      "homepage": "https://chromedriver.chromium.org/",
+      "desc": "Automated testing of webapps for Google Chrome",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://chromedriver.chromium.org/",
+        "release_feed": "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.56/mac-arm64/chromedriver-mac-arm64.zip",
+        "allow_domains": [
+          "storage.googleapis.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 18,
+        "cask_install_30d_count": "23,521"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "chromedriver-mac-arm64/chromedriver"
+        }
+      ],
+      "resolved": {
+        "version": "148.0.7778.56",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.56/mac-arm64/chromedriver-mac-arm64.zip",
+            "sha256": "18a6d39141a839d59417c8661ce99dc799c1064d961fcc4d7b134a7f00908645"
+          },
+          "macos-x86_64": {
+            "url": "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.56/mac-x64/chromedriver-mac-x64.zip",
+            "sha256": "2e78ae274cfce62b2df6d7569c2bf2367de677540ba57ba41a5d9a9510b56147",
+            "artifacts": [
+              {
+                "type": "binary",
+                "path": "chromedriver-mac-x64/chromedriver"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "chromium",
+      "name": "Chromium",
+      "kind": "cask",
+      "homepage": "https://www.chromium.org/Home",
+      "desc": "Free and open-source web browser",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.chromium.org/Home",
+        "release_feed": "https://download-chromium.appspot.com/dl/Mac_Arm?type=snapshots",
+        "allow_domains": [
+          "download-chromium.appspot.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 100,
+        "cask_install_30d_count": "4,727"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "chrome-mac/Chromium.app"
+        },
+        {
+          "type": "binary",
+          "path": "chromium.wrapper.sh",
+          "target": "chromium"
+        }
+      ],
+      "resolved": {
+        "version": "latest",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://download-chromium.appspot.com/dl/Mac_Arm?type=snapshots",
+            "sha256": "no_check"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "no_check",
+        "no_check_reason": "Homebrew cask uses sha256 :no_check for an auto-updating vendor download."
+      }
+    },
+    {
+      "token": "codex",
+      "name": "Codex",
+      "kind": "cask",
+      "homepage": "https://github.com/openai/codex",
+      "desc": "OpenAI's coding agent that runs in your terminal",
+      "upstream": {
+        "type": "github_release",
+        "repo": "openai/codex",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 2,
+        "cask_install_30d_count": "80,082"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "codex-aarch64-apple-darwin.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "codex-x86_64-apple-darwin.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "codex-aarch64-apple-darwin",
+          "target": "codex"
+        }
+      ],
+      "resolved": {
+        "tag": "rust-v0.125.0",
+        "version": "0.125.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.125.0/codex-aarch64-apple-darwin.tar.gz",
+            "sha256": "6a926dc0cb9639d349b62beda1907c53cb1349709e7dc9cfc53268f438cb749f"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.125.0/codex-x86_64-apple-darwin.tar.gz",
+            "sha256": "b46019584d15814c235696bea75bff0d378e6d14997a268846b675501fb5c089",
+            "artifacts": [
+              {
+                "type": "binary",
+                "path": "codex-x86_64-apple-darwin",
+                "target": "codex"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "db-browser-for-sqlite",
+      "name": "DB Browser for SQLite",
+      "kind": "cask",
+      "homepage": "https://sqlitebrowser.org/",
+      "desc": "Browser for SQLite databases",
+      "upstream": {
+        "type": "github_release",
+        "repo": "sqlitebrowser/sqlitebrowser",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 95,
+        "cask_install_30d_count": "5,017"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "DB.Browser.for.SQLite-{tag}.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "DB.Browser.for.SQLite-{tag}.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "DB Browser for SQLite.app"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.13.1",
+        "version": "3.13.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.13.1/DB.Browser.for.SQLite-v3.13.1.dmg",
+            "sha256": "a641cfbfcc2ce609f07de44a35134dab53485ecc18e6d9afa297b514d74bd75e"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.13.1/DB.Browser.for.SQLite-v3.13.1.dmg",
+            "sha256": "a641cfbfcc2ce609f07de44a35134dab53485ecc18e6d9afa297b514d74bd75e"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "docker-desktop",
+      "name": "Docker Desktop",
+      "kind": "cask",
+      "homepage": "https://www.docker.com/products/docker-desktop",
+      "desc": "App to build and share containerised applications and microservices",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.docker.com/products/docker-desktop",
+        "release_feed": "https://desktop.docker.com/mac/main/arm64/224270/Docker.dmg",
+        "allow_domains": [
+          "desktop.docker.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 4,
+        "cask_install_30d_count": "54,972"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Docker.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/cli-plugins/docker-compose"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/bin/hub-tool"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/bin/kubectl"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker-credential-desktop"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker-credential-ecr-login"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker-credential-osxkeychain"
+        }
+      ],
+      "resolved": {
+        "version": "4.70.0,224270",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://desktop.docker.com/mac/main/arm64/224270/Docker.dmg",
+            "sha256": "38a19ac039dee38e0e445118da34962039ef1601b0656dc4d138592efda2caba"
+          },
+          "macos-x86_64": {
+            "url": "https://desktop.docker.com/mac/main/amd64/224270/Docker.dmg",
+            "sha256": "2f0e3d0b9e0341810399fc1d5b3eb2a3dd05ca4dcf2add0df3a62eb1d328a36c",
+            "artifacts": [
+              {
+                "type": "app",
+                "path": "Docker.app"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker-credential-desktop"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker-credential-ecr-login"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker-credential-osxkeychain"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/hub-tool"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/kubectl"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/cli-plugins/docker-compose"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/com.docker.hyperkit"
+              },
+              {
+                "type": "binary",
+                "path": "$APPDIR/Docker.app/Contents/Resources/bin/docker"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "dotnet-sdk",
+      "name": ".NET SDK",
+      "kind": "cask",
+      "homepage": "https://www.microsoft.com/net/core#macos",
+      "desc": "Developer platform",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.microsoft.com/net/core#macos",
+        "release_feed": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.203/dotnet-sdk-10.0.203-osx-arm64.pkg",
+        "allow_domains": [
+          "builds.dotnet.microsoft.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 45,
+        "cask_install_30d_count": "10,330"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "dotnet-sdk-10.0.203-osx-arm64.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "10.0.203",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.203/dotnet-sdk-10.0.203-osx-arm64.pkg",
+            "sha256": "535916245b7f89ff35c1e408352fda812ecd643fd93385bde2cb008185b38884"
+          },
+          "macos-x86_64": {
+            "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.203/dotnet-sdk-10.0.203-osx-x64.pkg",
+            "sha256": "c4b66e9bd445eb1ff7c0bd4b79dbbabcb733a223bff9c98f1b670494a44998e7",
+            "artifacts": [
+              {
+                "type": "pkg",
+                "path": "dotnet-sdk-10.0.203-osx-x64.pkg"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "flutter",
+      "name": "Flutter SDK",
+      "kind": "cask",
+      "homepage": "https://flutter.dev/",
+      "desc": "UI toolkit for building applications for mobile, web and desktop",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://flutter.dev/",
+        "release_feed": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.41.7-stable.zip",
+        "allow_domains": [
+          "storage.googleapis.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 20,
+        "cask_install_30d_count": "20,986"
+      },
+      "artifacts": [
+        {
+          "type": "suite",
+          "path": "flutter",
+          "target": "$HOMEBREW_PREFIX/share/flutter"
+        },
+        {
+          "type": "binary",
+          "path": "flutter/bin/dart"
+        },
+        {
+          "type": "binary",
+          "path": "flutter/bin/flutter"
+        }
+      ],
+      "resolved": {
+        "version": "3.41.7",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.41.7-stable.zip",
+            "sha256": "2e3e6af44d1adccf695deff52e5e4c8beb10e5625066b27ad082b38b83ef805e"
+          },
+          "macos-x86_64": {
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.41.7-stable.zip",
+            "sha256": "a0b9af49e6e1a6800f31a408b98c1d7bd51e98650a8b9ebcd77168b48c916ff0"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "font-fira-code-nerd-font",
+      "name": "FiraCode Nerd Font (Fira Code)",
+      "kind": "cask",
+      "homepage": "https://github.com/ryanoasis/nerd-fonts",
+      "desc": "Fira Code Nerd Font family",
+      "upstream": {
+        "type": "github_release",
+        "repo": "ryanoasis/nerd-fonts",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 77,
+        "cask_install_30d_count": "5,879"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "FiraCode.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "FiraCode.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontPropo-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFont-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFont-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFont-Retina.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFont-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontMono-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontMono-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontMono-Retina.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontMono-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontPropo-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontPropo-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFontPropo-Retina.ttf"
+        },
+        {
+          "type": "font",
+          "path": "FiraCodeNerdFont-Bold.ttf"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.4.0",
+        "version": "3.4.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/FiraCode.zip",
+            "sha256": "7cc4ffd8f7a1fc914cdab7b149808298165ff7a7f40e40d82dea9ebe41e8ca0b"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/FiraCode.zip",
+            "sha256": "7cc4ffd8f7a1fc914cdab7b149808298165ff7a7f40e40d82dea9ebe41e8ca0b"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "font-hack-nerd-font",
+      "name": "Hack Nerd Font (Hack)",
+      "kind": "cask",
+      "homepage": "https://github.com/ryanoasis/nerd-fonts",
+      "desc": "Hack Nerd Font family",
+      "upstream": {
+        "type": "github_release",
+        "repo": "ryanoasis/nerd-fonts",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 73,
+        "cask_install_30d_count": "6,175"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Hack.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "Hack.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "font",
+          "path": "HackNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "HackNerdFont-Bold.ttf"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.4.0",
+        "version": "3.4.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Hack.zip",
+            "sha256": "8ca33a60c791392d872b80d26c42f2bfa914a480f9eb2d7516d9f84373c36897"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Hack.zip",
+            "sha256": "8ca33a60c791392d872b80d26c42f2bfa914a480f9eb2d7516d9f84373c36897"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "font-jetbrains-mono",
+      "name": "JetBrains Mono",
+      "kind": "cask",
+      "homepage": "https://www.jetbrains.com/lp/mono",
+      "desc": "JetBrains Mono font family",
+      "upstream": {
+        "type": "github_release",
+        "repo": "JetBrains/JetBrainsMono",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 90,
+        "cask_install_30d_count": "5,226"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "JetBrainsMono-{version}.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "JetBrainsMono-{version}.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "font",
+          "path": "fonts/variable/JetBrainsMono[wght].ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMonoNL-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/variable/JetBrainsMono-Italic[wght].ttf"
+        },
+        {
+          "type": "font",
+          "path": "fonts/ttf/JetBrainsMono-Bold.ttf"
+        }
+      ],
+      "resolved": {
+        "tag": "v2.304",
+        "version": "2.304",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip",
+            "sha256": "6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip",
+            "sha256": "6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "font-jetbrains-mono-nerd-font",
+      "name": "JetBrainsMono Nerd Font families (JetBrains Mono)",
+      "kind": "cask",
+      "homepage": "https://github.com/ryanoasis/nerd-fonts",
+      "desc": "JetBrains Mono Nerd Font family",
+      "upstream": {
+        "type": "github_release",
+        "repo": "ryanoasis/nerd-fonts",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 26,
+        "cask_install_30d_count": "17,334"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "JetBrainsMono.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "JetBrainsMono.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontMono-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFontPropo-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFont-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontMono-ThinItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraLight.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraLightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-Light.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-LightItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-Medium.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-MediumItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-SemiBold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-SemiBoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNerdFontPropo-Thin.ttf"
+        },
+        {
+          "type": "font",
+          "path": "JetBrainsMonoNLNerdFont-Bold.ttf"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.4.0",
+        "version": "3.4.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.zip",
+            "sha256": "76f05ff3ace48a464a6ca57977998784ff7bdbb65a6d915d7e401cd3927c493c"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.zip",
+            "sha256": "76f05ff3ace48a464a6ca57977998784ff7bdbb65a6d915d7e401cd3927c493c"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "font-meslo-lg-nerd-font",
+      "name": "MesloLG Nerd Font families (Meslo LG)",
+      "kind": "cask",
+      "homepage": "https://github.com/ryanoasis/nerd-fonts",
+      "desc": "Meslo LG Nerd Font family",
+      "upstream": {
+        "type": "github_release",
+        "repo": "ryanoasis/nerd-fonts",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 52,
+        "cask_install_30d_count": "9,316"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Meslo.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "Meslo.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFont-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFont-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMDZNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFont-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGMNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFont-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSDZNerdFontPropo-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFont-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFont-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFont-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFont-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontMono-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontMono-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontMono-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontMono-Regular.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontPropo-Bold.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontPropo-BoldItalic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGSNerdFontPropo-Italic.ttf"
+        },
+        {
+          "type": "font",
+          "path": "MesloLGLDZNerdFont-Bold.ttf"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.4.0",
+        "version": "3.4.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Meslo.zip",
+            "sha256": "13b502ac8c2bd9d3161018064560e23cd42b175bb730780a270975265a19ad57"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Meslo.zip",
+            "sha256": "13b502ac8c2bd9d3161018064560e23cd42b175bb730780a270975265a19ad57"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "gcloud-cli",
+      "name": "Google Cloud CLI",
+      "kind": "cask",
+      "homepage": "https://cloud.google.com/cli/",
+      "desc": "Set of tools to manage resources and applications hosted on Google Cloud",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://cloud.google.com/cli/",
+        "release_feed": "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-565.0.0-darwin-arm.tar.gz",
+        "allow_domains": [
+          "dl.google.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 3,
+        "cask_install_30d_count": "61,443"
+      },
+      "artifacts": [
+        {
+          "type": "installer_script",
+          "path": "google-cloud-sdk/install.sh",
+          "args": [
+            "--quiet",
+            "--usage-reporting",
+            "false",
+            "--bash-completion",
+            "false",
+            "--path-update",
+            "false",
+            "--rc-path",
+            "false",
+            "--update-installed-components",
+            "--install-python",
+            "false"
+          ]
+        },
+        {
+          "type": "binary",
+          "path": "google-cloud-sdk/bin/gsutil"
+        },
+        {
+          "type": "binary",
+          "path": "google-cloud-sdk/bin/bq"
+        },
+        {
+          "type": "binary",
+          "path": "google-cloud-sdk/bin/docker-credential-gcloud"
+        },
+        {
+          "type": "binary",
+          "path": "google-cloud-sdk/bin/gcloud"
+        },
+        {
+          "type": "binary",
+          "path": "google-cloud-sdk/bin/git-credential-gcloud.sh",
+          "target": "git-credential-gcloud"
+        }
+      ],
+      "resolved": {
+        "version": "565.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-565.0.0-darwin-arm.tar.gz",
+            "sha256": "11b5f571699fca76dbc9d9226c93fb631762c419d0d85f75a5ba74055b9d1679"
+          },
+          "macos-x86_64": {
+            "url": "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-565.0.0-darwin-x86_64.tar.gz",
+            "sha256": "6d4567a5405ca4e2789af2366b0585514b0e707cd33291d6cd8e3fe8eb139599"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "git-credential-manager",
+      "name": "Git Credential Manager",
+      "kind": "cask",
+      "homepage": "https://aka.ms/gcm",
+      "desc": "Cross-platform Git credential storage for multiple hosting providers",
+      "upstream": {
+        "type": "github_release",
+        "repo": "git-ecosystem/git-credential-manager",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 14,
+        "cask_install_30d_count": "27,626"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "gcm-osx-arm64-{version}.pkg"
+        },
+        "macos-x86_64": {
+          "pattern": "gcm-osx-x64-{version}.pkg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "gcm-osx-arm64-2.7.3.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "v2.7.3",
+        "version": "2.7.3",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/git-ecosystem/git-credential-manager/releases/download/v2.7.3/gcm-osx-arm64-2.7.3.pkg",
+            "sha256": "9b4a4008b505a5878a4ee3e7e906b84cbc595e499d92d2c382e0a9f587a8861a"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/git-ecosystem/git-credential-manager/releases/download/v2.7.3/gcm-osx-x64-2.7.3.pkg",
+            "sha256": "5638e6aef7dfc097ba5f9ceb6fcefaa05187859404de19a680e329bd97047f17",
+            "artifacts": [
+              {
+                "type": "pkg",
+                "path": "gcm-osx-x64-2.7.3.pkg"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "jordanbaird-ice",
+      "name": "Ice",
+      "kind": "cask",
+      "homepage": "https://icemenubar.app/",
+      "desc": "Menu bar manager",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "jordanbaird/ice-releases",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 72,
+        "cask_install_30d_count": "6,176"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Ice.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "Ice.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Ice.app"
+        }
+      ],
+      "resolved": {
+        "tag": "0.11.12",
+        "version": "0.11.12",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/jordanbaird/ice-releases/releases/download/0.11.12/Ice.zip",
+            "sha256": "d770e81597566dd2d2363feb350f808c7a92e363df95c51e48140eb30e452cc9"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/jordanbaird/ice-releases/releases/download/0.11.12/Ice.zip",
+            "sha256": "d770e81597566dd2d2363feb350f808c7a92e363df95c51e48140eb30e452cc9"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "karabiner-elements",
+      "name": "Karabiner Elements",
+      "kind": "cask",
+      "homepage": "https://karabiner-elements.pqrs.org/",
+      "desc": "Keyboard customiser",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "pqrs-org/Karabiner-Elements",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 81,
+        "cask_install_30d_count": "5,657"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Karabiner-Elements-{version}.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "Karabiner-Elements-{version}.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "Karabiner-Elements.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "v15.9.0",
+        "version": "15.9.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/pqrs-org/Karabiner-Elements/releases/download/v15.9.0/Karabiner-Elements-15.9.0.dmg",
+            "sha256": "c495f131165a4deefbe32e4a8ff5b3ffb000fcd5507140344899b8fee31574ee"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/pqrs-org/Karabiner-Elements/releases/download/v15.9.0/Karabiner-Elements-15.9.0.dmg",
+            "sha256": "c495f131165a4deefbe32e4a8ff5b3ffb000fcd5507140344899b8fee31574ee"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "localsend",
+      "name": "LocalSend",
+      "kind": "cask",
+      "homepage": "https://localsend.org/",
+      "desc": "Open-source cross-platform alternative to AirDrop",
+      "upstream": {
+        "type": "github_release",
+        "repo": "localsend/localsend",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 83,
+        "cask_install_30d_count": "5,512"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "LocalSend-{version}.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "LocalSend-{version}.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "LocalSend.app"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.17.0",
+        "version": "1.17.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/localsend/localsend/releases/download/v1.17.0/LocalSend-1.17.0.dmg",
+            "sha256": "fdf1a42ee13eb9fdd6ae94dc5883981e8a09599e758bde23f6e677c4fab5c93c"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/localsend/localsend/releases/download/v1.17.0/LocalSend-1.17.0.dmg",
+            "sha256": "fdf1a42ee13eb9fdd6ae94dc5883981e8a09599e758bde23f6e677c4fab5c93c"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "mactex",
+      "name": "MacTeX",
+      "kind": "cask",
+      "homepage": "https://www.tug.org/mactex/",
+      "desc": "Full TeX Live distribution with GUI applications",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.tug.org/mactex/",
+        "release_feed": "https://mirror.ctan.org/systems/mac/mactex/mactex-20260324.pkg",
+        "allow_domains": [
+          "mirror.ctan.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 94,
+        "cask_install_30d_count": "5,085"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "mactex-20260324.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "2026.0324",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://mirror.ctan.org/systems/mac/mactex/mactex-20260324.pkg",
+            "sha256": "e30af0640f51979a95b9f54084456d1e16749b79e12e65bdebd630fb2795ff1e"
+          },
+          "macos-x86_64": {
+            "url": "https://mirror.ctan.org/systems/mac/mactex/mactex-20260324.pkg",
+            "sha256": "e30af0640f51979a95b9f54084456d1e16749b79e12e65bdebd630fb2795ff1e"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "microsoft-openjdk@17",
+      "name": "Microsoft Build of OpenJDK",
+      "kind": "cask",
+      "homepage": "https://microsoft.com/openjdk",
+      "desc": "OpenJDK distribution from Microsoft",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://microsoft.com/openjdk",
+        "release_feed": "https://aka.ms/download-jdk/microsoft-jdk-17.0.18-macos-aarch64.pkg",
+        "allow_domains": [
+          "aka.ms"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 31,
+        "cask_install_30d_count": "14,703"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "microsoft-jdk-17.0.18-macos-aarch64.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "17.0.18",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://aka.ms/download-jdk/microsoft-jdk-17.0.18-macos-aarch64.pkg",
+            "sha256": "cb3d278ccea4500e085e78ea1e1cca543394bcdeddc8656a4c4778235425364e"
+          },
+          "macos-x86_64": {
+            "url": "https://aka.ms/download-jdk/microsoft-jdk-17.0.18-macos-x64.pkg",
+            "sha256": "ebbe9e536ef534b381290eebf354542da73bbf8fd89c7f0828020d962a6afbc9",
+            "artifacts": [
+              {
+                "type": "pkg",
+                "path": "microsoft-jdk-17.0.18-macos-x64.pkg"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "miniconda",
+      "name": "Miniconda",
+      "kind": "cask",
+      "homepage": "https://www.anaconda.com/docs/getting-started/miniconda/main",
+      "desc": "Minimal installer for conda",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.anaconda.com/docs/getting-started/miniconda/main",
+        "release_feed": "https://repo.anaconda.com/miniconda/Miniconda3-py313_26.1.1-1-MacOSX-arm64.sh",
+        "allow_domains": [
+          "repo.anaconda.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 68,
+        "cask_install_30d_count": "7,048"
+      },
+      "artifacts": [
+        {
+          "type": "installer_script",
+          "path": "Miniconda3-py313_26.1.1-1-MacOSX-arm64.sh",
+          "args": [
+            "-b",
+            "-p",
+            "$HOMEBREW_PREFIX/Caskroom/miniconda/base"
+          ]
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/Caskroom/miniconda/base/condabin/conda"
+        }
+      ],
+      "resolved": {
+        "version": "py313_26.1.1-1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://repo.anaconda.com/miniconda/Miniconda3-py313_26.1.1-1-MacOSX-arm64.sh",
+            "sha256": "745f97a6553ebdce0bfdaafe00b0d1939784b38cdaadb3378ca7868a51616a65"
+          },
+          "macos-x86_64": {
+            "url": "https://repo.anaconda.com/miniconda/Miniconda3-py313_25.7.0-2-MacOSX-x86_64.sh",
+            "sha256": "9c88674b1a839eeb4cff006df397a05ea7d896472318fd84b7070278f9653dc6",
+            "artifacts": [
+              {
+                "type": "installer_script",
+                "path": "Miniconda3-py313_25.7.0-2-MacOSX-x86_64.sh",
+                "args": [
+                  "-b",
+                  "-p",
+                  "$HOMEBREW_PREFIX/Caskroom/miniconda/base"
+                ]
+              },
+              {
+                "type": "binary",
+                "path": "$HOMEBREW_PREFIX/Caskroom/miniconda/base/condabin/conda"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "miniforge",
+      "name": "miniforge",
+      "kind": "cask",
+      "homepage": "https://github.com/conda-forge/miniforge",
+      "desc": "Minimal installer for conda specific to conda-forge",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "conda-forge/miniforge",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 98,
+        "cask_install_30d_count": "4,806"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Miniforge3-{tag}-MacOSX-arm64.sh"
+        },
+        "macos-x86_64": {
+          "pattern": "Miniforge3-{tag}-MacOSX-x86_64.sh"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "installer_script",
+          "path": "Miniforge3-26.1.1-3-MacOSX-arm64.sh",
+          "args": [
+            "-b",
+            "-p",
+            "$HOMEBREW_PREFIX/Caskroom/miniforge/base"
+          ]
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/Caskroom/miniforge/base/condabin/conda"
+        },
+        {
+          "type": "binary",
+          "path": "$HOMEBREW_PREFIX/Caskroom/miniforge/base/condabin/mamba"
+        }
+      ],
+      "resolved": {
+        "tag": "26.1.1-3",
+        "version": "26.1.1-3",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/conda-forge/miniforge/releases/download/26.1.1-3/Miniforge3-26.1.1-3-MacOSX-arm64.sh",
+            "sha256": "38e73713bc504e11cf2a70f8bc01de4a778c547e9191e682606ba76fa4397fd9"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/conda-forge/miniforge/releases/download/26.1.1-3/Miniforge3-26.1.1-3-MacOSX-x86_64.sh",
+            "sha256": "d81e77d8f3c104c64e0ab27256f901e58ac9965288ccec774db87bf1a98a03e7",
+            "artifacts": [
+              {
+                "type": "installer_script",
+                "path": "Miniforge3-26.1.1-3-MacOSX-x86_64.sh",
+                "args": [
+                  "-b",
+                  "-p",
+                  "$HOMEBREW_PREFIX/Caskroom/miniforge/base"
+                ]
+              },
+              {
+                "type": "binary",
+                "path": "$HOMEBREW_PREFIX/Caskroom/miniforge/base/condabin/conda"
+              },
+              {
+                "type": "binary",
+                "path": "$HOMEBREW_PREFIX/Caskroom/miniforge/base/condabin/mamba"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "orbstack",
+      "name": "OrbStack",
+      "kind": "cask",
+      "homepage": "https://orbstack.dev/",
+      "desc": "Replacement for Docker Desktop",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://orbstack.dev/",
+        "release_feed": "https://cdn-updates.orbstack.dev/arm64/OrbStack_v2.1.1_20026_arm64.dmg",
+        "allow_domains": [
+          "cdn-updates.orbstack.dev"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 21,
+        "cask_install_30d_count": "20,311"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "OrbStack.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/OrbStack.app/Contents/MacOS/bin/orbctl"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/OrbStack.app/Contents/MacOS/bin/orb"
+        }
+      ],
+      "resolved": {
+        "version": "2.1.1,20026",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://cdn-updates.orbstack.dev/arm64/OrbStack_v2.1.1_20026_arm64.dmg",
+            "sha256": "18a41f759958e1fa0951696b820b5478d3ed7353f8ca486fe9d026a1a7d97207"
+          },
+          "macos-x86_64": {
+            "url": "https://cdn-updates.orbstack.dev/amd64/OrbStack_v2.1.1_20026_amd64.dmg",
+            "sha256": "c7eef8f0f29aaac9d0a9ea962208a1362a63ced0926645a5ba89835e5260513c"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "postman",
+      "name": "Postman",
+      "kind": "cask",
+      "homepage": "https://www.postman.com/",
+      "desc": "Collaboration platform for API development",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.postman.com/",
+        "release_feed": "https://dl.pstmn.io/download/version/12.7.6/osx_arm64",
+        "allow_domains": [
+          "dl.pstmn.io"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 35,
+        "cask_install_30d_count": "12,225"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Postman.app"
+        }
+      ],
+      "resolved": {
+        "version": "12.7.6",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl.pstmn.io/download/version/12.7.6/osx_arm64",
+            "sha256": "a1248b74741d96e38bd48443f6d1aec6ace9e988b13bee4752fe2c7e5be12a14"
+          },
+          "macos-x86_64": {
+            "url": "https://dl.pstmn.io/download/version/12.7.6/osx64",
+            "sha256": "895b55efa4cc0746aeded71888a4fdb4b60a4dca43591dc81fc611b06bee0724"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "rar",
+      "name": "RAR Archiver",
+      "kind": "cask",
+      "homepage": "https://www.rarlab.com/",
+      "desc": "Archive manager for data compression and backups",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.rarlab.com/",
+        "release_feed": "https://www.rarlab.com/rar/rarmacos-arm-720.tar.gz",
+        "allow_domains": [
+          "www.rarlab.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 97,
+        "cask_install_30d_count": "4,853"
+      },
+      "artifacts": [
+        {
+          "type": "artifact",
+          "path": "rar/default.sfx",
+          "target": "$HOMEBREW_PREFIX/lib/default.sfx"
+        },
+        {
+          "type": "artifact",
+          "path": "rar/rarfiles.lst",
+          "target": "$HOMEBREW_PREFIX/etc/rarfiles.lst"
+        },
+        {
+          "type": "binary",
+          "path": "rar/rar"
+        },
+        {
+          "type": "binary",
+          "path": "rar/unrar"
+        }
+      ],
+      "resolved": {
+        "version": "7.20",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://www.rarlab.com/rar/rarmacos-arm-720.tar.gz",
+            "sha256": "e0e363c8f7b48f0dad54deabd1dc462a300ab740226e9eb2c091edbd2e05bd4a"
+          },
+          "macos-x86_64": {
+            "url": "https://www.rarlab.com/rar/rarmacos-x64-720.tar.gz",
+            "sha256": "2e12d8f64b93b30702e38ddae4bfb063b9c73888599fa0aac8a5aa99f8d766de"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "raycast",
+      "name": "Raycast",
+      "kind": "cask",
+      "homepage": "https://raycast.com/",
+      "desc": "Control your tools with a few keystrokes",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://raycast.com/",
+        "release_feed": "https://releases.raycast.com/releases/1.104.13/download?build=arm",
+        "allow_domains": [
+          "releases.raycast.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 38,
+        "cask_install_30d_count": "11,272"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Raycast.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.104.13",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://releases.raycast.com/releases/1.104.13/download?build=arm",
+            "sha256": "f8408734d0b6488aa995d906aeaac03db9e704206165ead6cb909372facd8b2c"
+          },
+          "macos-x86_64": {
+            "url": "https://releases.raycast.com/releases/1.104.13/download?build=arm",
+            "sha256": "f8408734d0b6488aa995d906aeaac03db9e704206165ead6cb909372facd8b2c"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "spotify",
+      "name": "Spotify",
+      "kind": "cask",
+      "homepage": "https://www.spotify.com/",
+      "desc": "Music streaming service",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.spotify.com/",
+        "release_feed": "https://download.scdn.co/SpotifyARM64.dmg",
+        "allow_domains": [
+          "download.scdn.co"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 58,
+        "cask_install_30d_count": "8,598"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Spotify.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.2.88.483",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://download.scdn.co/SpotifyARM64.dmg",
+            "sha256": "no_check"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "no_check",
+        "no_check_reason": "Homebrew cask uses sha256 :no_check for an auto-updating vendor download."
+      }
+    },
+    {
+      "token": "temurin",
+      "name": "Eclipse Temurin Java Development Kit",
+      "kind": "cask",
+      "homepage": "https://adoptium.net/",
+      "desc": "JDK from the Eclipse Foundation (Adoptium)",
+      "upstream": {
+        "type": "github_release",
+        "repo": "adoptium/temurin26-binaries",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 50,
+        "cask_install_30d_count": "9,684"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "OpenJDK26U-jdk_aarch64_mac_hotspot_26_35.pkg"
+        },
+        "macos-x86_64": {
+          "pattern": "OpenJDK26U-jdk_x64_mac_hotspot_26_35.pkg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "OpenJDK26U-jdk_aarch64_mac_hotspot_26_35.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "jdk-26+35",
+        "version": "26,35",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26%2B35/OpenJDK26U-jdk_aarch64_mac_hotspot_26_35.pkg",
+            "sha256": "b843236ed2d297cad1e0285a9488633fa2b17e199284a449e3aae870492ecbbe"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26%2B35/OpenJDK26U-jdk_x64_mac_hotspot_26_35.pkg",
+            "sha256": "d70bf1815eaf6f6b61b3e0b83f65e8ed82da3b93f25c5ec7db900ab769220d14",
+            "artifacts": [
+              {
+                "type": "pkg",
+                "path": "OpenJDK26U-jdk_x64_mac_hotspot_26_35.pkg"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "temurin@17",
+      "name": "Eclipse Temurin Java Development Kit",
+      "kind": "cask",
+      "homepage": "https://adoptium.net/",
+      "desc": "JDK from the Eclipse Foundation (Adoptium)",
+      "upstream": {
+        "type": "github_release",
+        "repo": "adoptium/temurin17-binaries",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 24,
+        "cask_install_30d_count": "17,785"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.18_8.pkg"
+        },
+        "macos-x86_64": {
+          "pattern": "OpenJDK17U-jdk_x64_mac_hotspot_17.0.18_8.pkg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.18_8.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "jdk-17.0.18+8",
+        "version": "17.0.18,8",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.18%2B8/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.18_8.pkg",
+            "sha256": "5eebbdbb9d132db80b6ca035ac651531e0ff10fae3fa01afb444c998e5163ca7"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.18%2B8/OpenJDK17U-jdk_x64_mac_hotspot_17.0.18_8.pkg",
+            "sha256": "bc49ec2943813ab07f230fc0643b93e6d4f2ea2edb73b3f4fe6898c04353de10",
+            "artifacts": [
+              {
+                "type": "pkg",
+                "path": "OpenJDK17U-jdk_x64_mac_hotspot_17.0.18_8.pkg"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "temurin@21",
+      "name": "Eclipse Temurin 21",
+      "kind": "cask",
+      "homepage": "https://adoptium.net/",
+      "desc": "JDK from the Eclipse Foundation (Adoptium)",
+      "upstream": {
+        "type": "github_release",
+        "repo": "adoptium/temurin21-binaries",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 36,
+        "cask_install_30d_count": "12,192"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.10_7.pkg"
+        },
+        "macos-x86_64": {
+          "pattern": "OpenJDK21U-jdk_x64_mac_hotspot_21.0.10_7.pkg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.10_7.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "jdk-21.0.10+7",
+        "version": "21.0.10,7",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.10_7.pkg",
+            "sha256": "c68958a85919328d63c52a208ca880635e33ca4fafa01f9bf0d8fe9c6b652bc0"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_x64_mac_hotspot_21.0.10_7.pkg",
+            "sha256": "a6295dcfbb19c7da6d97203506ab086e7e35692ca2bc14443bcdb002527bc4b4",
+            "artifacts": [
+              {
+                "type": "pkg",
+                "path": "OpenJDK21U-jdk_x64_mac_hotspot_21.0.10_7.pkg"
+              }
+            ]
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "visual-studio-code",
+      "name": "Microsoft Visual Studio Code",
+      "kind": "cask",
+      "homepage": "https://code.visualstudio.com/",
+      "desc": "Open-source code editor",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://code.visualstudio.com/",
+        "release_feed": "https://update.code.visualstudio.com/1.117.0/darwin-arm64/stable",
+        "allow_domains": [
+          "update.code.visualstudio.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 5,
+        "cask_install_30d_count": "47,061"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Visual Studio Code.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Visual Studio Code.app/Contents/Resources/app/bin/code"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/Visual Studio Code.app/Contents/Resources/app/bin/code-tunnel"
+        }
+      ],
+      "resolved": {
+        "version": "1.117.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://update.code.visualstudio.com/1.117.0/darwin-arm64/stable",
+            "sha256": "3628f084f3b634ad84ea86c4cd58a6022a9e89e8df5d5973ba2c83c1a8939ae5"
+          },
+          "macos-x86_64": {
+            "url": "https://update.code.visualstudio.com/1.117.0/darwin/stable",
+            "sha256": "a685653c1331465fcaff3c73d5d03f0afa51fb973117f2a761e826f7988ee5c5"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "warp",
+      "name": "Warp",
+      "kind": "cask",
+      "homepage": "https://www.warp.dev/",
+      "desc": "Rust-based terminal",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.warp.dev/",
+        "release_feed": "https://app.warp.dev/download/brew?version=v0.2026.04.22.08.46.stable_02",
+        "allow_domains": [
+          "app.warp.dev"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 40,
+        "cask_install_30d_count": "11,198"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Warp.app"
+        }
+      ],
+      "resolved": {
+        "version": "0.2026.04.22.08.46.stable_02",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://app.warp.dev/download/brew?version=v0.2026.04.22.08.46.stable_02",
+            "sha256": "1465a40110ba0ef9ea6ad34f9ff30902f020781f19cc60e39f2b274cb8dedf1d"
+          },
+          "macos-x86_64": {
+            "url": "https://app.warp.dev/download/brew?version=v0.2026.04.22.08.46.stable_02",
+            "sha256": "1465a40110ba0ef9ea6ad34f9ff30902f020781f19cc60e39f2b274cb8dedf1d"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "whatsapp",
+      "name": "WhatsApp",
+      "kind": "cask",
+      "homepage": "https://www.whatsapp.com/",
+      "desc": "Native desktop client for WhatsApp",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.whatsapp.com/",
+        "release_feed": "https://web.whatsapp.com/desktop/mac_native/release/?version=2.26.16.17&extension=zip&configuration=Release&branch=master&is_buck=true",
+        "allow_domains": [
+          "web.whatsapp.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 78,
+        "cask_install_30d_count": "5,803"
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "WhatsApp.app"
+        }
+      ],
+      "resolved": {
+        "version": "2.26.16.17",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://web.whatsapp.com/desktop/mac_native/release/?version=2.26.16.17&extension=zip&configuration=Release&branch=master&is_buck=true",
+            "sha256": "1f6fd10b5fff2f45cfa24a928377db58c281b255b06750d19a58355e1746c0ad"
+          },
+          "macos-x86_64": {
+            "url": "https://web.whatsapp.com/desktop/mac_native/release/?version=2.26.16.17&extension=zip&configuration=Release&branch=master&is_buck=true",
+            "sha256": "1f6fd10b5fff2f45cfa24a928377db58c281b255b06750d19a58355e1746c0ad"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "xquartz",
+      "name": "XQuartz",
+      "kind": "cask",
+      "homepage": "https://www.xquartz.org/",
+      "desc": "Open-source version of the X.Org X Window System",
+      "auto_updates": true,
+      "upstream": {
+        "type": "github_release",
+        "repo": "XQuartz/XQuartz",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 67,
+        "cask_install_30d_count": "7,117"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "{tag}.pkg"
+        },
+        "macos-x86_64": {
+          "pattern": "{tag}.pkg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "XQuartz-2.8.5.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "XQuartz-2.8.5",
+        "version": "2.8.5",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/XQuartz/XQuartz/releases/download/XQuartz-2.8.5/XQuartz-2.8.5.pkg",
+            "sha256": "e89538a134738dfa71d5b80f8e4658cb812e0803115a760629380b851b608782"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/XQuartz/XQuartz/releases/download/XQuartz-2.8.5/XQuartz-2.8.5.pkg",
+            "sha256": "e89538a134738dfa71d5b80f8e4658cb812e0803115a760629380b851b608782"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "anomalyco/tap/opencode",
+      "name": "opencode",
+      "kind": "formula",
+      "homepage": "https://github.com/anomalyco/opencode",
+      "desc": "The AI coding agent built for the terminal.",
+      "dependencies": [
+        "ripgrep"
+      ],
+      "upstream": {
+        "type": "github_release",
+        "repo": "anomalyco/opencode",
+        "verified": true
+      },
+      "analytics": {
+        "install_on_request_30d_rank": 11,
+        "install_on_request_30d_count": "164,609"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "opencode-darwin-arm64.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "opencode-darwin-x64.zip"
+        },
+        "linux-x86_64": {
+          "pattern": "opencode-linux-x64.tar.gz"
+        },
+        "linux-aarch64": {
+          "pattern": "opencode-linux-arm64.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "opencode"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.14.24",
+        "version": "1.14.24",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.24/opencode-darwin-arm64.zip",
+            "sha256": "5e61cbbd67d6ef8268e840aa031edf5a33f13d42812a39cdde1fb461ce7920a2"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.24/opencode-darwin-x64.zip",
+            "sha256": "7ccfaabc5d1e351bad2f5edef688465048ec9029b3e21ecc52fc54b8e08ae750"
+          },
+          "linux-x86_64": {
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.24/opencode-linux-x64.tar.gz",
+            "sha256": "2edfc17bad3ecba54ae1d9753cef9eca686fdd8a0b0f4b785f9209ee0fc8a6d2"
+          },
+          "linux-aarch64": {
+            "url": "https://github.com/anomalyco/opencode/releases/download/v1.14.24/opencode-linux-arm64.tar.gz",
+            "sha256": "304108f05063bd17ad6df62541b48e19980d8e36d5d507ae2ebf80920990c9a2"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "farion1231/ccswitch/cc-switch",
+      "name": "CC Switch",
+      "kind": "cask",
+      "homepage": "https://github.com/farion1231/cc-switch",
+      "desc": "Configuration manager for Claude Code, Codex, Gemini CLI, OpenCode and OpenClaw",
+      "upstream": {
+        "type": "github_release",
+        "repo": "farion1231/cc-switch",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 28,
+        "cask_install_30d_count": "16,197"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "CC-Switch-v{version}-macOS.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "CC-Switch-v{version}-macOS.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "CC Switch.app"
+        }
+      ],
+      "resolved": {
+        "tag": "v3.14.1",
+        "version": "3.14.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/farion1231/cc-switch/releases/download/v3.14.1/CC-Switch-v3.14.1-macOS.tar.gz",
+            "sha256": "c27774f9d67546807752b753df4c907ef77aceabf0a04ea2e46c396ac49de16b"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/farion1231/cc-switch/releases/download/v3.14.1/CC-Switch-v3.14.1-macOS.tar.gz",
+            "sha256": "c27774f9d67546807752b753df4c907ef77aceabf0a04ea2e46c396ac49de16b"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "hashicorp/tap/terraform",
+      "name": "terraform",
+      "kind": "formula",
+      "homepage": "https://www.terraform.io/",
+      "desc": "Terraform",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.terraform.io/",
+        "release_feed": "https://releases.hashicorp.com/terraform/1.14.9/",
+        "allow_domains": [
+          "releases.hashicorp.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "install_on_request_30d_rank": 55,
+        "install_on_request_30d_count": "38,616"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "terraform"
+        }
+      ],
+      "resolved": {
+        "version": "1.14.9",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_darwin_arm64.zip",
+            "sha256": "5bc0b11b7a63c8984a41d82523356df46f7833c2e9651a39a7f8919422de5cde"
+          },
+          "macos-x86_64": {
+            "url": "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_darwin_amd64.zip",
+            "sha256": "c15326e1af102d2767d40208a0157d1402057f80192991f56803b66457304cf3"
+          },
+          "linux-x86_64": {
+            "url": "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_linux_amd64.zip",
+            "sha256": "2e5cffc20a0b48a67a76268723bd5a10b8666f69b2aa4f04906e206726bedd63"
+          },
+          "linux-aarch64": {
+            "url": "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_linux_arm64.zip",
+            "sha256": "863002085b886453795d9ff4b8989b8468784478150b70ba8a1df3e3ad66da99"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "microsoft/git/microsoft-git",
+      "name": "Microsoft-fork of Git",
+      "kind": "cask",
+      "homepage": "https://github.com/microsoft/git",
+      "desc": "Microsoft fork of Git",
+      "upstream": {
+        "type": "github_release",
+        "repo": "microsoft/git",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 19,
+        "cask_install_30d_count": "21,732"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "git-{version}-universal.pkg"
+        },
+        "macos-x86_64": {
+          "pattern": "git-{version}-universal.pkg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "git-2.53.0.vfs.0.7-universal.pkg"
+        }
+      ],
+      "resolved": {
+        "tag": "v2.53.0.vfs.0.7",
+        "version": "2.53.0.vfs.0.7",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/microsoft/git/releases/download/v2.53.0.vfs.0.7/git-2.53.0.vfs.0.7-universal.pkg",
+            "sha256": "4f2af04d3bfbf79580f9e82ef0244a1ec3e349a36e31d4614d76086d2ab7f89c"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/microsoft/git/releases/download/v2.53.0.vfs.0.7/git-2.53.0.vfs.0.7-universal.pkg",
+            "sha256": "4f2af04d3bfbf79580f9e82ef0244a1ec3e349a36e31d4614d76086d2ab7f89c"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "ngrok/ngrok/ngrok",
+      "name": "ngrok",
+      "kind": "cask",
+      "homepage": "https://ngrok.com/",
+      "desc": "Reverse proxy, secure introspectable tunnels to localhost",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://ngrok.com/",
+        "release_feed": "https://bin.ngrok.com/a/7EMiwS51we7/ngrok-v3-3.38.0-darwin-arm64.zip",
+        "allow_domains": [
+          "bin.ngrok.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 44,
+        "cask_install_30d_count": "10,621"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "ngrok"
+        }
+      ],
+      "resolved": {
+        "version": "3.38.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://bin.ngrok.com/a/7EMiwS51we7/ngrok-v3-3.38.0-darwin-arm64.zip",
+            "sha256": "02035c72c8af47a680db9aeaa40c41c18303074ba470fd721b941d2ee9fc532a"
+          },
+          "macos-x86_64": {
+            "url": "https://bin.ngrok.com/a/kTApLwEXM1k/ngrok-v3-3.38.0-darwin-amd64.zip",
+            "sha256": "3c213892aa993dbc8b8b51f464af7414171631ecc540f71df3a5f35d4c9b12e9"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "nikitabobko/tap/aerospace",
+      "name": "AeroSpace",
+      "kind": "cask",
+      "homepage": "https://github.com/nikitabobko/AeroSpace",
+      "desc": "i3-like tiling window manager for macOS",
+      "upstream": {
+        "type": "github_release",
+        "repo": "nikitabobko/AeroSpace",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 89,
+        "cask_install_30d_count": "5,261"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "AeroSpace-v{version}.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "AeroSpace-v{version}.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "AeroSpace-v0.20.3-Beta/AeroSpace.app"
+        },
+        {
+          "type": "binary",
+          "path": "AeroSpace-v0.20.3-Beta/bin/aerospace"
+        }
+      ],
+      "resolved": {
+        "tag": "v0.20.3-Beta",
+        "version": "0.20.3-Beta",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/nikitabobko/AeroSpace/releases/download/v0.20.3-Beta/AeroSpace-v0.20.3-Beta.zip",
+            "sha256": "9d6cc269b773cbcb392623982c4f0ba585a68120b6bb1d179fec1cb4de8e374f"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/nikitabobko/AeroSpace/releases/download/v0.20.3-Beta/AeroSpace-v0.20.3-Beta.zip",
+            "sha256": "9d6cc269b773cbcb392623982c4f0ba585a68120b6bb1d179fec1cb4de8e374f"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "norwoodj/tap/helm-docs",
+      "name": "helm-docs",
+      "kind": "formula",
+      "homepage": "https://github.com/norwoodj/helm-docs",
+      "desc": "Automatically generate markdown documentation for helm charts",
+      "upstream": {
+        "type": "github_release",
+        "repo": "norwoodj/helm-docs",
+        "verified": true
+      },
+      "analytics": {
+        "install_on_request_30d_rank": 73,
+        "install_on_request_30d_count": "31,316"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "helm-docs_{version}_Darwin_arm64.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "helm-docs_{version}_Darwin_x86_64.tar.gz"
+        },
+        "linux-x86_64": {
+          "pattern": "helm-docs_{version}_Linux_x86_64.tar.gz"
+        },
+        "linux-aarch64": {
+          "pattern": "helm-docs_{version}_Linux_arm64.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "helm-docs"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.14.2",
+        "version": "1.14.2",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Darwin_arm64.tar.gz",
+            "sha256": "2d8399db5b33d240d5f8985241bcf5483563150b968e3229823822979f3e4b8b"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Darwin_x86_64.tar.gz",
+            "sha256": "b2f1ffd0feef8dc0901a38a2053481d1d67b63ca30da4ac774166c6b52fa2245"
+          },
+          "linux-x86_64": {
+            "url": "https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz",
+            "sha256": "a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"
+          },
+          "linux-aarch64": {
+            "url": "https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_arm64.tar.gz",
+            "sha256": "c3787212332386dcd122debef7848feb165aa701467ae3e3442df7638f3ac4e4"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "sikarugir-app/sikarugir/sikarugir",
+      "name": "Sikarugir Creator",
+      "kind": "cask",
+      "homepage": "https://github.com/Sikarugir-App",
+      "desc": "Porting tool, to make Windows programs/games into native apps",
+      "upstream": {
+        "type": "github_release",
+        "repo": "Sikarugir-App/Creator",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 85,
+        "cask_install_30d_count": "5,450"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "Creator-v{version}.tar.xz"
+        },
+        "macos-x86_64": {
+          "pattern": "Creator-v{version}.tar.xz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Sikarugir Creator.app"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.0.1",
+        "version": "1.0.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/Sikarugir-App/Creator/releases/download/v1.0.1/Creator-v1.0.1.tar.xz",
+            "sha256": "187825e4e6bf96f294cf9ccb65e53049432b3ee2925480e8ad1cbca12a96e819"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/Sikarugir-App/Creator/releases/download/v1.0.1/Creator-v1.0.1.tar.xz",
+            "sha256": "187825e4e6bf96f294cf9ccb65e53049432b3ee2925480e8ad1cbca12a96e819"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "steipete/tap/codexbar",
+      "name": "CodexBar",
+      "kind": "cask",
+      "homepage": "https://codexbar.app/",
+      "desc": "Menu bar usage monitor for Codex and Claude",
+      "auto_updates": false,
+      "upstream": {
+        "type": "github_release",
+        "repo": "steipete/CodexBar",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 22,
+        "cask_install_30d_count": "19,210"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "CodexBar-{version}.zip"
+        },
+        "macos-x86_64": {
+          "pattern": "CodexBar-{version}.zip"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "CodexBar.app"
+        },
+        {
+          "type": "binary",
+          "path": "$APPDIR/CodexBar.app/Contents/Helpers/CodexBarCLI",
+          "target": "codexbar"
+        }
+      ],
+      "resolved": {
+        "tag": "v0.22",
+        "version": "0.22",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/steipete/CodexBar/releases/download/v0.22/CodexBar-0.22.zip",
+            "sha256": "112d5f427ab39674c122fd89509d22af39f40bf7e01f42c4d9ed7058112e875f"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/steipete/CodexBar/releases/download/v0.22/CodexBar-0.22.zip",
+            "sha256": "112d5f427ab39674c122fd89509d22af39f40bf7e01f42c4d9ed7058112e875f"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "steipete/tap/gogcli",
+      "name": "gogcli",
+      "kind": "formula",
+      "homepage": "https://github.com/steipete/gogcli",
+      "desc": "Google CLI for Gmail, Calendar, Drive, Docs, Sheets, and more",
+      "upstream": {
+        "type": "github_release",
+        "repo": "steipete/gogcli",
+        "verified": true
+      },
+      "analytics": {
+        "install_on_request_30d_rank": 75,
+        "install_on_request_30d_count": "30,714"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "gogcli_{version}_darwin_arm64.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "gogcli_{version}_darwin_amd64.tar.gz"
+        },
+        "linux-x86_64": {
+          "pattern": "gogcli_{version}_linux_amd64.tar.gz"
+        },
+        "linux-aarch64": {
+          "pattern": "gogcli_{version}_linux_arm64.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "gog",
+          "target": "gog"
+        }
+      ],
+      "resolved": {
+        "tag": "v0.13.0",
+        "version": "0.13.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/steipete/gogcli/releases/download/v0.13.0/gogcli_0.13.0_darwin_arm64.tar.gz",
+            "sha256": "7c6f650f7516323ddd003e4ababf998fc1d2c73089a4662b8c79bf80ac4bdf56"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/steipete/gogcli/releases/download/v0.13.0/gogcli_0.13.0_darwin_amd64.tar.gz",
+            "sha256": "15c88798d25cb2e1870cafa5df232601f3a05472a134ca8c396be907f2b235f6"
+          },
+          "linux-x86_64": {
+            "url": "https://github.com/steipete/gogcli/releases/download/v0.13.0/gogcli_0.13.0_linux_amd64.tar.gz",
+            "sha256": "a1fe25c47cc3297c6695d61c1b0b3abb7e88634b11e86d77bc0d930377287e3d"
+          },
+          "linux-aarch64": {
+            "url": "https://github.com/steipete/gogcli/releases/download/v0.13.0/gogcli_0.13.0_linux_arm64.tar.gz",
+            "sha256": "1e8af1a03c299855a4e968b72faabefef230f7aee37d2bf366ae92f2e19292d4"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "warrensbox/tap/tfswitch",
+      "name": "tfswitch",
+      "kind": "cask",
+      "homepage": "https://warrensbox.github.io/terraform-switcher",
+      "desc": "The tfswitch command lets you switch between terraform versions.",
+      "upstream": {
+        "type": "github_release",
+        "repo": "warrensbox/terraform-switcher",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 46,
+        "cask_install_30d_count": "10,230"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "terraform-switcher_v{version}_darwin_arm64.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "terraform-switcher_v{version}_darwin_amd64.tar.gz"
+        },
+        "linux-x86_64": {
+          "pattern": "terraform-switcher_v{version}_linux_amd64.tar.gz"
+        },
+        "linux-aarch64": {
+          "pattern": "terraform-switcher_v{version}_linux_arm64.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "tfswitch"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.17.1",
+        "version": "1.17.1",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/warrensbox/terraform-switcher/releases/download/v1.17.1/terraform-switcher_v1.17.1_darwin_arm64.tar.gz",
+            "sha256": "227405a63ee110229471875b0f1af068f895f733ad70ef37488e6671555f8fde"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/warrensbox/terraform-switcher/releases/download/v1.17.1/terraform-switcher_v1.17.1_darwin_amd64.tar.gz",
+            "sha256": "c2fd58c1cc535f0e34a8b6c1eb2082be550e4cecce9b3f615c60de58f8fcf7cc"
+          },
+          "linux-x86_64": {
+            "url": "https://github.com/warrensbox/terraform-switcher/releases/download/v1.17.1/terraform-switcher_v1.17.1_linux_amd64.tar.gz",
+            "sha256": "a8cefb741ef3edfb8bbe8cf2ae6198904ebf45c7f60f157dbcfef63cc8af601a"
+          },
+          "linux-aarch64": {
+            "url": "https://github.com/warrensbox/terraform-switcher/releases/download/v1.17.1/terraform-switcher_v1.17.1_linux_arm64.tar.gz",
+            "sha256": "0157eb1e916237ec6fd797065a74499ae090746639fe34aee6c10aa55e6edd82"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "wine-stable",
+      "name": "Wine Stable",
+      "kind": "cask",
+      "homepage": "https://wiki.winehq.org/MacOS",
+      "desc": "Compatibility layer to run Windows applications",
+      "upstream": {
+        "type": "github_release",
+        "repo": "Gcenx/macOS_Wine_builds",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 53,
+        "cask_install_30d_count": "9,146"
+      },
+      "assets": {
+        "macos-x86_64": {
+          "pattern": "wine-stable-{version}-osx64.tar.xz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Wine Stable.app"
+        }
+      ],
+      "resolved": {
+        "tag": "11.0_1",
+        "version": "11.0_1",
+        "assets": {
+          "macos-x86_64": {
+            "url": "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.0_1/wine-stable-11.0_1-osx64.tar.xz",
+            "sha256": "b50dc50ec7f41d58b115a6b685d4d1315ba3c797bd3aa0f49213f2703cb82388"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "wix/brew/applesimutils",
+      "name": "applesimutils",
+      "kind": "formula",
+      "homepage": "https://github.com/wix/AppleSimulatorUtils",
+      "desc": "Apple simulator utilities",
+      "upstream": {
+        "type": "homebrew_bottle",
+        "verified": true
+      },
+      "analytics": {
+        "install_on_request_30d_rank": 89,
+        "install_on_request_30d_count": "28,852"
+      },
+      "resolved": {
+        "version": "0.9.12",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/wix/AppleSimulatorUtils/releases/download/0.9.12/applesimutils-0.9.12.arm64_big_sur.bottle.tar.gz",
+            "sha256": "3373d85ea6051e77865b0a22960eb0b5d63f3126c7c99232d0b6b9c83ee2c133"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/wix/AppleSimulatorUtils/releases/download/0.9.12/applesimutils-0.9.12.big_sur.bottle.tar.gz",
+            "sha256": "3373d85ea6051e77865b0a22960eb0b5d63f3126c7c99232d0b6b9c83ee2c133"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "xdevplatform/tap/xurl",
+      "name": "xurl",
+      "kind": "cask",
+      "homepage": "https://github.com/xdevplatform/xurl",
+      "desc": "Auth-enabled curl-like CLI for the X API",
+      "upstream": {
+        "type": "github_release",
+        "repo": "xdevplatform/xurl",
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 23,
+        "cask_install_30d_count": "18,082"
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "xurl_Darwin_arm64.tar.gz"
+        },
+        "macos-x86_64": {
+          "pattern": "xurl_Darwin_x86_64.tar.gz"
+        },
+        "linux-x86_64": {
+          "pattern": "xurl_Linux_x86_64.tar.gz"
+        },
+        "linux-aarch64": {
+          "pattern": "xurl_Linux_arm64.tar.gz"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "xurl"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.1.0",
+        "version": "1.1.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/xdevplatform/xurl/releases/download/v1.1.0/xurl_Darwin_arm64.tar.gz",
+            "sha256": "8712992f96cc6ad5e052419f3dadd4d6d14f413c1bea6d4417dc4d60e4d3886e"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/xdevplatform/xurl/releases/download/v1.1.0/xurl_Darwin_x86_64.tar.gz",
+            "sha256": "45e28179ceaaa8eb3e44cc799f10cd393b956e3a4f13fd2166cce47a716fc3aa"
+          },
+          "linux-x86_64": {
+            "url": "https://github.com/xdevplatform/xurl/releases/download/v1.1.0/xurl_Linux_x86_64.tar.gz",
+            "sha256": "257d12ea177e3bfb60212045c2dfc61dec7aab67099609abf07a7de5aed41f3b"
+          },
+          "linux-aarch64": {
+            "url": "https://github.com/xdevplatform/xurl/releases/download/v1.1.0/xurl_Linux_arm64.tar.gz",
+            "sha256": "f97351b9d002c2c6622684e6ef98d4259a74d84127453f1bfe07ebc607b24c22"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "microsoft-teams",
+      "name": "Microsoft Teams",
+      "kind": "cask",
+      "homepage": "https://www.microsoft.com/en/microsoft-teams/group-chat-software/",
+      "desc": "Meet, chat, call, and collaborate in just one place",
+      "auto_updates": true,
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.microsoft.com/en/microsoft-teams/group-chat-software/",
+        "release_feed": "https://statics.teams.cdn.office.net/production-osx/26072.608.4595.8484/MicrosoftTeams.pkg",
+        "allow_domains": [
+          "statics.teams.cdn.office.net"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 100,
+        "cask_install_30d_count": "4,724"
+      },
+      "artifacts": [
+        {
+          "type": "pkg",
+          "path": "MicrosoftTeams.pkg"
+        }
+      ],
+      "resolved": {
+        "version": "26072.608.4595.8484",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://statics.teams.cdn.office.net/production-osx/26072.608.4595.8484/MicrosoftTeams.pkg",
+            "sha256": "24f75f9884416e726ce31e964758b3625e8d5d714aa05f175bcd75c2345172ee"
+          },
+          "macos-x86_64": {
+            "url": "https://statics.teams.cdn.office.net/production-osx/26072.608.4595.8484/MicrosoftTeams.pkg",
+            "sha256": "24f75f9884416e726ce31e964758b3625e8d5d714aa05f175bcd75c2345172ee"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
     }
   ]
 }
