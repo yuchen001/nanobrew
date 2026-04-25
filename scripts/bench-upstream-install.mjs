@@ -166,6 +166,7 @@ async function main() {
     cold: opts.cold,
     upstream_registry_url: opts.upstreamRegistryUrl || null,
     upstream_registry_cache: opts.upstreamRegistryCache || null,
+    summary: summarize(rows),
     rows,
     skipped,
   };
@@ -303,6 +304,31 @@ function splitList(value) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function summarize(rows) {
+  const measured = rows.filter((row) =>
+    Number.isFinite(row.upstream_median_ms) &&
+    Number.isFinite(row.homebrew_median_ms) &&
+    row.upstream_median_ms > 0 &&
+    row.homebrew_median_ms > 0);
+  const upstreamTotal = measured.reduce((sum, row) => sum + row.upstream_median_ms, 0);
+  const homebrewTotal = measured.reduce((sum, row) => sum + row.homebrew_median_ms, 0);
+  const speedups = measured.map((row) => row.homebrew_median_ms / row.upstream_median_ms);
+  const averageSpeedup = speedups.length > 0
+    ? speedups.reduce((sum, value) => sum + value, 0) / speedups.length
+    : null;
+  return {
+    measured_count: measured.length,
+    faster_count: measured.filter((row) => row.homebrew_median_ms > row.upstream_median_ms).length,
+    upstream_total_ms: round(upstreamTotal),
+    homebrew_total_ms: round(homebrewTotal),
+    total_delta_ms: round(homebrewTotal - upstreamTotal),
+    weighted_speedup: upstreamTotal > 0 ? Number((homebrewTotal / upstreamTotal).toFixed(2)) : null,
+    average_speedup: averageSpeedup == null ? null : Number(averageSpeedup.toFixed(2)),
+    min_speedup: speedups.length > 0 ? Number(Math.min(...speedups).toFixed(2)) : null,
+    max_speedup: speedups.length > 0 ? Number(Math.max(...speedups).toFixed(2)) : null,
+  };
+}
+
 function printHuman(result) {
   const cacheLabel = result.cold ? "cold package cache" : "warm cache";
   console.log(`nb install benchmark (${result.kind}, ${result.iterations} iteration(s), ${cacheLabel})`);
@@ -319,6 +345,9 @@ function printHuman(result) {
     }
   }
   if (result.rows.length === 0) return;
+  if (result.summary.measured_count > 0) {
+    console.log(`summary\tmeasured=${result.summary.measured_count}\tfaster=${result.summary.faster_count}\tweighted=${result.summary.weighted_speedup}x\tavg=${result.summary.average_speedup}x\tdelta_ms=${result.summary.total_delta_ms}`);
+  }
   console.log("token\tkind\tupstream_ms\thomebrew_ms\tdelta_ms\tspeedup");
   for (const row of result.rows) {
     console.log(`${row.token}\t${row.kind}\t${row.upstream_median_ms}\t${row.homebrew_median_ms}\t${row.delta_ms}\t${row.speedup}x`);

@@ -502,27 +502,12 @@ fn installFastCaskArtifact(
 ) !bool {
     switch (format) {
         .zip => {
-            if (zipAppBundleArtifact(&cask)) |app_name| {
-                installZipAppBundleDirect(alloc, io, &cask, archive_path, app_name) catch |err| switch (err) {
-                    error.UnsafePath => return err,
-                    else => return false,
-                };
-                return true;
-            }
-            if (fontArtifactsOnly(&cask)) {
-                installZipFontsDirect(alloc, io, &cask, archive_path) catch |err| switch (err) {
-                    error.UnsafePath => return err,
-                    else => return false,
-                };
-                return true;
-            }
-            if (singleBinaryArtifact(&cask)) |bin| {
-                installArchivedBinaryDirect(alloc, io, format, archive_path, caskroom_path, bin.source, bin.target) catch |err| switch (err) {
-                    error.UnsafePath => return err,
-                    else => return false,
-                };
-                return true;
-            }
+            return installFastZipArtifact(alloc, io, cask, archive_path, caskroom_path);
+        },
+        .unknown => {
+            // Some vendor URLs hide a ZIP payload behind extensionless URLs.
+            // Probe the ZIP fast paths before the slower dmg-then-zip fallback.
+            return installFastZipArtifact(alloc, io, cask, archive_path, caskroom_path);
         },
         .tar_gz, .tar_xz => {
             if (singleBinaryArtifact(&cask)) |bin| {
@@ -534,6 +519,37 @@ fn installFastCaskArtifact(
             }
         },
         else => {},
+    }
+    return false;
+}
+
+fn installFastZipArtifact(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    cask: Cask,
+    archive_path: []const u8,
+    caskroom_path: []const u8,
+) !bool {
+    if (zipAppBundleArtifact(&cask)) |app_name| {
+        installZipAppBundleDirect(alloc, io, &cask, archive_path, app_name) catch |err| switch (err) {
+            error.UnsafePath => return err,
+            else => return false,
+        };
+        return true;
+    }
+    if (fontArtifactsOnly(&cask)) {
+        installZipFontsDirect(alloc, io, &cask, archive_path) catch |err| switch (err) {
+            error.UnsafePath => return err,
+            else => return false,
+        };
+        return true;
+    }
+    if (singleBinaryArtifact(&cask)) |bin| {
+        installArchivedBinaryDirect(alloc, io, .zip, archive_path, caskroom_path, bin.source, bin.target) catch |err| switch (err) {
+            error.UnsafePath => return err,
+            else => return false,
+        };
+        return true;
     }
     return false;
 }
@@ -634,14 +650,13 @@ fn installZipAppDirect(
         return error.UnsafePath;
     }
 
-    try ensureZipSafe(alloc, io, zip_path);
-
     var dst_buf: [512]u8 = undefined;
     const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{std.fs.path.basename(app_name)}) catch return error.PathTooLong;
     std.Io.Dir.cwd().deleteTree(io, dst) catch {};
 
     const pattern = try std.fmt.allocPrint(alloc, "{s}/*", .{app_name});
     defer alloc.free(pattern);
+    try ensureZipPatternSafe(alloc, io, zip_path, pattern);
 
     const result = std.process.run(alloc, io, .{
         .argv = &.{ "unzip", "-o", "-q", zip_path, pattern, "-d", "/Applications" },
@@ -650,7 +665,10 @@ fn installZipAppDirect(
     }) catch return error.ExtractFailed;
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
-    if (switch (result.term) { .exited => |code| code != 0, else => true }) return error.ExtractFailed;
+    if (switch (result.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return error.ExtractFailed;
 
     if (comptime builtin.os.tag == .macos) {
         clearQuarantineIfPresent(alloc, io, dst, true);
@@ -672,7 +690,7 @@ fn installZipFontsDirect(
     for (cask.artifacts) |artifact| {
         switch (artifact) {
             .font => |font_path| {
-                if (!safeRelativePath(font_path)) return error.UnsafePath;
+                if (!safeArchiveMemberPath(font_path)) return error.UnsafePath;
             },
             else => {},
         }
@@ -712,7 +730,10 @@ fn installZipFontsDirect(
     }) catch return error.ExtractFailed;
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
-    if (switch (result.term) { .exited => |code| code != 0, else => true }) return error.ExtractFailed;
+    if (switch (result.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return error.ExtractFailed;
 }
 
 fn linkAppBundleBinary(
@@ -747,6 +768,7 @@ fn installArchivedBinaryDirect(
     target: []const u8,
 ) !void {
     if (!safeRelativePath(source_path) or
+        !safeArchiveMemberPath(source_path) or
         std.mem.indexOf(u8, target, "..") != null or
         std.mem.indexOfScalar(u8, target, '/') != null)
     {
@@ -765,15 +787,13 @@ fn installArchivedBinaryDirect(
 }
 
 fn extractArchiveMemberToFile(
-    alloc: std.mem.Allocator,
+    _: std.mem.Allocator,
     io: std.Io,
     format: DownloadFormat,
     archive_path: []const u8,
     member_path: []const u8,
     dst_path: []const u8,
 ) !void {
-    if (format == .zip) try ensureZipSafe(alloc, io, archive_path);
-
     var out = std.Io.Dir.createFileAbsolute(io, dst_path, .{ .permissions = .executable_file }) catch return error.ExtractFailed;
     defer out.close(io);
 
@@ -793,7 +813,10 @@ fn extractArchiveMemberToFile(
     defer child.kill(io);
 
     const term = child.wait(io) catch return error.ExtractFailed;
-    if (switch (term) { .exited => |code| code != 0, else => true }) {
+    if (switch (term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) {
         std.Io.Dir.deleteFileAbsolute(io, dst_path) catch {};
         return error.ExtractFailed;
     }
@@ -813,7 +836,10 @@ fn clearQuarantineIfPresent(alloc: std.mem.Allocator, io: std.Io, path: []const 
     }) catch return;
     defer alloc.free(check.stdout);
     defer alloc.free(check.stderr);
-    if (switch (check.term) { .exited => |code| code != 0, else => true }) return;
+    if (switch (check.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return;
 
     const argv: []const []const u8 = if (recursive)
         &.{ "xattr", "-dr", "com.apple.quarantine", path }
@@ -834,6 +860,11 @@ fn safeRelativePath(path: []const u8) bool {
         std.mem.indexOf(u8, path, "..") == null;
 }
 
+fn safeArchiveMemberPath(path: []const u8) bool {
+    return safeRelativePath(path) and
+        std.mem.indexOfAny(u8, path, "*?[\\") == null;
+}
+
 fn expandInstallPath(alloc: std.mem.Allocator, value: []const u8) ![]u8 {
     if (std.mem.startsWith(u8, value, "$HOMEBREW_PREFIX/")) {
         return std.fmt.allocPrint(alloc, "{s}/{s}", .{ PREFIX, value["$HOMEBREW_PREFIX/".len..] });
@@ -850,13 +881,19 @@ fn copyPath(alloc: std.mem.Allocator, io: std.Io, src: []const u8, dst: []const 
     const mkdir = try std.process.run(alloc, io, .{ .argv = &.{ "mkdir", "-p", parent } });
     defer alloc.free(mkdir.stdout);
     defer alloc.free(mkdir.stderr);
-    if (switch (mkdir.term) { .exited => |c| c != 0, else => true }) return error.CopyFailed;
+    if (switch (mkdir.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.CopyFailed;
 
     std.Io.Dir.cwd().deleteTree(io, dst) catch {};
     const cp = try std.process.run(alloc, io, .{ .argv = &.{ "cp", "-R", src, dst } });
     defer alloc.free(cp.stdout);
     defer alloc.free(cp.stderr);
-    if (switch (cp.term) { .exited => |c| c != 0, else => true }) return error.CopyFailed;
+    if (switch (cp.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.CopyFailed;
 }
 
 fn copyGenericArtifact(
@@ -911,7 +948,10 @@ fn runInstallerScript(
     const result = try std.process.run(alloc, io, .{ .argv = argv });
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.InstallerFailed;
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.InstallerFailed;
 }
 
 fn extractZip(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, dest: []const u8) !void {
@@ -952,25 +992,41 @@ fn extractZip(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, dest: 
 }
 
 fn ensureZipSafe(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8) !void {
-    // Pre-list ZIP contents and check for path traversal
+    try ensureZipEntriesSafe(alloc, io, &.{ "unzip", "-Z1", zip_path });
+}
+
+fn ensureZipPatternSafe(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, pattern: []const u8) !void {
+    try ensureZipEntriesSafe(alloc, io, &.{ "unzip", "-Z1", zip_path, pattern });
+}
+
+fn ensureZipEntriesSafe(alloc: std.mem.Allocator, io: std.Io, argv: []const []const u8) !void {
+    // Pre-list selected ZIP contents and check for path traversal.
     const list_result = std.process.run(alloc, io, .{
-        .argv = &.{ "unzip", "-l", zip_path },
+        .argv = argv,
         .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(16 * 1024),
     }) catch return error.ExtractFailed;
     defer alloc.free(list_result.stdout);
     defer alloc.free(list_result.stderr);
+    if (switch (list_result.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return error.ExtractFailed;
 
-    // Scan listed paths for traversal sequences ("../" or "/..")
+    var saw_entry = false;
     var lines = std.mem.splitScalar(u8, list_result.stdout, '\n');
     while (lines.next()) |line| {
-        const trimmed = std.mem.trimEnd(u8, std.mem.trimStart(u8, line, " "), " \r");
+        const trimmed = std.mem.trim(u8, line, " \r\t");
         if (trimmed.len == 0) continue;
-        if (std.mem.indexOf(u8, trimmed, "../") != null or
+        saw_entry = true;
+        if (std.mem.startsWith(u8, trimmed, "/") or
+            std.mem.indexOf(u8, trimmed, "../") != null or
             std.mem.indexOf(u8, trimmed, "/..") != null)
         {
             return error.UnsafePath;
         }
     }
+    if (!saw_entry) return error.ExtractFailed;
 }
 
 fn extractTarGz(alloc: std.mem.Allocator, io: std.Io, tar_path: []const u8, dest: []const u8) !void {

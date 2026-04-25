@@ -28,7 +28,7 @@ on:
       cask_tokens:
         description: "Comma-separated cask tokens for actual install benchmarks"
         required: false
-        default: "font-hack-nerd-font"
+        default: "iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,warp,firefox,google-chrome,brave-browser,orbstack"
       cask_iterations:
         description: "Timed install runs per cask/mode"
         required: false
@@ -170,6 +170,24 @@ jobs:
             --cold \
             --json > upstream-install-bench-formula.json
 
+      - name: Summarize formula benchmark
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync("upstream-install-bench-formula.json", "utf8"));
+          const lines = [
+            "### Formula install benchmark",
+            "",
+            `measured: ${result.summary.measured_count}, faster: ${result.summary.faster_count}, weighted speedup: ${result.summary.weighted_speedup}x, average speedup: ${result.summary.average_speedup}x`,
+            "",
+            "| token | upstream | Homebrew metadata | speedup |",
+            "|---|---:|---:|---:|",
+            ...result.rows.map((row) => `| \`${row.token}\` | ${row.upstream_median_ms}ms | ${row.homebrew_median_ms}ms | ${row.speedup}x |`),
+            "",
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          NODE
+
       - name: Generate upstream coverage report
         run: node scripts/upstream-coverage-report.mjs --top 100 --json > upstream-coverage.json
 
@@ -223,12 +241,30 @@ jobs:
         run: |
           scripts/bench-upstream-install.mjs \
             --kind cask \
-            --tokens "${{ inputs.cask_tokens || 'font-hack-nerd-font' }}" \
+            --tokens "${{ inputs.cask_tokens || 'iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,warp,firefox,google-chrome,brave-browser,orbstack' }}" \
             --iterations "${{ inputs.cask_iterations || '2' }}" \
             --order "${{ inputs.cask_order || 'alternating' }}" \
             --cold \
             --allow-casks \
             --json > upstream-install-bench-cask.json
+
+      - name: Summarize cask benchmark
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync("upstream-install-bench-cask.json", "utf8"));
+          const lines = [
+            "### Cask install benchmark",
+            "",
+            `measured: ${result.summary.measured_count}, faster: ${result.summary.faster_count}, weighted speedup: ${result.summary.weighted_speedup}x, average speedup: ${result.summary.average_speedup}x`,
+            "",
+            "| token | upstream | Homebrew metadata | speedup |",
+            "|---|---:|---:|---:|",
+            ...result.rows.map((row) => `| \`${row.token}\` | ${row.upstream_median_ms}ms | ${row.homebrew_median_ms}ms | ${row.speedup}x |`),
+            "",
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          NODE
 
       - name: Upload cask benchmark artifacts
         uses: actions/upload-artifact@v4
