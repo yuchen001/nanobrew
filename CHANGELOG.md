@@ -13,6 +13,7 @@ All notable changes to nanobrew are documented here.
 ### Performance
 - **Native upstream formula installs are faster for self-contained binaries** — cold package-cache install benchmarks show `actionlint` installing in 728 ms through verified upstream vs 4665 ms through Homebrew fallback (6.41x faster), and `fd` in 623 ms vs 1703 ms (2.74x faster).
 - **Verified source archive cache** — source-archive installs now reuse an existing cached archive when its SHA256 matches the resolved metadata, avoiding repeated downloads for verified upstream formula reinstalls.
+- **Warm upstream binary reinstalls use the fast snapshot path** — verified upstream binary formulae now save and restore relocated keg snapshots keyed by source SHA256, and cache their tiny resolved formula metadata per registry channel. Warm beta-registry reinstall benchmarks improved from `fd` losing to Homebrew (118 ms vs 22 ms) to `fd` slightly ahead (19.64 ms vs 21.45 ms), while `actionlint` improved to 19.74 ms vs 153.79 ms.
 
 ### Changed
 - **Upstream registry scaling direction** — documented the speed-first registry shape: hosted resolved install locks, Zig local caching, and fallback to live metadata only when a token is not covered.

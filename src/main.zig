@@ -820,6 +820,28 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
     const is_source_build = f.bottle_url.len == 0 and f.source_url.len > 0;
 
     if (is_source_build) {
+        const source_cache_key = if (f.install_binaries.len > 0 and nb.store.isValidSha256(f.source_sha256)) f.source_sha256 else "";
+        fast: {
+            if (source_cache_key.len == 0) break :fast;
+            if (!nb.store.hasRelocatedEntry(source_cache_key)) break :fast;
+            var fv_buf: [256]u8 = undefined;
+            const fv = f.effectiveVersion(&fv_buf);
+            phase.store(@intFromEnum(Phase.installing), .release);
+            nb.store.materializeFromRelocated(source_cache_key, f.name, fv) catch break :fast;
+            phase.store(@intFromEnum(Phase.linking), .release);
+            nb.linker.linkKeg(f.name, fv) catch |err| {
+                stderr.print("nb: {s}: link failed: {}\n", .{ f.name, err }) catch {};
+                had_error.store(true, .release);
+                phase.store(@intFromEnum(Phase.failed), .release);
+                return;
+            };
+            nb.postinstall.runPostInstall(alloc, f) catch |err| {
+                stderr.print("nb: {s}: post-install warning: {}\n", .{ f.name, err }) catch {};
+            };
+            phase.store(@intFromEnum(Phase.done), .release);
+            return;
+        }
+
         // Source build path: download + compile from source
         phase.store(@intFromEnum(Phase.downloading), .release);
         nb.source_builder.buildFromSource(alloc, g_io, f) catch |err| {
@@ -903,7 +925,11 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
     //     sealed-resource signature matches the final on-disk state.
     platform.relocate.sealKegBundles(alloc, g_io, f.name, actual_ver);
     // Save post-relocation snapshot so future reinstalls skip steps 4/4b/4c (~1500ms → ~10ms)
-    nb.store.saveRelocatedEntry(f.bottle_sha256, f.name, actual_ver) catch {};
+    const relocated_cache_key = if (is_source_build and f.install_binaries.len > 0 and nb.store.isValidSha256(f.source_sha256))
+        f.source_sha256
+    else
+        f.bottle_sha256;
+    nb.store.saveRelocatedEntry(relocated_cache_key, f.name, actual_ver) catch {};
 
     // 5. Link binaries
     phase.store(@intFromEnum(Phase.linking), .release);

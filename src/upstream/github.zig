@@ -32,11 +32,15 @@ pub fn fetchCask(alloc: std.mem.Allocator, token: []const u8) !Cask {
 }
 
 pub fn fetchFormula(alloc: std.mem.Allocator, token: []const u8) !Formula {
+    if (readCachedFormula(alloc, token)) |formula| return formula;
+
     const registry = try registry_mod.loadRegistry(alloc);
     defer registry.deinit(alloc);
 
     const record = registry.find(token, .formula) orelse return error.UpstreamRecordNotFound;
-    return fetchFormulaFromRecord(alloc, record);
+    const formula = try fetchFormulaFromRecord(alloc, record);
+    writeCachedFormula(token, &formula);
+    return formula;
 }
 
 pub fn fetchFormulaFromRecord(alloc: std.mem.Allocator, record: *const registry_mod.Record) !Formula {
@@ -533,6 +537,168 @@ fn readCachedFile(alloc: std.mem.Allocator, path: []const u8) ?[]u8 {
         return trimmed;
     }
     return buf;
+}
+
+fn readCachedFormula(alloc: std.mem.Allocator, token: []const u8) ?Formula {
+    return readCachedFormulaInner(alloc, token) catch null;
+}
+
+fn readCachedFormulaInner(alloc: std.mem.Allocator, token: []const u8) !Formula {
+    var path_buf: [512]u8 = undefined;
+    const cache_path = try upstreamFormulaCachePath(token, &path_buf);
+    const body = readCachedFile(alloc, cache_path) orelse return error.CacheMiss;
+    defer alloc.free(body);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc, body, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidField;
+    const root = parsed.value.object;
+    if (!std.mem.eql(u8, getStr(root, "token") orelse "", token)) return error.InvalidField;
+    if (!std.mem.eql(u8, getStr(root, "registry_channel") orelse "", currentRegistryChannel())) return error.InvalidField;
+
+    const name = try alloc.dupe(u8, getStr(root, "name") orelse token);
+    errdefer alloc.free(name);
+    const version = try alloc.dupe(u8, getStr(root, "version") orelse "");
+    errdefer alloc.free(version);
+    const desc = try alloc.dupe(u8, getStr(root, "desc") orelse "");
+    errdefer alloc.free(desc);
+    const homepage = try alloc.dupe(u8, getStr(root, "homepage") orelse "");
+    errdefer alloc.free(homepage);
+    const license = try alloc.dupe(u8, "");
+    errdefer alloc.free(license);
+    const dependencies = try alloc.alloc([]const u8, 0);
+    errdefer alloc.free(dependencies);
+    const bottle_url = try alloc.dupe(u8, "");
+    errdefer alloc.free(bottle_url);
+    const bottle_sha256 = try alloc.dupe(u8, "");
+    errdefer alloc.free(bottle_sha256);
+    const source_url = try alloc.dupe(u8, getStr(root, "source_url") orelse "");
+    errdefer alloc.free(source_url);
+    const source_sha256 = try alloc.dupe(u8, getStr(root, "source_sha256") orelse "");
+    errdefer alloc.free(source_sha256);
+    const build_deps = try alloc.alloc([]const u8, 0);
+    errdefer alloc.free(build_deps);
+    const install_binaries = try parseCachedStringList(alloc, root.get("install_binaries"));
+    errdefer freeStringList(alloc, install_binaries);
+    const caveats = try alloc.dupe(u8, "");
+    errdefer alloc.free(caveats);
+
+    if (version.len == 0 or source_url.len == 0 or !isSha256Hex(source_sha256)) return error.InvalidField;
+
+    return .{
+        .name = name,
+        .version = version,
+        .desc = desc,
+        .homepage = homepage,
+        .license = license,
+        .dependencies = dependencies,
+        .bottle_url = bottle_url,
+        .bottle_sha256 = bottle_sha256,
+        .source_url = source_url,
+        .source_sha256 = source_sha256,
+        .build_deps = build_deps,
+        .install_binaries = install_binaries,
+        .caveats = caveats,
+    };
+}
+
+fn parseCachedStringList(alloc: std.mem.Allocator, value: ?std.json.Value) ![]const []const u8 {
+    const val = value orelse return alloc.alloc([]const u8, 0);
+    if (val != .array) return error.InvalidField;
+    var list: std.ArrayList([]const u8) = .empty;
+    defer list.deinit(alloc);
+    errdefer {
+        for (list.items) |item| alloc.free(item);
+    }
+    for (val.array.items) |item| {
+        if (item != .string) return error.InvalidField;
+        try list.append(alloc, try alloc.dupe(u8, item.string));
+    }
+    return list.toOwnedSlice(alloc);
+}
+
+fn writeCachedFormula(token: []const u8, formula: *const Formula) void {
+    var path_buf: [512]u8 = undefined;
+    const cache_path = upstreamFormulaCachePath(token, &path_buf) catch return;
+    const io = std.Io.Threaded.global_single_threaded.io();
+    std.Io.Dir.createDirAbsolute(io, API_CACHE_DIR, .default_dir) catch {};
+
+    var out: std.Io.Writer.Allocating = .init(std.heap.smp_allocator);
+    defer out.deinit();
+    const writer = &out.writer;
+    writer.writeAll("{\n") catch return;
+    writeJsonField(writer, "token", token, true) catch return;
+    writeJsonField(writer, "registry_channel", currentRegistryChannel(), true) catch return;
+    writeJsonField(writer, "name", formula.name, true) catch return;
+    writeJsonField(writer, "version", formula.version, true) catch return;
+    writeJsonField(writer, "desc", formula.desc, true) catch return;
+    writeJsonField(writer, "homepage", formula.homepage, true) catch return;
+    writeJsonField(writer, "source_url", formula.source_url, true) catch return;
+    writeJsonField(writer, "source_sha256", formula.source_sha256, true) catch return;
+    writer.writeAll("  \"install_binaries\": [") catch return;
+    for (formula.install_binaries, 0..) |binary, i| {
+        if (i > 0) writer.writeAll(", ") catch return;
+        writeJsonString(writer, binary) catch return;
+    }
+    writer.writeAll("]\n}\n") catch return;
+
+    const body = out.toOwnedSlice() catch return;
+    defer std.heap.smp_allocator.free(body);
+
+    if (std.Io.Dir.createFileAbsolute(io, cache_path, .{})) |file| {
+        defer file.close(io);
+        file.writeStreamingAll(io, body) catch {};
+    } else |_| {}
+}
+
+fn writeJsonField(writer: *std.Io.Writer, key: []const u8, value: []const u8, comma: bool) !void {
+    try writer.writeAll("  ");
+    try writeJsonString(writer, key);
+    try writer.writeAll(": ");
+    try writeJsonString(writer, value);
+    if (comma) try writer.writeAll(",");
+    try writer.writeAll("\n");
+}
+
+fn writeJsonString(writer: *std.Io.Writer, value: []const u8) !void {
+    try writer.writeByte('"');
+    for (value) |c| {
+        switch (c) {
+            '\\' => try writer.writeAll("\\\\"),
+            '"' => try writer.writeAll("\\\""),
+            '\n' => try writer.writeAll("\\n"),
+            '\r' => try writer.writeAll("\\r"),
+            '\t' => try writer.writeAll("\\t"),
+            else => try writer.writeByte(c),
+        }
+    }
+    try writer.writeByte('"');
+}
+
+fn upstreamFormulaCachePath(token: []const u8, buf: []u8) ![]const u8 {
+    var safe: [256]u8 = undefined;
+    if (token.len > safe.len) return error.NameTooLong;
+    for (token, 0..) |c, i| {
+        safe[i] = switch (c) {
+            '/', ':', '\\' => '-',
+            else => c,
+        };
+    }
+    const channel_hash = std.hash.Wyhash.hash(0, currentRegistryChannel());
+    return std.fmt.bufPrint(buf, "{s}/upstream-formula-{x}-{s}.json", .{ API_CACHE_DIR, channel_hash, safe[0..token.len] });
+}
+
+fn currentRegistryChannel() []const u8 {
+    if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE") != null) return "embedded";
+    if (envSlice("NANOBREW_UPSTREAM_REGISTRY_URL")) |remote_url| {
+        if (remote_url.len > 0) return remote_url;
+    }
+    return registry_mod.DEFAULT_REMOTE_REGISTRY_URL;
+}
+
+fn envSlice(name: [*:0]const u8) ?[]const u8 {
+    const value = std.c.getenv(name) orelse return null;
+    return std.mem.sliceTo(value, 0);
 }
 
 const testing = std.testing;
