@@ -9,6 +9,9 @@ All notable changes to nanobrew are documented here.
 - **Seeded upstream coverage** — embedded registry now includes 20 formulae (`gh`, `uv`, `mise`, `ripgrep`, `just`, `lazygit`, `atuin`, `actionlint`, `podman`, `fd`, `bat`, `chezmoi`, `fastfetch`, `git-delta`, `git-lfs`, `golangci-lint`, `k9s`, `llmfit`, `ruff`, `zoxide`) and 20 casks (`alacritty`, `alt-tab`, `actual`, `firefox`, `google-chrome`, `betterdisplay`, `bitwarden`, `bruno`, `cc-switch`, `cmux`, `dockdoor`, `hammerspoon`, `maccy`, `obsidian`, `ollama-app`, `openclaw`, `opencode-desktop`, `rectangle`, `stats`, `utm`).
 - **Programmatic upstream seeding tools** — added seeders for popular formulae and casks using Homebrew analytics, GitHub release assets, checksums, platform matching, and artifact inference.
 - **Coverage and benchmark tooling** — added scripts to report top-N upstream registry coverage, compare metadata resolution, and benchmark actual `nb install` wall time for verified upstream versus Homebrew fallback.
+- **Top-100 upstream gap report** — added `scripts/upstream-gap-report.mjs` to classify every unseeded top-N formula and cask by Homebrew rank, install count, current seeder skip bucket, artifact/source shape, likely resolver class, and checksum availability. The current top-100 baseline is 11/100 formulae and 18/100 casks covered; the new report classifies the remaining 89 formula gaps and 82 cask gaps so resolver work can be prioritized from data instead of ad hoc inspection.
+- **Upstream promotion gate** — added `scripts/upstream-promotion-check.mjs` to gate registry expansion batches against coverage deltas, registry shape validation, `no_check` review policy, and saved install benchmark JSON with a minimum speedup threshold.
+- **Offline upstream tooling fixtures** — added deterministic fixtures and `scripts/test-upstream-tooling.mjs` covering coverage math, top-100 gap classification, release DB generation, and promotion checks without live Homebrew or GitHub calls.
 
 ### Performance
 - **Native upstream formula installs are faster for self-contained binaries** — cold package-cache install benchmarks show `actionlint` installing in 728 ms through verified upstream vs 4665 ms through Homebrew fallback (6.41x faster), and `fd` in 623 ms vs 1703 ms (2.74x faster).
@@ -18,6 +21,12 @@ All notable changes to nanobrew are documented here.
 ### Changed
 - **Upstream registry scaling direction** — documented the speed-first registry shape: hosted resolved install locks, Zig local caching, and fallback to live metadata only when a token is not covered.
 - **Beta-safe rollout policy** — documented stable vs beta binary and registry channels so experimental resolver work can soak without changing behavior for regular users.
+- **Top-100 expansion workflow** — documented the methodical path to 100/100 coverage: measure coverage, classify gaps, implement one resolver class, generate records, smoke test through a beta registry URL, benchmark actual installs, run the promotion gate, then promote stable.
+
+### Coverage Planning
+- **Current top-100 coverage remains unchanged by the tooling branch** — formulae are still 11/100 covered (839,038 / 5,140,672 top-100 30-day installs, 16.32%) and casks are still 18/100 covered (217,478 / 1,612,680, 13.49%). The improvement is that the uncovered surface is now fully classified.
+- **Formula gap buckets** — the 89 unseeded top-100 formulae classify as 36 `vendor_source_build`, 35 `github_source_build`, 11 `github_release_asset`, 5 `tap_formula`, and 2 `homebrew_bottle_lock` candidates.
+- **Cask gap buckets** — the 82 unseeded top-100 casks classify as 31 `app_cask`, 18 `package_manager_cli`, 16 `github_release_asset`, 9 `pkg_cask`, and 8 `tap_cask` candidates.
 
 ## [0.1.192] - 2026-04-21
 
