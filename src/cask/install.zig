@@ -456,7 +456,10 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
 
     fetch.downloadWithClientSha256Headers(&client, url, dest, cask.sha256, &CASK_DOWNLOAD_HEADERS) catch |err| {
         var _b: [512]u8 = undefined;
-        const _m = std.fmt.bufPrint(&_b, "nb: error: SHA256 verification failed for {s}\n", .{cask.token}) catch "nb: error: SHA256 verification failed\n";
+        const _m = if (err == error.ChecksumMismatch)
+            std.fmt.bufPrint(&_b, "nb: error: SHA256 verification failed for {s}\n", .{cask.token}) catch "nb: error: SHA256 verification failed\n"
+        else
+            std.fmt.bufPrint(&_b, "nb: error: download failed for {s}\n", .{cask.token}) catch "nb: error: download failed\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
         // Clean up the bad download
         std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};

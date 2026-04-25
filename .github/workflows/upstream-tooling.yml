@@ -28,7 +28,7 @@ on:
       cask_tokens:
         description: "Comma-separated cask tokens for actual install benchmarks"
         required: false
-        default: "iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,warp,firefox,google-chrome,brave-browser,orbstack,alacritty,alt-tab,maccy,rectangle,stats,ghostty,zed,obsidian,bitwarden,bruno,github,slack"
+        default: "iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,firefox,google-chrome,brave-browser,orbstack,alacritty,alt-tab,maccy,rectangle,stats,ghostty,zed,obsidian,bitwarden,bruno,github,slack,telegram"
       cask_iterations:
         description: "Timed install runs per cask/mode"
         required: false
@@ -243,7 +243,7 @@ jobs:
         run: |
           scripts/bench-upstream-install.mjs \
             --kind cask \
-            --tokens "${{ inputs.cask_tokens || 'iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,warp,firefox,google-chrome,brave-browser,orbstack,alacritty,alt-tab,maccy,rectangle,stats,ghostty,zed,obsidian,bitwarden,bruno,github,slack' }}" \
+            --tokens "${{ inputs.cask_tokens || 'iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,firefox,google-chrome,brave-browser,orbstack,alacritty,alt-tab,maccy,rectangle,stats,ghostty,zed,obsidian,bitwarden,bruno,github,slack,telegram' }}" \
             --iterations "${{ inputs.cask_iterations || '2' }}" \
             --order "${{ inputs.cask_order || 'alternating' }}" \
             --cold \
