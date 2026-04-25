@@ -14,6 +14,10 @@ const builtin = @import("builtin");
 const PREFIX = paths.PREFIX;
 const CASKROOM_DIR = paths.CASKROOM_DIR;
 const CACHE_TMP = paths.TMP_DIR;
+const ZIP_LIST_STDOUT_LIMIT = 8 * 1024 * 1024;
+const CASK_DOWNLOAD_HEADERS = [_]std.http.Header{
+    .{ .name = "User-Agent", .value = "Homebrew/4 (nanobrew)" },
+};
 
 pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
     const lib_io = io;
@@ -443,14 +447,14 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
 
     // Verify SHA256 if available
     if (cask.sha256.len == 0 or std.mem.eql(u8, cask.sha256, "no_check")) {
-        fetch.downloadWithClient(&client, url, dest) catch return error.DownloadFailed;
+        fetch.downloadWithClientHeaders(&client, url, dest, &CASK_DOWNLOAD_HEADERS) catch return error.DownloadFailed;
         var _b: [512]u8 = undefined;
         const _m = std.fmt.bufPrint(&_b, "nb: warning: skipping SHA256 verification for {s} (no checksum available)\n", .{cask.token}) catch "nb: warning: skipping SHA256 verification\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
         return;
     }
 
-    fetch.downloadWithClientSha256(&client, url, dest, cask.sha256) catch |err| {
+    fetch.downloadWithClientSha256Headers(&client, url, dest, cask.sha256, &CASK_DOWNLOAD_HEADERS) catch |err| {
         var _b: [512]u8 = undefined;
         const _m = std.fmt.bufPrint(&_b, "nb: error: SHA256 verification failed for {s}\n", .{cask.token}) catch "nb: error: SHA256 verification failed\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
@@ -1072,7 +1076,7 @@ fn ensureZipEntriesSafe(alloc: std.mem.Allocator, io: std.Io, argv: []const []co
     // Pre-list selected ZIP contents and check for path traversal.
     const list_result = std.process.run(alloc, io, .{
         .argv = argv,
-        .stdout_limit = .limited(256 * 1024),
+        .stdout_limit = .limited(ZIP_LIST_STDOUT_LIMIT),
         .stderr_limit = .limited(16 * 1024),
     }) catch return error.ExtractFailed;
     defer alloc.free(list_result.stdout);

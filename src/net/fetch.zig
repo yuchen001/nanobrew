@@ -95,10 +95,16 @@ pub fn download(alloc: std.mem.Allocator, url: []const u8, dest_path: []const u8
 
 /// Download using an existing client.
 pub fn downloadWithClient(client: *std.http.Client, url: []const u8, dest_path: []const u8) !void {
+    return downloadWithClientHeaders(client, url, dest_path, &.{});
+}
+
+/// Download using an existing client plus additional headers.
+pub fn downloadWithClientHeaders(client: *std.http.Client, url: []const u8, dest_path: []const u8, extra_headers: []const std.http.Header) !void {
     const uri = std.Uri.parse(url) catch return error.InvalidUrl;
     var req = client.request(.GET, uri, .{
         // Reduced from 5; HTTPS-to-HTTP downgrade not yet detectable in std.http
         .redirect_behavior = @enumFromInt(3),
+        .extra_headers = extra_headers,
     }) catch return error.FetchFailed;
 
     req.sendBodiless() catch {
@@ -148,12 +154,24 @@ pub fn downloadWithClientSha256(
     dest_path: []const u8,
     expected_sha256: []const u8,
 ) !void {
+    return downloadWithClientSha256Headers(client, url, dest_path, expected_sha256, &.{});
+}
+
+/// Download with additional headers while computing SHA256 in the same pass.
+pub fn downloadWithClientSha256Headers(
+    client: *std.http.Client,
+    url: []const u8,
+    dest_path: []const u8,
+    expected_sha256: []const u8,
+    extra_headers: []const std.http.Header,
+) !void {
     if (expected_sha256.len < 64) return error.ChecksumMismatch;
 
     const uri = std.Uri.parse(url) catch return error.InvalidUrl;
     var req = client.request(.GET, uri, .{
         // Reduced from 5; HTTPS-to-HTTP downgrade not yet detectable in std.http
         .redirect_behavior = @enumFromInt(3),
+        .extra_headers = extra_headers,
     }) catch return error.FetchFailed;
 
     req.sendBodiless() catch {
