@@ -31,11 +31,13 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
         cask.token;
 
     // 1. Download artifact
-    const ext: []const u8 = switch (cask.downloadFormat()) {
+    const format = cask.downloadFormat();
+    const ext: []const u8 = switch (format) {
         .dmg => ".dmg",
         .zip => ".zip",
         .pkg => ".pkg",
         .tar_gz => ".tar.gz",
+        .binary => "",
         .unknown => ".dmg", // try dmg as default
     };
     var dl_buf: [512]u8 = undefined;
@@ -53,7 +55,6 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
     std.Io.Dir.createDirAbsolute(lib_io, caskroom_path, .default_dir) catch {};
 
     // 3. Mount/extract based on format
-    const format = cask.downloadFormat();
     var mount_point_buf: [512]u8 = undefined;
     var mount_point: ?[]const u8 = null;
     var temp_extract_dir: ?[]const u8 = null;
@@ -85,6 +86,7 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
             temp_extract_dir = tmp_dir;
         },
         .pkg => {}, // standalone, handled directly in artifact processing
+        .binary => {}, // direct executable download, handled as a binary artifact
     }
 
     defer {
@@ -191,7 +193,10 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                     // Relative path — binary is in the extract/mount dir.
                     // Copy to Caskroom, then symlink from there.
                     var src_buf2: [1024]u8 = undefined;
-                    const extract_src = std.fmt.bufPrint(&src_buf2, "{s}/{s}", .{ source_dir, bin.source }) catch continue;
+                    const extract_src = if (format == .binary)
+                        dl_path
+                    else
+                        std.fmt.bufPrint(&src_buf2, "{s}/{s}", .{ source_dir, bin.source }) catch continue;
                     var caskroom_bin_buf: [1024]u8 = undefined;
                     const caskroom_bin = std.fmt.bufPrint(&caskroom_bin_buf, "{s}/{s}", .{ caskroom_path, bin.target }) catch continue;
 
@@ -287,7 +292,10 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
                 };
                 alloc.free(result.stdout);
                 alloc.free(result.stderr);
-                if (switch (result.term) { .exited => |c| c != 0, else => true }) {
+                if (switch (result.term) {
+                    .exited => |c| c != 0,
+                    else => true,
+                }) {
                     var _b: [512]u8 = undefined;
                     const _m = std.fmt.bufPrint(&_b, "nb: installer failed for {s}\n", .{pkg_name}) catch "nb: installer failed\n";
                     std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
@@ -405,7 +413,10 @@ fn mountDmg(alloc: std.mem.Allocator, io: std.Io, dmg_path: []const u8, out_buf:
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
 
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.MountFailed;
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.MountFailed;
 
     // Parse mount point from hdiutil output — look for /Volumes/ path
     if (std.mem.indexOf(u8, result.stdout, "/Volumes/")) |start| {
@@ -466,7 +477,10 @@ fn extractZip(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, dest: 
     }) catch return error.ExtractFailed;
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) {
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) {
         // Fallback to Apple's `ditto` on macOS — handles extended attributes,
         // code-signature resources, and zip variants that BSD unzip rejects
         // (seen on some notarized .app zips — issue #224, PureMac).
@@ -478,7 +492,10 @@ fn extractZip(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, dest: 
             }) catch return error.ExtractFailed;
             defer alloc.free(ditto.stdout);
             defer alloc.free(ditto.stderr);
-            if (switch (ditto.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+            if (switch (ditto.term) {
+                .exited => |c| c != 0,
+                else => true,
+            }) return error.ExtractFailed;
             return;
         }
         return error.ExtractFailed;
@@ -494,5 +511,8 @@ fn extractTarGz(alloc: std.mem.Allocator, io: std.Io, tar_path: []const u8, dest
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
 
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.ExtractFailed;
 }

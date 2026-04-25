@@ -3335,6 +3335,206 @@
       "verification": {
         "sha256": "required"
       }
+    },
+    {
+      "token": "android-platform-tools",
+      "name": "Android SDK Platform-Tools",
+      "kind": "cask",
+      "homepage": "https://developer.android.com/tools/releases/platform-tools",
+      "desc": "Android SDK component",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://developer.android.com/tools/releases/platform-tools",
+        "release_feed": "https://dl.google.com/android/repository/platform-tools_r37.0.0-darwin.zip",
+        "allow_domains": [
+          "dl.google.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 11,
+        "cask_install_30d_count": "37,822"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "platform-tools/adb"
+        },
+        {
+          "type": "binary",
+          "path": "platform-tools/etc1tool"
+        },
+        {
+          "type": "binary",
+          "path": "platform-tools/fastboot"
+        },
+        {
+          "type": "binary",
+          "path": "platform-tools/hprof-conv"
+        },
+        {
+          "type": "binary",
+          "path": "platform-tools/make_f2fs"
+        },
+        {
+          "type": "binary",
+          "path": "platform-tools/make_f2fs_casefold"
+        },
+        {
+          "type": "binary",
+          "path": "platform-tools/mke2fs"
+        }
+      ],
+      "resolved": {
+        "version": "37.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.0-darwin.zip",
+            "sha256": "094a1395683c509fd4d48667da0d8b5ef4d42b2abfcd29f2e8149e2f989357c7"
+          },
+          "macos-x86_64": {
+            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.0-darwin.zip",
+            "sha256": "094a1395683c509fd4d48667da0d8b5ef4d42b2abfcd29f2e8149e2f989357c7"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "claude-code",
+      "name": "Claude Code",
+      "kind": "cask",
+      "homepage": "https://www.anthropic.com/claude-code",
+      "desc": "Terminal-based AI coding assistant",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.anthropic.com/claude-code",
+        "release_feed": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.109/darwin-arm64/claude",
+        "allow_domains": [
+          "storage.googleapis.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 1,
+        "cask_install_30d_count": "159,341"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "claude"
+        }
+      ],
+      "resolved": {
+        "version": "2.1.109",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.109/darwin-arm64/claude",
+            "sha256": "cc7e26eb08521a5315094a522775c7f17bdeef2d6d8d9040205af6d2e6dee595"
+          },
+          "macos-x86_64": {
+            "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.109/darwin-x64/claude",
+            "sha256": "533c0834474a123af9989576d733d4e1d51f67ebeca828d426f25d0eae28f317"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "claude-code@latest",
+      "name": "Claude Code",
+      "kind": "cask",
+      "homepage": "https://www.anthropic.com/claude-code",
+      "desc": "Terminal-based AI coding assistant",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://www.anthropic.com/claude-code",
+        "release_feed": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.120/darwin-arm64/claude",
+        "allow_domains": [
+          "storage.googleapis.com"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 25,
+        "cask_install_30d_count": "17,736"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "claude"
+        }
+      ],
+      "resolved": {
+        "version": "2.1.120",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.120/darwin-arm64/claude",
+            "sha256": "fad8faf49c7b1b454c38d785b75e17edbdadc7ffaf450b31349aafc6560b8ef6"
+          },
+          "macos-x86_64": {
+            "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.120/darwin-x64/claude",
+            "sha256": "ad68f225e96db8b7d12d0c31f0343bc3227ea2886ecefae2f483cb32310b0004"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "mitmproxy",
+      "name": "mitmproxy",
+      "kind": "cask",
+      "homepage": "https://mitmproxy.org/",
+      "desc": "Intercept, modify, replay, save HTTP/S traffic",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://mitmproxy.org/",
+        "release_feed": "https://downloads.mitmproxy.org/12.2.2/mitmproxy-12.2.2-macos-arm64.tar.gz",
+        "allow_domains": [
+          "downloads.mitmproxy.org"
+        ],
+        "verified": true
+      },
+      "analytics": {
+        "cask_install_30d_rank": 59,
+        "cask_install_30d_count": "8,510"
+      },
+      "artifacts": [
+        {
+          "type": "binary",
+          "path": "mitmproxy.app/Contents/MacOS/mitmproxy"
+        },
+        {
+          "type": "binary",
+          "path": "mitmproxy.app/Contents/MacOS/mitmdump"
+        },
+        {
+          "type": "binary",
+          "path": "mitmproxy.app/Contents/MacOS/mitmweb"
+        }
+      ],
+      "resolved": {
+        "version": "12.2.2",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://downloads.mitmproxy.org/12.2.2/mitmproxy-12.2.2-macos-arm64.tar.gz",
+            "sha256": "da6fb3e7bdd3fed2c3f6618afd60a3f311995b51979e55dc606d86f23a8af92c"
+          },
+          "macos-x86_64": {
+            "url": "https://downloads.mitmproxy.org/12.2.2/mitmproxy-12.2.2-macos-x86_64.tar.gz",
+            "sha256": "b5d4084c425e5e8272b24f672a934d1d600dacfcebb742fdf46040f74bff7e87"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
     }
   ]
 }

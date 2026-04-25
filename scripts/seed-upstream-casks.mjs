@@ -242,7 +242,7 @@ async function seedRecordFromCask(cask, analyticsItem, opts, releaseCache) {
 }
 
 function seedVendorRecordFromCask(cask, analyticsItem, artifacts) {
-  const downloads = collectVendorPlatformDownloads(cask);
+  const downloads = collectVendorPlatformDownloads(cask, isDirectBinaryCask(artifacts.items));
   if (downloads.size === 0) return { ok: false, reason: "no supported pinned vendor downloads" };
   if (!downloads.has("macos-arm64")) return { ok: false, reason: "no macos-arm64 download" };
 
@@ -329,7 +329,7 @@ function caskArtifacts(cask, opts) {
       }
     }
     if (opts.includeBinaries && Array.isArray(artifact.binary)) {
-      for (const binary of binaryArtifacts(artifact.binary)) {
+      for (const binary of binaryArtifacts(artifact.binary, cask)) {
         items.push(binary);
         binaryCount += 1;
       }
@@ -353,7 +353,7 @@ function hasIncompatibleVariationArtifacts(cask, opts, artifacts) {
   const baseSignature = artifactSignature(artifacts.items);
   for (const variation of Object.values(cask.variations ?? {})) {
     if (!variation || typeof variation !== "object" || !Array.isArray(variation.artifacts)) continue;
-    const variationArtifacts = caskArtifacts({ artifacts: variation.artifacts }, opts);
+    const variationArtifacts = caskArtifacts({ ...cask, artifacts: variation.artifacts }, opts);
     if (!variationArtifacts.ok) return true;
     if (artifactSignature(variationArtifacts.items) !== baseSignature) return true;
   }
@@ -368,12 +368,11 @@ function hasObjectEntry(items) {
   return items.some((item) => item && typeof item === "object");
 }
 
-function binaryArtifacts(entries) {
+function binaryArtifacts(entries, cask) {
   const binaries = [];
   for (let i = 0; i < entries.length; i += 1) {
-    const path = entries[i];
-    if (typeof path !== "string") continue;
-    if (!safeBinarySource(path)) continue;
+    const path = normalizeBinarySource(entries[i], cask);
+    if (!path) continue;
 
     const item = { type: "binary", path };
     const next = entries[i + 1];
@@ -386,6 +385,23 @@ function binaryArtifacts(entries) {
     binaries.push(item);
   }
   return binaries;
+}
+
+function normalizeBinarySource(value, cask) {
+  if (typeof value !== "string") return "";
+  const token = String(cask.token ?? "");
+  const version = String(cask.version ?? "");
+  const caskroomPrefix = `$HOMEBREW_PREFIX/Caskroom/${token}/`;
+  let path = value;
+  if (token && path.startsWith(caskroomPrefix)) {
+    path = path.slice(caskroomPrefix.length);
+    if (version && path.startsWith(`${version}/`)) {
+      path = path.slice(version.length + 1);
+    } else if (path.startsWith("latest/")) {
+      path = path.slice("latest/".length);
+    }
+  }
+  return safeBinarySource(path) ? path : "";
 }
 
 function safeAppPath(path) {
@@ -401,7 +417,8 @@ function safeBinarySource(path) {
   if (path.startsWith("$HOMEBREW_PREFIX")) return false;
   if (path.startsWith("$APPDIR/")) return true;
   if (path.startsWith("/")) return false;
-  return !path.includes("/");
+  if (path.startsWith("$")) return false;
+  return path.length > 0;
 }
 
 function safeBinaryTarget(target) {
@@ -426,7 +443,7 @@ function collectGithubPlatformDownloads(cask, base) {
   return downloads;
 }
 
-function collectVendorPlatformDownloads(cask) {
+function collectVendorPlatformDownloads(cask, allowDirectBinary) {
   if (typeof cask.url !== "string") return new Map();
   let baseUrl;
   try {
@@ -436,12 +453,12 @@ function collectVendorPlatformDownloads(cask) {
   }
 
   const downloads = new Map();
-  addVendorPlatformDownload(downloads, cask.url, cask.sha256, "", baseUrl.hostname, false);
+  addVendorPlatformDownload(downloads, cask.url, cask.sha256, "", baseUrl.hostname, false, allowDirectBinary);
 
   for (const [key, variation] of Object.entries(cask.variations ?? {})) {
     if (!variation || typeof variation !== "object") continue;
     if (typeof variation.url !== "string" || typeof variation.sha256 !== "string") continue;
-    addVendorPlatformDownload(downloads, variation.url, variation.sha256, key, baseUrl.hostname, true);
+    addVendorPlatformDownload(downloads, variation.url, variation.sha256, key, baseUrl.hostname, true, allowDirectBinary);
   }
   return downloads;
 }
@@ -457,9 +474,9 @@ function addPlatformDownload(downloads, url, sha256, variationKey, base, isVaria
   }
 }
 
-function addVendorPlatformDownload(downloads, url, sha256, variationKey, baseHost, isVariation) {
+function addVendorPlatformDownload(downloads, url, sha256, variationKey, baseHost, isVariation, allowDirectBinary) {
   if (!isSha256(sha256)) return;
-  if (!supportedCaskDownloadUrl(url)) return;
+  if (!supportedCaskDownloadUrl(url, allowDirectBinary)) return;
   let parsed;
   try {
     parsed = new URL(url);
@@ -474,13 +491,22 @@ function addVendorPlatformDownload(downloads, url, sha256, variationKey, baseHos
   }
 }
 
-function supportedCaskDownloadUrl(value) {
+function supportedCaskDownloadUrl(value, allowDirectBinary) {
   try {
     const path = new URL(value).pathname.toLowerCase();
-    return path.endsWith(".dmg") || path.endsWith(".zip") || path.endsWith(".pkg") || path.endsWith(".tar.gz") || path.endsWith(".tgz");
+    if (path.endsWith(".dmg") || path.endsWith(".zip") || path.endsWith(".pkg") || path.endsWith(".tar.gz") || path.endsWith(".tgz")) {
+      return true;
+    }
+    if (!allowDirectBinary) return false;
+    const name = path.split("/").filter(Boolean).at(-1) ?? "";
+    return name.length > 0 && !name.includes(".");
   } catch {
     return false;
   }
+}
+
+function isDirectBinaryCask(items) {
+  return items.length === 1 && items[0]?.type === "binary";
 }
 
 function domainsFromResolvedAssets(resolvedAssets) {

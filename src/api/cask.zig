@@ -10,6 +10,7 @@ pub const DownloadFormat = enum {
     zip,
     pkg,
     tar_gz,
+    binary,
     unknown,
 };
 
@@ -65,7 +66,20 @@ pub const Cask = struct {
         if (std.mem.endsWith(u8, self.url, ".pkg")) return .pkg;
         if (std.mem.endsWith(u8, self.url, ".tar.gz")) return .tar_gz;
         if (std.mem.endsWith(u8, self.url, ".tgz")) return .tar_gz;
+        if (self.hasOnlyBinaryArtifacts()) return .binary;
         return .unknown;
+    }
+
+    fn hasOnlyBinaryArtifacts(self: *const Cask) bool {
+        var binary_count: usize = 0;
+        for (self.artifacts) |artifact| {
+            switch (artifact) {
+                .binary => binary_count += 1,
+                .uninstall => {},
+                .app, .pkg => return false,
+            }
+        }
+        return binary_count == 1;
     }
 
     pub fn shouldVerifySha(self: *const Cask) bool {
@@ -153,6 +167,43 @@ test "downloadFormat - detects pkg" {
         .min_macos = null,
     };
     try testing.expectEqual(DownloadFormat.pkg, c.downloadFormat());
+}
+
+test "downloadFormat - detects direct binary-only cask" {
+    const c = Cask{
+        .token = "claude-code",
+        .name = "Claude Code",
+        .version = "2.1.109",
+        .url = "https://example.com/releases/darwin-arm64/claude",
+        .sha256 = "abc123",
+        .homepage = "",
+        .desc = "CLI",
+        .auto_updates = false,
+        .artifacts = &.{
+            .{ .binary = .{ .source = "claude", .target = "claude" } },
+        },
+        .min_macos = null,
+    };
+    try testing.expectEqual(DownloadFormat.binary, c.downloadFormat());
+}
+
+test "downloadFormat - leaves extensionless multi-binary archives unknown" {
+    const c = Cask{
+        .token = "multi",
+        .name = "Multi",
+        .version = "1.0",
+        .url = "https://example.com/download",
+        .sha256 = "abc123",
+        .homepage = "",
+        .desc = "CLI",
+        .auto_updates = false,
+        .artifacts = &.{
+            .{ .binary = .{ .source = "bin/a", .target = "a" } },
+            .{ .binary = .{ .source = "bin/b", .target = "b" } },
+        },
+        .min_macos = null,
+    };
+    try testing.expectEqual(DownloadFormat.unknown, c.downloadFormat());
 }
 
 test "shouldVerifySha - returns true for normal sha" {
