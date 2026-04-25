@@ -1,0 +1,228 @@
+name: Upstream Tooling
+
+on:
+  workflow_dispatch:
+    inputs:
+      formula_tokens:
+        description: "Comma-separated formula tokens for actual install benchmarks"
+        required: false
+        default: "actionlint,fd"
+      formula_iterations:
+        description: "Timed install runs per formula/mode"
+        required: false
+        default: "1"
+      min_speedup:
+        description: "Minimum speedup required by promotion gate"
+        required: false
+        default: "1"
+      run_formula_install_benchmark:
+        description: "Run actual formula install benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_cask_install_benchmark:
+        description: "Run actual cask install benchmarks on the disposable runner"
+        required: false
+        type: boolean
+        default: false
+      cask_tokens:
+        description: "Comma-separated cask tokens for actual install benchmarks"
+        required: false
+        default: "font-hack-nerd-font"
+  push:
+    branches:
+      - codex/issue-251-upstream-tooling
+    paths:
+      - ".github/workflows/upstream-tooling.yml"
+      - "build.zig"
+      - "registry/upstream.json"
+      - "scripts/**"
+      - "src/**"
+      - "tests/fixtures/upstream-release-db/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate upstream registry and tooling
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build nanobrew
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Run upstream Zig tests
+        run: |
+          zig build test-upstream-registry
+          zig build test-upstream-github
+          zig build test
+
+      - name: Check upstream script syntax
+        run: |
+          for script in \
+            scripts/bench-upstream-install.mjs \
+            scripts/bench-upstream-resolution.mjs \
+            scripts/build-upstream-release-db.mjs \
+            scripts/discover-github-upstreams.mjs \
+            scripts/seed-upstream-casks.mjs \
+            scripts/seed-upstream-formulas.mjs \
+            scripts/test-upstream-tooling.mjs \
+            scripts/upstream-coverage-report.mjs \
+            scripts/upstream-gap-report.mjs \
+            scripts/upstream-promotion-check.mjs
+          do
+            node --check "$script"
+          done
+
+      - name: Run upstream tooling fixture tests
+        run: node scripts/test-upstream-tooling.mjs
+
+      - name: Initialize disposable nanobrew root
+        run: |
+          sudo mkdir -p /opt/nanobrew
+          sudo chown -R "$USER" /opt/nanobrew
+          ./zig-out/bin/nb init
+
+      - name: Smoke verified upstream metadata paths
+        run: |
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info actionlint
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info fd
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info --cask codex
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info --cask visual-studio-code
+
+      - name: Generate upstream coverage report
+        run: node scripts/upstream-coverage-report.mjs --top 100 --json > upstream-coverage.json
+
+      - name: Generate upstream gap report
+        run: node scripts/upstream-gap-report.mjs --top 100 --json > upstream-gaps.json
+
+      - name: Run promotion gate without benchmark
+        run: |
+          node scripts/upstream-promotion-check.mjs \
+            --top 100 \
+            --after-json upstream-coverage.json \
+            --allow-no-check \
+            --json > upstream-promotion-check.json
+
+      - name: Upload upstream validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-validation
+          path: |
+            upstream-coverage.json
+            upstream-gaps.json
+            upstream-promotion-check.json
+
+  formula-install-benchmark:
+    name: Benchmark formula install path
+    runs-on: macos-14
+    timeout-minutes: 30
+    needs: validate
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_formula_install_benchmark) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build nanobrew
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Initialize disposable nanobrew root
+        run: |
+          sudo mkdir -p /opt/nanobrew
+          sudo chown -R "$USER" /opt/nanobrew
+          ./zig-out/bin/nb init
+
+      - name: Benchmark actual formula installs
+        run: |
+          scripts/bench-upstream-install.mjs \
+            --tokens "${{ inputs.formula_tokens || 'actionlint,fd' }}" \
+            --iterations "${{ inputs.formula_iterations || '1' }}" \
+            --cold \
+            --json > upstream-install-bench-formula.json
+
+      - name: Generate upstream coverage report
+        run: node scripts/upstream-coverage-report.mjs --top 100 --json > upstream-coverage.json
+
+      - name: Gate benchmark result
+        run: |
+          node scripts/upstream-promotion-check.mjs \
+            --top 100 \
+            --after-json upstream-coverage.json \
+            --allow-no-check \
+            --bench-json upstream-install-bench-formula.json \
+            --min-speedup "${{ inputs.min_speedup || '1' }}" \
+            --json > upstream-promotion-check-with-formula-bench.json
+
+      - name: Upload formula benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-formula-install-benchmark
+          path: |
+            upstream-install-bench-formula.json
+            upstream-promotion-check-with-formula-bench.json
+
+  cask-install-benchmark:
+    name: Benchmark cask install path
+    runs-on: macos-14
+    timeout-minutes: 45
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cask_install_benchmark }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build nanobrew
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Initialize disposable nanobrew root
+        run: |
+          sudo mkdir -p /opt/nanobrew
+          sudo chown -R "$USER" /opt/nanobrew
+          ./zig-out/bin/nb init
+
+      - name: Benchmark actual cask installs
+        run: |
+          scripts/bench-upstream-install.mjs \
+            --kind cask \
+            --tokens "${{ inputs.cask_tokens || 'font-hack-nerd-font' }}" \
+            --iterations "1" \
+            --cold \
+            --allow-casks \
+            --json > upstream-install-bench-cask.json
+
+      - name: Upload cask benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-cask-install-benchmark
+          path: upstream-install-bench-cask.json
