@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "token": "fixture-seeded-formula",
+      "name": "Fixture Seeded Formula",
+      "kind": "formula",
+      "homepage": "https://example.test/fixture-seeded-formula",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/seeded-formula",
+        "verified": true
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "fixture-seeded-formula-two",
+      "name": "Fixture Seeded Formula Two",
+      "kind": "formula",
+      "homepage": "https://example.test/fixture-seeded-formula-two",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/seeded-formula-two",
+        "verified": true
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "fixture-seeded-cask",
+      "name": "Fixture Seeded Cask",
+      "kind": "cask",
+      "homepage": "https://example.test/fixture-seeded-cask",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/seeded-cask",
+        "verified": true
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "fixture-seeded-cask-shared",
+      "name": "Fixture Seeded Cask Shared",
+      "kind": "cask",
+      "homepage": "https://example.test/fixture-seeded-cask-shared",
+      "upstream": {
+        "type": "vendor_url",
+        "allow_domains": ["example.test"],
+        "verified": true
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    }
+  ]
+}

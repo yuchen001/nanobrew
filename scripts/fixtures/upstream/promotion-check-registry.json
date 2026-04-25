@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "token": "fixture-existing-formula",
+      "name": "Fixture Existing Formula",
+      "kind": "formula",
+      "homepage": "https://example.test/fixture-existing-formula",
+      "desc": "Existing fixture formula",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/existing-formula",
+        "verified": true
+      },
+      "resolved": {
+        "tag": "v1.0.0",
+        "version": "1.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/fixture/existing-formula/releases/download/v1.0.0/existing-formula.tar.gz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "fixture-new-formula",
+      "name": "Fixture New Formula",
+      "kind": "formula",
+      "homepage": "https://example.test/fixture-new-formula",
+      "desc": "New fixture formula",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/new-formula",
+        "verified": true
+      },
+      "resolved": {
+        "tag": "v1.0.0",
+        "version": "1.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/fixture/new-formula/releases/download/v1.0.0/new-formula.tar.gz",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "fixture-existing-cask",
+      "name": "Fixture Existing Cask",
+      "kind": "cask",
+      "homepage": "https://example.test/fixture-existing-cask",
+      "desc": "Existing fixture cask",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://example.test/fixture-existing-cask",
+        "release_feed": "https://example.test/fixture-existing-cask.dmg",
+        "allow_domains": [
+          "example.test"
+        ],
+        "verified": true
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Fixture Existing.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://example.test/fixture-existing-cask.dmg",
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    },
+    {
+      "token": "fixture-new-cask",
+      "name": "Fixture New Cask",
+      "kind": "cask",
+      "homepage": "https://example.test/fixture-new-cask",
+      "desc": "New fixture cask",
+      "upstream": {
+        "type": "vendor_url",
+        "homepage": "https://example.test/fixture-new-cask",
+        "release_feed": "https://example.test/fixture-new-cask.dmg",
+        "allow_domains": [
+          "example.test"
+        ],
+        "verified": true
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Fixture New.app"
+        }
+      ],
+      "resolved": {
+        "version": "1.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://example.test/fixture-new-cask.dmg",
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "required"
+      }
+    }
+  ]
+}

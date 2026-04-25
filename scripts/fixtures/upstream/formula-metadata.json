@@ -1,0 +1,91 @@
+[
+  {
+    "name": "fixture-seeded-formula",
+    "full_name": "fixture-seeded-formula",
+    "tap": "homebrew/core",
+    "homepage": "https://example.test/fixture-seeded-formula",
+    "desc": "Fixture seeded formula",
+    "versions": {
+      "stable": "1.0.0"
+    },
+    "urls": {
+      "stable": {
+        "url": "https://github.com/fixture/seeded-formula/archive/refs/tags/v1.0.0.tar.gz",
+        "checksum": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+    "bottle": {
+      "stable": {
+        "files": {
+          "arm64_sonoma": {
+            "url": "https://ghcr.io/v2/homebrew/core/fixture-seeded-formula/blobs/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "fixture-seeded-formula-two",
+    "full_name": "fixture-seeded-formula-two",
+    "tap": "homebrew/core",
+    "homepage": "https://example.test/fixture-seeded-formula-two",
+    "desc": "Second fixture seeded formula",
+    "versions": {
+      "stable": "2.0.0"
+    },
+    "urls": {
+      "stable": {
+        "url": "https://example.test/fixture-seeded-formula-two-2.0.0.tar.gz",
+        "checksum": "3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    "bottle": {
+      "stable": {
+        "files": {}
+      }
+    }
+  },
+  {
+    "name": "fixture-gap-formula",
+    "full_name": "fixture-gap-formula",
+    "tap": "homebrew/core",
+    "homepage": "https://github.com/fixture/gap-formula",
+    "desc": "Fixture formula missing from the upstream registry",
+    "versions": {
+      "stable": "1.2.3"
+    },
+    "urls": {
+      "stable": {
+        "url": "https://github.com/fixture/gap-formula/archive/refs/tags/v1.2.3.tar.gz",
+        "checksum": "4444444444444444444444444444444444444444444444444444444444444444"
+      }
+    },
+    "bottle": {
+      "stable": {
+        "files": {}
+      }
+    }
+  },
+  {
+    "name": "fixture-low-signal-formula",
+    "full_name": "fixture-low-signal-formula",
+    "tap": "homebrew/core",
+    "homepage": "https://example.test/fixture-low-signal-formula",
+    "desc": "Lower ranked fixture formula missing from the upstream registry",
+    "versions": {
+      "stable": "0.1.0"
+    },
+    "urls": {
+      "stable": {
+        "url": "https://example.test/fixture-low-signal-formula-0.1.0.tar.gz",
+        "checksum": "5555555555555555555555555555555555555555555555555555555555555555"
+      }
+    },
+    "bottle": {
+      "stable": {
+        "files": {}
+      }
+    }
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "registry": "fixture-after",
+  "top": 4,
+  "formula": {
+    "seeded_records": 2,
+    "top_seeded_records": 2,
+    "top_coverage_percent": 50,
+    "seeded_with_analytics": [
+      {
+        "token": "fixture-existing-formula"
+      },
+      {
+        "token": "fixture-new-formula"
+      }
+    ]
+  },
+  "cask": {
+    "seeded_records": 2,
+    "top_seeded_records": 2,
+    "top_coverage_percent": 50,
+    "seeded_with_analytics": [
+      {
+        "token": "fixture-existing-cask"
+      },
+      {
+        "token": "fixture-new-cask"
+      }
+    ]
+  }
+}

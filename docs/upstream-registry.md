@@ -16,6 +16,90 @@ Formula records also get a small per-token resolved metadata cache under `/opt/n
 
 Regular-user safety: `registry/upstream.json` on `main` is the stable registry channel because released binaries may fetch it without a binary update. Experimental resolver classes, broad top-N generated records, and unsoaked records should live behind an explicit `NANOBREW_UPSTREAM_REGISTRY_URL` beta URL until they pass verification, runtime checks, install benchmarks, and a beta-release soak. If a stable hosted record regresses, revert the hosted registry entry first; users can bypass immediately with `NANOBREW_DISABLE_UPSTREAM=1`.
 
+## Top-100 Expansion Workflow
+
+As of 2026-04-25, verified upstream coverage starts from 11/100 Homebrew formulae and 18/100 Homebrew casks in the top-100 analytics sets. Treat that as the baseline for the related #251-#256 work: any resolver-class or generated-record change should include a fresh coverage run and explain whether the delta comes from new records, analytics churn, or report logic.
+
+Keep top-100 expansion methodical and serial:
+
+1. Run coverage against the current registry before changing records.
+2. Classify the uncovered top-100 gaps by resolver class and artifact shape.
+3. Implement one resolver class, including parser/runtime support and generator support, before adding broad generated records for that class.
+4. Generate records from the reviewed source rules.
+5. Run a beta registry smoke test through `NANOBREW_UPSTREAM_REGISTRY_URL`.
+6. Run an install benchmark against the same beta registry.
+7. Apply the promotion gate.
+8. Promote the accepted records to the stable registry channel.
+
+Coverage comes first:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" scripts/upstream-coverage-report.mjs --top 100 --download-counts
+```
+
+For #255, classify every uncovered top-100 token before implementing a resolver class:
+
+```sh
+scripts/upstream-gap-report.mjs --top 100
+scripts/upstream-gap-report.mjs --top 100 --json > /tmp/upstream-gaps.json
+```
+
+The gap report emits buckets such as existing `github_release`, resolved `vendor_url`, Homebrew bottle metadata, source-build formula support, binary rename support, pkg-only casks, font casks, tap analytics metadata, `no_check` verification policy, unsupported install behavior, or unsafe/no deterministic verification. Keep the JSON output with the issue or PR so resolver work can be prioritized from recorded data.
+
+Implement and review one new resolver class at a time. The runtime resolver, registry schema changes, generated-record logic, fixtures, and fallback behavior should land together so a generated top-100 record cannot require behavior that `nb` does not understand yet. Existing GitHub-release formula and cask records can use the current seeders; new resolver classes should use the generator entrypoint added with that resolver.
+
+After generating records, test them through a beta registry URL instead of the stable `registry/upstream.json` channel. From the repo root, start a local beta registry server:
+
+```sh
+python3 -m http.server 8765
+```
+
+In another shell, run the smoke checks against that beta URL:
+
+```sh
+zig build
+NANOBREW_UPSTREAM_REGISTRY_URL=http://127.0.0.1:8765/registry/upstream.json \
+  NANOBREW_UPSTREAM_REGISTRY_CACHE=/opt/nanobrew/cache/api/upstream-registry-beta-local.json \
+  ./zig-out/bin/nb info <formula-token>
+NANOBREW_UPSTREAM_REGISTRY_URL=http://127.0.0.1:8765/registry/upstream.json \
+  NANOBREW_UPSTREAM_REGISTRY_CACHE=/opt/nanobrew/cache/api/upstream-registry-beta-local.json \
+  ./zig-out/bin/nb info --cask <cask-token>
+```
+
+The beta smoke should cover at least one generated formula, one generated cask when the change touches casks, one token missing from the beta registry to prove fallback still works, and one malformed or unsupported generated record when the resolver class has new validation logic. If a dedicated smoke script is added later, it should preserve those checks.
+
+Then measure the install path against the same beta registry:
+
+```sh
+scripts/bench-upstream-install.mjs --tokens <token-a>,<token-b> --iterations 1 --cold \
+  --upstream-registry-url http://127.0.0.1:8765/registry/upstream.json \
+  --upstream-registry-cache /opt/nanobrew/cache/api/upstream-registry-beta-local.json
+```
+
+The promotion gate is the last stop before stable. A record or resolver class passes only when coverage has been rerun, all top-100 additions have a documented classification, deterministic verification is present, fallback behavior is tested, generated records are reproducible, `zig build test-upstream-registry`, `zig build test-upstream-github`, and `zig build test` pass, beta `nb info` smoke passes, cold install benchmarks are recorded, and a beta/prerelease soak has not found regressions. Use `scripts/upstream-promotion-check.mjs` to make the coverage, registry, `no_check`, and benchmark parts explicit:
+
+```sh
+scripts/upstream-coverage-report.mjs --top 100 --json > /tmp/upstream-before.json
+# Apply generated registry changes, then:
+scripts/upstream-coverage-report.mjs --top 100 --json > /tmp/upstream-after.json
+scripts/bench-upstream-install.mjs --tokens <token-a>,<token-b> --iterations 1 --cold --json > /tmp/upstream-bench.json
+scripts/upstream-promotion-check.mjs \
+  --before-json /tmp/upstream-before.json \
+  --after-json /tmp/upstream-after.json \
+  --bench-json /tmp/upstream-bench.json \
+  --min-speedup 1
+```
+
+Pass `--allow-no-check` only when the record includes an explicit `verification.no_check_reason` and the PR explains why checksum pinning is impossible or not meaningful for that source.
+
+Promote stable only after the gate passes. Promotion means moving accepted records from the beta/generated candidate set into the stable hosted `registry/upstream.json` channel and, while the embedded fallback still exists, mirroring the same accepted records into `src/upstream/registry_default.json` in the integration branch. Re-run coverage after promotion and record the new top-100 formula/cask counts next to the 2026-04-25 baseline.
+
+Offline tooling fixtures cover coverage math, gap classification, release DB generation, and promotion gating:
+
+```sh
+node scripts/test-upstream-tooling.mjs
+```
+
 Use `scripts/build-upstream-release-db.mjs` after a record exists in `registry/upstream.json` to build a local review database of GitHub releases, assets, asset digests, and repository advisories. The default output is `registry/upstream-release-db.json`, which is ignored by git because it is generated review data, not runtime state.
 
 Use `scripts/seed-upstream-formulas.mjs` to find popular formula candidates programmatically from Homebrew's 30-day install-on-request analytics. The seeder only writes formula records when it can find a GitHub latest release, a macOS arm64 archive with a GitHub SHA256 asset digest, and an inferable binary path inside that archive. Archive inspection has download timeouts and a size cap so broad scans skip unsuitable payloads instead of hanging. It mirrors generated records into both `registry/upstream.json` and `src/upstream/registry_default.json` when run with `--write`.

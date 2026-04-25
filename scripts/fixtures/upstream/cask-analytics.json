@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "number": "1",
+      "cask": "fixture-gap-cask",
+      "count": "900"
+    },
+    {
+      "number": "2",
+      "cask": "fixture-seeded-cask",
+      "count": "600"
+    },
+    {
+      "number": "3",
+      "cask": "fixture-seeded-cask-shared",
+      "count": "300"
+    },
+    {
+      "number": "4",
+      "cask": "fixture-unseeded-cask",
+      "count": "100"
+    },
+    {
+      "number": "5",
+      "cask": "fixture-outside-top-cask",
+      "count": "50"
+    }
+  ]
+}

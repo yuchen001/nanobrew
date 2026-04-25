@@ -1,0 +1,28 @@
+[
+  {
+    "id": 3000,
+    "tag_name": "v3.0.0",
+    "name": "Fixture Promotion Gap 3.0.0",
+    "html_url": "https://github.com/fixture/promotion-gap/releases/tag/v3.0.0",
+    "target_commitish": "main",
+    "draft": false,
+    "prerelease": false,
+    "immutable": false,
+    "created_at": "2026-03-01T00:00:00Z",
+    "published_at": "2026-03-02T00:00:00Z",
+    "assets": [
+      {
+        "id": 3001,
+        "name": "FixtureGap-3.0.0-arm64.dmg",
+        "browser_download_url": "https://github.com/fixture/promotion-gap/releases/download/v3.0.0/FixtureGap-3.0.0-arm64.dmg",
+        "digest": "sha512:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "content_type": "application/x-apple-diskimage",
+        "state": "uploaded",
+        "size": 1800,
+        "download_count": 4,
+        "created_at": "2026-03-02T00:01:00Z",
+        "updated_at": "2026-03-02T00:01:00Z"
+      }
+    ]
+  }
+]
