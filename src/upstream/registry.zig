@@ -238,6 +238,55 @@ pub fn loadRegistry(alloc: std.mem.Allocator) !Registry {
     return loadRegistryWithOptions(alloc, options);
 }
 
+pub fn loadRecord(alloc: std.mem.Allocator, token: []const u8, kind: Kind) !Record {
+    var options: LoadOptions = .{};
+    if (envSlice("NANOBREW_UPSTREAM_REGISTRY_CACHE")) |cache_path| {
+        if (cache_path.len > 0) options.cache_path = cache_path;
+    }
+    if (envSlice("NANOBREW_UPSTREAM_REGISTRY_URL")) |remote_url| {
+        options.remote_url = remote_url;
+    }
+    if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE") != null) {
+        options.allow_remote = false;
+    }
+    if (options.remote_url.len == 0) {
+        options.allow_remote = false;
+    }
+    return loadRecordWithOptions(alloc, options, token, kind);
+}
+
+pub fn loadRecordWithOptions(alloc: std.mem.Allocator, options: LoadOptions, token: []const u8, kind: Kind) !Record {
+    var stale_record: ?Record = null;
+    errdefer if (stale_record) |record| record.deinit(alloc);
+
+    if (readRegistryCache(alloc, options.cache_path, options.cache_ttl_ns)) |cached_json| {
+        defer alloc.free(cached_json.data);
+        if (parseRecordFromRegistryJson(alloc, cached_json.data, token, kind)) |record| {
+            if (cached_json.fresh) return record;
+            stale_record = record;
+        } else |_| {}
+    }
+
+    if (options.allow_remote and options.remote_url.len > 0) {
+        if (fetchRemoteRegistryJson(alloc, options.remote_url)) |remote_json| {
+            defer alloc.free(remote_json);
+            if (parseRecordFromRegistryJson(alloc, remote_json, token, kind)) |record| {
+                writeRegistryCache(options.cache_path, remote_json);
+                if (stale_record) |old_record| old_record.deinit(alloc);
+                stale_record = null;
+                return record;
+            } else |_| {}
+        } else |_| {}
+    }
+
+    if (stale_record) |record| {
+        stale_record = null;
+        return record;
+    }
+
+    return parseRecordFromRegistryJson(alloc, DEFAULT_REGISTRY_JSON, token, kind);
+}
+
 pub fn loadRegistryWithOptions(alloc: std.mem.Allocator, options: LoadOptions) !Registry {
     var stale_registry: ?Registry = null;
     errdefer if (stale_registry) |registry| registry.deinit(alloc);
@@ -268,6 +317,83 @@ pub fn loadRegistryWithOptions(alloc: std.mem.Allocator, options: LoadOptions) !
     }
 
     return parseRegistry(alloc, DEFAULT_REGISTRY_JSON);
+}
+
+pub fn parseRecordJson(alloc: std.mem.Allocator, json_data: []const u8) !Record {
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc, json_data, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidField;
+    return parseRecord(alloc, parsed.value.object);
+}
+
+pub fn parseRecordFromRegistryJson(alloc: std.mem.Allocator, json_data: []const u8, token: []const u8, kind: Kind) !Record {
+    const needle_spaced = try std.fmt.allocPrint(alloc, "\"token\": \"{s}\"", .{token});
+    defer alloc.free(needle_spaced);
+    const needle_compact = try std.fmt.allocPrint(alloc, "\"token\":\"{s}\"", .{token});
+    defer alloc.free(needle_compact);
+
+    var search_start: usize = 0;
+    while (nextNeedleIndex(json_data, search_start, needle_spaced, needle_compact)) |token_idx| {
+        search_start = token_idx + 1;
+        const start = findRecordObjectStart(json_data, token_idx) orelse continue;
+        const end = findObjectEnd(json_data, start) orelse continue;
+        var record = parseRecordJson(alloc, json_data[start..end]) catch continue;
+        if (record.kind == kind and std.mem.eql(u8, record.token, token)) {
+            return record;
+        }
+        record.deinit(alloc);
+    }
+    return error.UpstreamRecordNotFound;
+}
+
+fn nextNeedleIndex(data: []const u8, start: usize, needle_a: []const u8, needle_b: []const u8) ?usize {
+    const a = std.mem.indexOfPos(u8, data, start, needle_a);
+    const b = std.mem.indexOfPos(u8, data, start, needle_b);
+    if (a) |ai| {
+        if (b) |bi| return @min(ai, bi);
+        return ai;
+    }
+    return b;
+}
+
+fn findRecordObjectStart(data: []const u8, token_idx: usize) ?usize {
+    var i = token_idx;
+    while (i > 0) {
+        i -= 1;
+        if (data[i] == '{') return i;
+    }
+    return null;
+}
+
+fn findObjectEnd(data: []const u8, start: usize) ?usize {
+    var depth: usize = 0;
+    var in_string = false;
+    var escaped = false;
+
+    var i = start;
+    while (i < data.len) : (i += 1) {
+        const c = data[i];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            in_string = true;
+        } else if (c == '{') {
+            depth += 1;
+        } else if (c == '}') {
+            depth -= 1;
+            if (depth == 0) return i + 1;
+        }
+    }
+    return null;
 }
 
 pub fn parseRegistry(alloc: std.mem.Allocator, json_data: []const u8) !Registry {
@@ -1054,6 +1180,62 @@ test "parseRegistry parses Homebrew bottle formula locks" {
     try testing.expectEqual(@as(usize, 0), record.assets.len);
     try testing.expect(record.resolved != null);
     try testing.expectEqualStrings("4.3.2", record.resolved.?.version);
+}
+
+test "parseRecordFromRegistryJson extracts a single matching record" {
+    const json =
+        \\{
+        \\  "schema_version": 1,
+        \\  "records": [{
+        \\    "token": "shared",
+        \\    "name": "Shared App",
+        \\    "kind": "cask",
+        \\    "upstream": {
+        \\      "type": "vendor_url",
+        \\      "allow_domains": ["example.test"],
+        \\      "verified": true
+        \\    },
+        \\    "artifacts": [{ "type": "app", "path": "Shared.app" }],
+        \\    "resolved": {
+        \\      "version": "1.0.0",
+        \\      "assets": {
+        \\        "macos-arm64": {
+        \\          "url": "https://example.test/shared.dmg",
+        \\          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        \\        }
+        \\      }
+        \\    },
+        \\    "verification": { "sha256": "required" }
+        \\  }, {
+        \\    "token": "shared",
+        \\    "name": "shared",
+        \\    "kind": "formula",
+        \\    "homepage": "https://example.test/shared",
+        \\    "desc": "Shared formula",
+        \\    "upstream": {
+        \\      "type": "homebrew_bottle",
+        \\      "verified": true
+        \\    },
+        \\    "resolved": {
+        \\      "version": "2.0.0",
+        \\      "assets": {
+        \\        "macos-arm64": {
+        \\          "url": "https://ghcr.io/v2/homebrew/core/shared/blobs/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        \\          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        \\        }
+        \\      }
+        \\    },
+        \\    "verification": { "sha256": "required" }
+        \\  }]
+        \\}
+    ;
+
+    const record = try parseRecordFromRegistryJson(testing.allocator, json, "shared", .formula);
+    defer record.deinit(testing.allocator);
+
+    try testing.expectEqual(Kind.formula, record.kind);
+    try testing.expectEqual(UpstreamType.homebrew_bottle, record.upstream.type);
+    try testing.expectEqualStrings("2.0.0", record.resolved.?.version);
 }
 
 test "parseRegistry parses cask artifacts and vendor allowlist" {

@@ -34,8 +34,15 @@ pub fn fetchCask(alloc: std.mem.Allocator, token: []const u8) !Cask {
 pub fn fetchFormula(alloc: std.mem.Allocator, token: []const u8) !Formula {
     if (readCachedFormula(alloc, token)) |formula| return formula;
 
-    const registry = try registry_mod.loadRegistry(alloc);
-    defer registry.deinit(alloc);
+    const record = try registry_mod.loadRecord(alloc, token, .formula);
+    defer record.deinit(alloc);
+    const formula = try fetchFormulaFromRecord(alloc, &record);
+    writeCachedFormula(token, &formula);
+    return formula;
+}
+
+pub fn fetchFormulaFromRegistry(alloc: std.mem.Allocator, token: []const u8, registry: *const registry_mod.Registry) !Formula {
+    if (readCachedFormula(alloc, token)) |formula| return formula;
 
     const record = registry.find(token, .formula) orelse return error.UpstreamRecordNotFound;
     const formula = try fetchFormulaFromRecord(alloc, record);
@@ -623,6 +630,23 @@ fn readCachedFile(alloc: std.mem.Allocator, path: []const u8) ?[]u8 {
 
 fn readCachedFormula(alloc: std.mem.Allocator, token: []const u8) ?Formula {
     return readCachedFormulaInner(alloc, token) catch null;
+}
+
+pub fn hasCachedFormula(token: []const u8) bool {
+    var path_buf: [512]u8 = undefined;
+    const cache_path = upstreamFormulaCachePath(token, &path_buf) catch return false;
+    return cachedFileIsFresh(cache_path);
+}
+
+fn cachedFileIsFresh(path: []const u8) bool {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch return false;
+    defer file.close(io);
+    const st = file.stat(io) catch return false;
+    if (st.size == 0) return false;
+    const now_ts = std.Io.Timestamp.now(io, .real);
+    const age_ns: i96 = now_ts.nanoseconds - st.mtime.nanoseconds;
+    return age_ns <= CACHE_TTL_NS;
 }
 
 fn readCachedFormulaInner(alloc: std.mem.Allocator, token: []const u8) !Formula {

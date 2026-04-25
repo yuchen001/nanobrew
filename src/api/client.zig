@@ -13,6 +13,7 @@ const Artifact = @import("cask.zig").Artifact;
 const tap = @import("tap.zig");
 const fetch = @import("../net/fetch.zig");
 const upstream_github = @import("../upstream/github.zig");
+const upstream_registry = @import("../upstream/registry.zig");
 
 const API_BASE = "https://formulae.brew.sh/api/formula/";
 const CASK_API_BASE = "https://formulae.brew.sh/api/cask/";
@@ -204,13 +205,29 @@ fn readCachedList(alloc: std.mem.Allocator, path: []const u8, ttl_ns: u64) ?[]u8
 
 /// Fetch formula using a shared HTTP client (avoids repeated TLS handshakes).
 pub fn fetchFormulaWithClient(alloc: std.mem.Allocator, client: ?*std.http.Client, name: []const u8) !Formula {
+    return fetchFormulaWithClientAndUpstreamRegistry(alloc, client, name, null);
+}
+
+/// Fetch formula using a shared HTTP client and, when available, a preloaded
+/// upstream registry. Dependency resolution calls this to avoid reparsing the
+/// generated registry once per dependency.
+pub fn fetchFormulaWithClientAndUpstreamRegistry(
+    alloc: std.mem.Allocator,
+    client: ?*std.http.Client,
+    name: []const u8,
+    registry: ?*const upstream_registry.Registry,
+) !Formula {
     // Tap formula: "user/tap/formula" -> fetch from GitHub
     if (isTapRef(name)) {
         return tap.fetchTapFormula(alloc, client, name);
     }
 
     if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM") == null) {
-        if (upstream_github.fetchFormula(alloc, name)) |upstream_formula| {
+        const upstream_result = if (registry) |loaded_registry|
+            upstream_github.fetchFormulaFromRegistry(alloc, name, loaded_registry)
+        else
+            upstream_github.fetchFormula(alloc, name);
+        if (upstream_result) |upstream_formula| {
             return upstream_formula;
         } else |err| switch (err) {
             error.UpstreamRecordNotFound,
@@ -244,7 +261,7 @@ pub fn fetchFormulaWithClient(alloc: std.mem.Allocator, client: ?*std.http.Clien
             defer alloc.free(resolved_name);
             if (!std.mem.eql(u8, resolved_name, name)) {
                 // Found an alias, fetch with the resolved name
-                const r = fetchFormulaWithClient(alloc, client, resolved_name) catch return result;
+                const r = fetchFormulaWithClientAndUpstreamRegistry(alloc, client, resolved_name, registry) catch return result;
                 // Return the formula with its resolved name
                 return r;
             }

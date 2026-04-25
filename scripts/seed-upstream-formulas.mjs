@@ -61,6 +61,7 @@ function parseArgs(argv) {
     analyticsFile: null,
     formulaFile: null,
     includeExisting: false,
+    includeDependencies: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -79,6 +80,8 @@ function parseArgs(argv) {
       opts.replace = true;
     } else if (arg === "--include-existing") {
       opts.includeExisting = true;
+    } else if (arg === "--include-dependencies") {
+      opts.includeDependencies = true;
     } else if (arg === "--registry") {
       opts.registry = argv[++i] ?? "";
     } else if (arg.startsWith("--registry=")) {
@@ -122,6 +125,7 @@ Options:
   --write                    Update registry files; otherwise print candidates
   --replace                  Replace existing formula records for generated tokens
   --include-existing         Include already-seeded records in printed output
+  --include-dependencies     Also seed Homebrew bottle records for dependency closure
   --registry PATH            Registry to update (default: ${DEFAULT_REGISTRY})
   --embedded-registry PATH   Embedded fallback to update (default: ${DEFAULT_EMBEDDED_REGISTRY})
   --analytics-file PATH      Read analytics JSON from disk instead of fetching
@@ -147,6 +151,7 @@ async function main() {
   ]);
 
   const formulaByName = new Map(formulae.map((formula) => [formula.name, formula]));
+  const analyticsByFormula = new Map((analytics.items ?? []).map((item) => [item.formula, item]));
   const existing = new Set((registry.records ?? []).map((record) => `${record.kind}:${record.token}`));
   const candidates = [];
   const skipped = [];
@@ -192,6 +197,17 @@ async function main() {
     candidates.push(seeded.record);
   }
 
+  if (opts.includeDependencies) {
+    seedDependencyClosure({
+      registry,
+      formulaByName,
+      analyticsByFormula,
+      candidates,
+      skipped,
+      replace: opts.replace,
+    });
+  }
+
   if (!opts.write) {
     process.stdout.write(JSON.stringify({ records: candidates, skipped: skipped.slice(0, 40) }, null, 2));
     process.stdout.write("\n");
@@ -208,7 +224,56 @@ async function main() {
   console.error(`seeded ${candidates.length} formula record(s): ${candidates.map((record) => record.token).join(", ")}`);
 }
 
-function seedBottleRecordFromFormula(formula, analyticsItem) {
+function seedDependencyClosure({ registry, formulaByName, analyticsByFormula, candidates, skipped, replace }) {
+  const recordsByToken = new Map();
+  for (const record of registry.records ?? []) {
+    if (record.kind !== "formula") continue;
+    if (!replace || !candidates.some((candidate) => candidate.token === record.token)) {
+      recordsByToken.set(record.token, record);
+    }
+  }
+  for (const record of candidates) {
+    if (record.kind === "formula") recordsByToken.set(record.token, record);
+  }
+
+  const queue = [];
+  const queued = new Set();
+  for (const record of recordsByToken.values()) {
+    for (const dep of record.dependencies ?? []) {
+      if (!recordsByToken.has(dep) && !queued.has(dep)) {
+        queue.push(dep);
+        queued.add(dep);
+      }
+    }
+  }
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const token = queue[cursor];
+    if (recordsByToken.has(token)) continue;
+    const formula = formulaByName.get(token);
+    if (!formula) {
+      skipped.push({ token, reason: "dependency formula metadata missing" });
+      continue;
+    }
+
+    const seeded = seedBottleRecordFromFormula(formula, analyticsByFormula.get(token));
+    if (!seeded.ok) {
+      skipped.push({ token, reason: `dependency ${seeded.reason}` });
+      continue;
+    }
+
+    candidates.push(seeded.record);
+    recordsByToken.set(token, seeded.record);
+    for (const dep of seeded.record.dependencies ?? []) {
+      if (!recordsByToken.has(dep) && !queued.has(dep)) {
+        queue.push(dep);
+        queued.add(dep);
+      }
+    }
+  }
+}
+
+function seedBottleRecordFromFormula(formula, analyticsItem = null) {
   const version = formula?.versions?.stable ?? "";
   const bottle = formula?.bottle?.stable;
   const files = bottle?.files;
@@ -246,8 +311,8 @@ function seedBottleRecordFromFormula(formula, analyticsItem) {
         verified: true,
       },
       analytics: {
-        install_on_request_30d_rank: Number.parseInt(String(analyticsItem.number ?? ""), 10) || undefined,
-        install_on_request_30d_count: analyticsItem.count ?? "",
+        install_on_request_30d_rank: Number.parseInt(String(analyticsItem?.number ?? ""), 10) || undefined,
+        install_on_request_30d_count: analyticsItem?.count ?? "",
       },
       resolved: {
         version,
