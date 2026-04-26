@@ -1,0 +1,397 @@
+name: Upstream Tooling
+
+on:
+  workflow_dispatch:
+    inputs:
+      formula_tokens:
+        description: "Comma-separated formula tokens for actual install benchmarks"
+        required: false
+        default: "actionlint,fd,ripgrep,uv,starship,zoxide,yq"
+      formula_iterations:
+        description: "Timed install runs per formula/mode"
+        required: false
+        default: "1"
+      min_speedup:
+        description: "Minimum speedup required by promotion gate"
+        required: false
+        default: "1"
+      run_formula_install_benchmark:
+        description: "Run actual formula install benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_cask_install_benchmark:
+        description: "Run actual cask install benchmarks on the disposable runner"
+        required: false
+        type: boolean
+        default: false
+      run_manager_comparison:
+        description: "Run sandboxed yt-dlp comparison across nanobrew, Homebrew, and zerobrew"
+        required: false
+        type: boolean
+        default: false
+      cask_tokens:
+        description: "Comma-separated cask tokens for actual install benchmarks"
+        required: false
+        default: "iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,firefox,google-chrome,brave-browser,orbstack,alacritty,alt-tab,maccy,rectangle,stats,ghostty,zed,obsidian,bitwarden,bruno,github,slack,telegram"
+      cask_iterations:
+        description: "Timed install runs per cask/mode"
+        required: false
+        default: "2"
+      cask_order:
+        description: "Cask benchmark order: upstream-first, homebrew-first, or alternating"
+        required: false
+        default: "alternating"
+  push:
+    branches:
+      - codex/issue-251-upstream-tooling
+    paths:
+      - ".github/workflows/upstream-tooling.yml"
+      - "build.zig"
+      - "registry/upstream.json"
+      - "scripts/**"
+      - "src/**"
+      - "tests/fixtures/upstream-release-db/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate upstream registry and tooling
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build nanobrew
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Run upstream Zig tests
+        run: |
+          zig build test-upstream-registry
+          zig build test-upstream-github
+          zig build test
+
+      - name: Check upstream script syntax
+        run: |
+          for script in \
+            scripts/bench-upstream-install.mjs \
+            scripts/bench-upstream-resolution.mjs \
+            scripts/bench-manager-comparison.mjs \
+            scripts/build-upstream-release-db.mjs \
+            scripts/discover-github-upstreams.mjs \
+            scripts/seed-upstream-casks.mjs \
+            scripts/seed-upstream-formulas.mjs \
+            scripts/test-upstream-tooling.mjs \
+            scripts/upstream-coverage-report.mjs \
+            scripts/upstream-gap-report.mjs \
+            scripts/upstream-promotion-check.mjs
+          do
+            node --check "$script"
+          done
+
+      - name: Run upstream tooling fixture tests
+        run: node scripts/test-upstream-tooling.mjs
+
+      - name: Initialize disposable nanobrew root
+        run: |
+          sudo mkdir -p /opt/nanobrew
+          sudo chown -R "$USER" /opt/nanobrew
+          ./zig-out/bin/nb init
+
+      - name: Smoke verified upstream metadata paths
+        run: |
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info actionlint
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info fd
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info --cask codex
+          NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1 ./zig-out/bin/nb info --cask visual-studio-code
+
+      - name: Generate upstream coverage report
+        run: node scripts/upstream-coverage-report.mjs --top 100 --json > upstream-coverage.json
+
+      - name: Generate upstream gap report
+        run: node scripts/upstream-gap-report.mjs --top 100 --json > upstream-gaps.json
+
+      - name: Run promotion gate without benchmark
+        run: |
+          node scripts/upstream-promotion-check.mjs \
+            --top 100 \
+            --after-json upstream-coverage.json \
+            --allow-no-check \
+            --json > upstream-promotion-check.json
+
+      - name: Upload upstream validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-validation
+          path: |
+            upstream-coverage.json
+            upstream-gaps.json
+            upstream-promotion-check.json
+
+  formula-install-benchmark:
+    name: Benchmark formula install path
+    runs-on: macos-14
+    timeout-minutes: 30
+    needs: validate
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_formula_install_benchmark) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build nanobrew
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Initialize disposable nanobrew root
+        run: |
+          sudo mkdir -p /opt/nanobrew
+          sudo chown -R "$USER" /opt/nanobrew
+          ./zig-out/bin/nb init
+
+      - name: Benchmark actual formula installs
+        run: |
+          scripts/bench-upstream-install.mjs \
+            --tokens "${{ inputs.formula_tokens || 'actionlint,fd,ripgrep,uv,starship,zoxide,yq' }}" \
+            --iterations "${{ inputs.formula_iterations || '1' }}" \
+            --cold \
+            --json > upstream-install-bench-formula.json
+
+      - name: Summarize formula benchmark
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync("upstream-install-bench-formula.json", "utf8"));
+          const lines = [
+            "### Formula install benchmark",
+            "",
+            `measured: ${result.summary.measured_count}, faster: ${result.summary.faster_count}, weighted speedup: ${result.summary.weighted_speedup}x, average speedup: ${result.summary.average_speedup}x`,
+            "",
+            "| token | upstream | Homebrew metadata | speedup |",
+            "|---|---:|---:|---:|",
+            ...result.rows.map((row) => `| \`${row.token}\` | ${row.upstream_median_ms}ms | ${row.homebrew_median_ms}ms | ${row.speedup}x |`),
+            "",
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          NODE
+
+      - name: Generate upstream coverage report
+        run: node scripts/upstream-coverage-report.mjs --top 100 --json > upstream-coverage.json
+
+      - name: Gate benchmark result
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          node scripts/upstream-promotion-check.mjs \
+            --top 100 \
+            --after-json upstream-coverage.json \
+            --allow-no-check \
+            --bench-json upstream-install-bench-formula.json \
+            --min-speedup "${{ inputs.min_speedup || '1' }}" \
+            --json > upstream-promotion-check-with-formula-bench.json
+
+      - name: Upload formula benchmark artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-formula-install-benchmark
+          path: |
+            upstream-install-bench-formula.json
+            upstream-promotion-check-with-formula-bench.json
+
+  manager-comparison-benchmark:
+    name: Benchmark yt-dlp across package managers
+    runs-on: macos-14
+    timeout-minutes: 45
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_manager_comparison }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build current nanobrew
+        run: |
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/nb /tmp/nb-current
+
+      - name: Build previous nanobrew release
+        run: |
+          git worktree add --detach /tmp/nanobrew-v0.1.191 v0.1.191
+          cd /tmp/nanobrew-v0.1.191
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/nb /tmp/nb-v0.1.191
+
+      - name: Download pinned zerobrew binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/zerobrew-bin
+          gh release download v0.2.1 \
+            --repo lucasgelfond/zerobrew \
+            --pattern 'zb-darwin-arm64' \
+            --pattern 'SHA256SUMS' \
+            --dir /tmp/zerobrew-bin
+          (cd /tmp/zerobrew-bin && shasum -a 256 -c SHA256SUMS --ignore-missing)
+          chmod +x /tmp/zerobrew-bin/zb-darwin-arm64
+          /tmp/zerobrew-bin/zb-darwin-arm64 --version
+
+      - name: Run sandboxed yt-dlp comparison
+        run: |
+          node scripts/bench-manager-comparison.mjs \
+            --token yt-dlp \
+            --iterations 5 \
+            --nb-current /tmp/nb-current \
+            --nb-previous /tmp/nb-v0.1.191 \
+            --zerobrew /tmp/zerobrew-bin/zb-darwin-arm64 \
+            --zerobrew-root /tmp/zbr \
+            --zerobrew-prefix /tmp/zbp \
+            --allow-opt-reset \
+            --allow-homebrew-reset \
+            --json-out manager-comparison-yt-dlp.json
+
+      - name: Summarize manager comparison
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync("manager-comparison-yt-dlp.json", "utf8"));
+          const lines = [
+            "### yt-dlp package manager comparison",
+            "",
+            "Target reinstall means dependencies and cache/store were primed, then only `yt-dlp` was removed and installed again. No-op means `yt-dlp` was already installed and the install command was run again.",
+            "",
+            "| manager | target reinstall | no-op median | speedup vs current reinstall | speedup vs current no-op |",
+            "|---|---:|---:|---:|---:|",
+            ...result.rows.map((row) => `| ${row.manager} | ${row.target_reinstall_ms}ms | ${row.noop_median_ms}ms | ${fmt(row.current_speedup_target_reinstall)} | ${fmt(row.current_speedup_noop)} |`),
+            "",
+            "Current nanobrew is run as `nb install --shims yt-dlp`; the workflow also smoke-tests that `yt-dlp --version` works and dependency executables such as `deno`/`python3.14` are not exposed in nanobrew's `prefix/bin`.",
+            "",
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          function fmt(value) {
+            return Number.isFinite(value) ? `${value}x` : "";
+          }
+          NODE
+
+      - name: Upload manager comparison artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: manager-comparison-yt-dlp
+          path: manager-comparison-yt-dlp.json
+
+  cask-install-benchmark:
+    name: Benchmark cask install path
+    runs-on: macos-14
+    timeout-minutes: 45
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cask_install_benchmark }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build nanobrew
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Initialize disposable nanobrew root
+        run: |
+          sudo mkdir -p /opt/nanobrew
+          sudo chown -R "$USER" /opt/nanobrew
+          ./zig-out/bin/nb init
+
+      - name: Benchmark actual cask installs
+        run: |
+          scripts/bench-upstream-install.mjs \
+            --kind cask \
+            --tokens "${{ inputs.cask_tokens || 'iterm2,codex,font-hack-nerd-font,visual-studio-code,cursor,raycast,postman,firefox,google-chrome,brave-browser,orbstack,alacritty,alt-tab,maccy,rectangle,stats,ghostty,zed,obsidian,bitwarden,bruno,github,slack,telegram' }}" \
+            --iterations "${{ inputs.cask_iterations || '2' }}" \
+            --order "${{ inputs.cask_order || 'alternating' }}" \
+            --cold \
+            --allow-casks \
+            --trace \
+            --json > upstream-install-bench-cask.json
+
+      - name: Summarize cask benchmark
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync("upstream-install-bench-cask.json", "utf8"));
+          const lines = [
+            "### Cask install benchmark",
+            "",
+            `measured: ${result.summary.measured_count}, faster: ${result.summary.faster_count}, weighted speedup: ${result.summary.weighted_speedup}x, average speedup: ${result.summary.average_speedup}x`,
+            "",
+            "| token | upstream | Homebrew metadata | speedup |",
+            "|---|---:|---:|---:|",
+            ...result.rows.map((row) => `| \`${row.token}\` | ${row.upstream_median_ms}ms | ${row.homebrew_median_ms}ms | ${row.speedup}x |`),
+            "",
+          ];
+          const phaseRows = result.rows.map((row) => {
+            const entries = Object.entries(row.phase_delta_ms ?? {})
+              .filter(([, delta]) => Number.isFinite(delta))
+              .sort((a, b) => a[1] - b[1]);
+            if (entries.length === 0) return null;
+            const [phase, delta] = entries[0];
+            return {
+              token: row.token,
+              phase,
+              upstream: row.upstream_phase_median_ms?.[phase],
+              homebrew: row.homebrew_phase_median_ms?.[phase],
+              delta,
+            };
+          }).filter(Boolean);
+          if (phaseRows.length > 0) {
+            lines.push(
+              "Phase deltas are Homebrew metadata minus upstream; negative means upstream was slower.",
+              "",
+              "| token | largest upstream deficit phase | upstream | Homebrew metadata | delta |",
+              "|---|---|---:|---:|---:|",
+              ...phaseRows.map((row) => `| \`${row.token}\` | \`${row.phase}\` | ${row.upstream}ms | ${row.homebrew}ms | ${row.delta}ms |`),
+              "",
+            );
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          NODE
+
+      - name: Upload cask benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-cask-install-benchmark
+          path: upstream-install-bench-cask.json

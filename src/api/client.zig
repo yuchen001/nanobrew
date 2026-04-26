@@ -12,6 +12,8 @@ const Cask = @import("cask.zig").Cask;
 const Artifact = @import("cask.zig").Artifact;
 const tap = @import("tap.zig");
 const fetch = @import("../net/fetch.zig");
+const upstream_github = @import("../upstream/github.zig");
+const upstream_registry = @import("../upstream/registry.zig");
 
 const API_BASE = "https://formulae.brew.sh/api/formula/";
 const CASK_API_BASE = "https://formulae.brew.sh/api/cask/";
@@ -46,26 +48,29 @@ fn normalizeCaskApiPrefix(scratch: *[512]u8, e: []const u8) []const u8 {
 }
 
 fn normalizedFormulaApiBase(scratch: *[512]u8) []const u8 {
-    if (std.c.getenv("NANOBREW_API_DOMAIN")) |_cv| { const d = std.mem.sliceTo(_cv, 0);
+    if (std.c.getenv("NANOBREW_API_DOMAIN")) |_cv| {
+        const d = std.mem.sliceTo(_cv, 0);
         if (isValidDomainOverride(d)) return normalizeFormulaApiPrefix(scratch, d);
     }
-    if (std.c.getenv("HOMEBREW_API_DOMAIN")) |_cv| { const d = std.mem.sliceTo(_cv, 0);
+    if (std.c.getenv("HOMEBREW_API_DOMAIN")) |_cv| {
+        const d = std.mem.sliceTo(_cv, 0);
         if (isValidDomainOverride(d)) return normalizeFormulaApiPrefix(scratch, d);
     }
     return API_BASE;
 }
 
 fn normalizedCaskApiBase(scratch: *[512]u8) []const u8 {
-    if (std.c.getenv("NANOBREW_API_DOMAIN")) |_cv| { const d = std.mem.sliceTo(_cv, 0);
+    if (std.c.getenv("NANOBREW_API_DOMAIN")) |_cv| {
+        const d = std.mem.sliceTo(_cv, 0);
         if (isValidDomainOverride(d)) return normalizeCaskApiPrefix(scratch, d);
     }
-    if (std.c.getenv("HOMEBREW_API_DOMAIN")) |_cv| { const d = std.mem.sliceTo(_cv, 0);
+    if (std.c.getenv("HOMEBREW_API_DOMAIN")) |_cv| {
+        const d = std.mem.sliceTo(_cv, 0);
         if (isValidDomainOverride(d)) return normalizeCaskApiPrefix(scratch, d);
     }
     return CASK_API_BASE;
 }
 const API_CACHE_DIR = @import("../platform/paths.zig").API_CACHE_DIR;
-
 
 pub fn fetchFormula(alloc: std.mem.Allocator, name: []const u8) !Formula {
     return fetchFormulaWithClient(alloc, null, name);
@@ -187,7 +192,10 @@ fn readCachedList(alloc: std.mem.Allocator, path: []const u8, ttl_ns: u64) ?[]u8
     if (age_ns > @as(i96, @intCast(ttl_ns))) return null;
     const sz = @min(st.size, 64 * 1024 * 1024);
     const buf = alloc.alloc(u8, sz) catch return null;
-    const n = file.readPositionalAll(lib_io, buf, 0) catch { alloc.free(buf); return null; };
+    const n = file.readPositionalAll(lib_io, buf, 0) catch {
+        alloc.free(buf);
+        return null;
+    };
     if (n < sz) {
         const trimmed = alloc.realloc(buf, n) catch return buf[0..n];
         return trimmed;
@@ -197,8 +205,41 @@ fn readCachedList(alloc: std.mem.Allocator, path: []const u8, ttl_ns: u64) ?[]u8
 
 /// Fetch formula using a shared HTTP client (avoids repeated TLS handshakes).
 pub fn fetchFormulaWithClient(alloc: std.mem.Allocator, client: ?*std.http.Client, name: []const u8) !Formula {
-    // Tap formula: "user/tap/formula" -> fetch from GitHub
-    if (isTapRef(name)) {
+    return fetchFormulaWithClientAndUpstreamRegistry(alloc, client, name, null);
+}
+
+/// Fetch formula using a shared HTTP client and, when available, a preloaded
+/// upstream registry. Dependency resolution calls this to avoid reparsing the
+/// generated registry once per dependency.
+pub fn fetchFormulaWithClientAndUpstreamRegistry(
+    alloc: std.mem.Allocator,
+    client: ?*std.http.Client,
+    name: []const u8,
+    registry: ?*const upstream_registry.Registry,
+) !Formula {
+    const tap_ref = isTapRef(name);
+
+    if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM") == null) {
+        const upstream_result = if (registry) |loaded_registry|
+            upstream_github.fetchFormulaFromRegistry(alloc, name, loaded_registry)
+        else
+            upstream_github.fetchFormula(alloc, name);
+        if (upstream_result) |upstream_formula| {
+            return upstream_formula;
+        } else |err| switch (err) {
+            error.UpstreamRecordNotFound,
+            error.UnsupportedPlatform,
+            error.MissingAsset,
+            error.FetchFailed,
+            error.InvalidGithubRelease,
+            => {},
+            else => return err,
+        }
+    }
+
+    // Tap formula: "user/tap/formula" -> fetch from GitHub when no verified
+    // upstream record exists for the tap token.
+    if (tap_ref) {
         return tap.fetchTapFormula(alloc, client, name);
     }
 
@@ -222,7 +263,7 @@ pub fn fetchFormulaWithClient(alloc: std.mem.Allocator, client: ?*std.http.Clien
             defer alloc.free(resolved_name);
             if (!std.mem.eql(u8, resolved_name, name)) {
                 // Found an alias, fetch with the resolved name
-                const r = fetchFormulaWithClient(alloc, client, resolved_name) catch return result;
+                const r = fetchFormulaWithClientAndUpstreamRegistry(alloc, client, resolved_name, registry) catch return result;
                 // Return the formula with its resolved name
                 return r;
             }
@@ -240,8 +281,26 @@ fn isTapRef(name: []const u8) bool {
 }
 
 pub fn fetchCask(alloc: std.mem.Allocator, token: []const u8) !Cask {
-    // Tap cask: "user/tap/cask" -> fetch from GitHub
-    if (tap.parseTapRef(token) != null) {
+    const tap_ref = tap.parseTapRef(token) != null;
+
+    if (std.c.getenv("NANOBREW_DISABLE_UPSTREAM") == null) {
+        if (upstream_github.fetchCask(alloc, token)) |upstream_cask| {
+            return upstream_cask;
+        } else |err| switch (err) {
+            error.UpstreamRecordNotFound,
+            error.UnsupportedPlatform,
+            error.UnsupportedUpstreamType,
+            error.MissingAsset,
+            error.FetchFailed,
+            error.InvalidGithubRelease,
+            => {},
+            else => return err,
+        }
+    }
+
+    // Tap cask: "user/tap/cask" -> fetch from GitHub when no verified
+    // upstream record exists for the tap token.
+    if (tap_ref) {
         return tap.fetchTapCask(alloc, token);
     }
 
@@ -308,7 +367,7 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
             if (root.get("variations")) |vars| {
                 if (vars == .object) {
                     const intel_keys = [_][]const u8{
-                        "tahoe", "sequoia", "sonoma", "ventura", "monterey",
+                        "tahoe",   "sequoia",  "sonoma", "ventura",     "monterey",
                         "big_sur", "catalina", "mojave", "high_sierra", "x86_64",
                     };
                     for (intel_keys) |key| {
@@ -332,7 +391,7 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
             if (root.get("variations")) |vars| {
                 if (vars == .object) {
                     const intel_keys = [_][]const u8{
-                        "tahoe", "sequoia", "sonoma", "ventura", "monterey",
+                        "tahoe",   "sequoia",  "sonoma", "ventura",     "monterey",
                         "big_sur", "catalina", "mojave", "high_sierra", "x86_64",
                     };
                     for (intel_keys) |key| {
@@ -400,6 +459,20 @@ fn parseCaskJson(alloc: std.mem.Allocator, json_data: []const u8) !Cask {
                     alloc.free(b.target);
                 },
                 .pkg => |p| alloc.free(p),
+                .font => |f| alloc.free(f),
+                .artifact => |a| {
+                    alloc.free(a.source);
+                    alloc.free(a.target);
+                },
+                .suite => |s| {
+                    alloc.free(s.source);
+                    alloc.free(s.target);
+                },
+                .installer_script => |script| {
+                    alloc.free(script.executable);
+                    for (script.args) |arg| alloc.free(arg);
+                    alloc.free(script.args);
+                },
                 .uninstall => |u| {
                     alloc.free(u.quit);
                     alloc.free(u.pkgutil);
@@ -521,7 +594,10 @@ fn readCached(alloc: std.mem.Allocator, path: []const u8) ?[]u8 {
     if (age_ns > 3600 * std.time.ns_per_s) return null;
     const sz = @min(st.size, 2 * 1024 * 1024);
     const buf = alloc.alloc(u8, sz) catch return null;
-    const n = file.readPositionalAll(lib_io, buf, 0) catch { alloc.free(buf); return null; };
+    const n = file.readPositionalAll(lib_io, buf, 0) catch {
+        alloc.free(buf);
+        return null;
+    };
     if (n < sz) {
         const trimmed = alloc.realloc(buf, n) catch return buf[0..n];
         return trimmed;
@@ -909,7 +985,6 @@ test "parseFormulaJson - missing/non-string homepage+license are empty (issue #2
     try testing.expectEqualStrings("", f.homepage);
     try testing.expectEqualStrings("", f.license);
 }
-
 
 test "findBottleTag - primary tag found" {
     // Build a JSON object with the current platform's BOTTLE_TAG as a key

@@ -10,14 +10,46 @@ pub const DownloadFormat = enum {
     zip,
     pkg,
     tar_gz,
+    tar_xz,
+    shell_script,
+    binary,
     unknown,
+};
+
+pub const MetadataSource = enum {
+    homebrew,
+    verified_upstream,
 };
 
 pub const Artifact = union(enum) {
     app: []const u8, // e.g. "Firefox.app"
     binary: struct { source: []const u8, target: []const u8 },
     pkg: []const u8, // pkg filename
+    font: []const u8,
+    artifact: struct { source: []const u8, target: []const u8 },
+    suite: struct { source: []const u8, target: []const u8 },
+    installer_script: struct { executable: []const u8, args: []const []const u8 },
     uninstall: struct { quit: []const u8, pkgutil: []const u8 },
+};
+
+pub const SecurityWarning = struct {
+    ghsa_id: []const u8,
+    cve_id: []const u8,
+    severity: []const u8,
+    summary: []const u8,
+    url: []const u8,
+    affected_versions: []const u8,
+    patched_versions: []const u8,
+
+    pub fn deinit(self: SecurityWarning, alloc: std.mem.Allocator) void {
+        alloc.free(self.ghsa_id);
+        alloc.free(self.cve_id);
+        alloc.free(self.severity);
+        alloc.free(self.summary);
+        alloc.free(self.url);
+        alloc.free(self.affected_versions);
+        alloc.free(self.patched_versions);
+    }
 };
 
 pub const Cask = struct {
@@ -31,6 +63,8 @@ pub const Cask = struct {
     auto_updates: bool,
     artifacts: []const Artifact,
     min_macos: ?[]const u8,
+    metadata_source: MetadataSource = .homebrew,
+    security_warnings: []const SecurityWarning = &.{},
 
     pub fn downloadFormat(self: *const Cask) DownloadFormat {
         if (std.mem.endsWith(u8, self.url, ".dmg")) return .dmg;
@@ -38,7 +72,25 @@ pub const Cask = struct {
         if (std.mem.endsWith(u8, self.url, ".pkg")) return .pkg;
         if (std.mem.endsWith(u8, self.url, ".tar.gz")) return .tar_gz;
         if (std.mem.endsWith(u8, self.url, ".tgz")) return .tar_gz;
+        if (std.mem.endsWith(u8, self.url, ".tar.xz")) return .tar_xz;
+        if (std.mem.endsWith(u8, self.url, ".sh")) return .shell_script;
+        if (std.mem.indexOf(u8, self.url, "extension=zip") != null) return .zip;
+        if (std.mem.indexOf(u8, self.url, "update.code.visualstudio.com/") != null) return .zip;
+        if (std.mem.indexOf(u8, self.url, "download-chromium.appspot.com/") != null) return .zip;
+        if (self.hasOnlyBinaryArtifacts()) return .binary;
         return .unknown;
+    }
+
+    fn hasOnlyBinaryArtifacts(self: *const Cask) bool {
+        var binary_count: usize = 0;
+        for (self.artifacts) |artifact| {
+            switch (artifact) {
+                .binary => binary_count += 1,
+                .uninstall => {},
+                .app, .pkg, .font, .artifact, .suite, .installer_script => return false,
+            }
+        }
+        return binary_count == 1;
     }
 
     pub fn shouldVerifySha(self: *const Cask) bool {
@@ -65,6 +117,20 @@ pub const Cask = struct {
                     alloc.free(b.target);
                 },
                 .pkg => |p| alloc.free(p),
+                .font => |f| alloc.free(f),
+                .artifact => |a| {
+                    alloc.free(a.source);
+                    alloc.free(a.target);
+                },
+                .suite => |s| {
+                    alloc.free(s.source);
+                    alloc.free(s.target);
+                },
+                .installer_script => |script| {
+                    alloc.free(script.executable);
+                    for (script.args) |arg| alloc.free(arg);
+                    alloc.free(script.args);
+                },
                 .uninstall => |u| {
                     alloc.free(u.quit);
                     alloc.free(u.pkgutil);
@@ -73,6 +139,8 @@ pub const Cask = struct {
         }
         alloc.free(self.artifacts);
         if (self.min_macos) |m| alloc.free(m);
+        for (self.security_warnings) |warning| warning.deinit(alloc);
+        if (self.security_warnings.len > 0) alloc.free(self.security_warnings);
     }
 };
 
@@ -124,6 +192,43 @@ test "downloadFormat - detects pkg" {
         .min_macos = null,
     };
     try testing.expectEqual(DownloadFormat.pkg, c.downloadFormat());
+}
+
+test "downloadFormat - detects direct binary-only cask" {
+    const c = Cask{
+        .token = "claude-code",
+        .name = "Claude Code",
+        .version = "2.1.109",
+        .url = "https://example.com/releases/darwin-arm64/claude",
+        .sha256 = "abc123",
+        .homepage = "",
+        .desc = "CLI",
+        .auto_updates = false,
+        .artifacts = &.{
+            .{ .binary = .{ .source = "claude", .target = "claude" } },
+        },
+        .min_macos = null,
+    };
+    try testing.expectEqual(DownloadFormat.binary, c.downloadFormat());
+}
+
+test "downloadFormat - leaves extensionless multi-binary archives unknown" {
+    const c = Cask{
+        .token = "multi",
+        .name = "Multi",
+        .version = "1.0",
+        .url = "https://example.com/download",
+        .sha256 = "abc123",
+        .homepage = "",
+        .desc = "CLI",
+        .auto_updates = false,
+        .artifacts = &.{
+            .{ .binary = .{ .source = "bin/a", .target = "a" } },
+            .{ .binary = .{ .source = "bin/b", .target = "b" } },
+        },
+        .min_macos = null,
+    };
+    try testing.expectEqual(DownloadFormat.unknown, c.downloadFormat());
 }
 
 test "shouldVerifySha - returns true for normal sha" {

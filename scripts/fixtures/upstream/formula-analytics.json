@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "number": "1",
+      "formula": "fixture-seeded-formula",
+      "count": "1,000"
+    },
+    {
+      "number": "2",
+      "formula": "fixture-gap-formula",
+      "count": "750"
+    },
+    {
+      "number": "3",
+      "formula": "fixture-seeded-formula-two",
+      "count": "250"
+    },
+    {
+      "number": "4",
+      "formula": "fixture-low-signal-formula",
+      "count": "100"
+    },
+    {
+      "number": "5",
+      "formula": "fixture-outside-top-formula",
+      "count": "50"
+    }
+  ]
+}

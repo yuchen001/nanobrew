@@ -1,0 +1,29 @@
+[
+  {
+    "identifiers": [
+      {
+        "type": "GHSA",
+        "value": "GHSA-prom-0001-test"
+      },
+      {
+        "type": "CVE",
+        "value": "CVE-2026-1001"
+      }
+    ],
+    "severity": "moderate",
+    "summary": "Fixture advisory used to require promotion review",
+    "html_url": "https://github.com/fixture/promotable/security/advisories/GHSA-prom-0001-test",
+    "state": "published",
+    "published_at": "2026-01-12T00:00:00Z",
+    "updated_at": "2026-01-13T00:00:00Z",
+    "vulnerabilities": [
+      {
+        "vulnerable_version_range": "< 1.1.0",
+        "patched_versions": ">= 1.1.0",
+        "package": {
+          "name": "fixture-promotable"
+        }
+      }
+    ]
+  }
+]

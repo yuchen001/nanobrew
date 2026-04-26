@@ -1,0 +1,78 @@
+[
+  {
+    "token": "fixture-seeded-cask",
+    "name": [
+      "Fixture Seeded Cask"
+    ],
+    "tap": "homebrew/cask",
+    "homepage": "https://example.test/fixture-seeded-cask",
+    "desc": "Fixture seeded cask",
+    "version": "1.0.0",
+    "url": "https://github.com/fixture/seeded-cask/releases/download/v1.0.0/FixtureSeeded-1.0.0.dmg",
+    "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "artifacts": [
+      {
+        "app": [
+          "Fixture Seeded.app"
+        ]
+      }
+    ]
+  },
+  {
+    "token": "fixture-seeded-cask-shared",
+    "name": [
+      "Fixture Seeded Cask Shared"
+    ],
+    "tap": "homebrew/cask",
+    "homepage": "https://example.test/fixture-seeded-cask-shared",
+    "desc": "Fixture seeded cask with a vendor URL",
+    "version": "2.0.0",
+    "url": "https://example.test/fixture-seeded-cask-shared-2.0.0.zip",
+    "sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+    "artifacts": [
+      {
+        "app": [
+          "Fixture Seeded Shared.app"
+        ]
+      }
+    ]
+  },
+  {
+    "token": "fixture-gap-cask",
+    "name": [
+      "Fixture Gap Cask"
+    ],
+    "tap": "homebrew/cask",
+    "homepage": "https://example.test/fixture-gap-cask",
+    "desc": "Fixture app cask missing from the upstream registry",
+    "version": "1.0.0",
+    "url": "https://example.test/FixtureGap-1.0.0.dmg",
+    "sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "artifacts": [
+      {
+        "app": [
+          "Fixture Gap.app"
+        ]
+      }
+    ]
+  },
+  {
+    "token": "fixture-unseeded-cask",
+    "name": [
+      "Fixture CLI Cask"
+    ],
+    "tap": "homebrew/cask",
+    "homepage": "https://example.test/fixture-cli-cask",
+    "desc": "Fixture command-line cask missing from the upstream registry",
+    "version": "0.1.0",
+    "url": "https://example.test/fixture-cli-cask-0.1.0.zip",
+    "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "artifacts": [
+      {
+        "binary": [
+          "fixture-cli"
+        ]
+      }
+    ]
+  }
+]

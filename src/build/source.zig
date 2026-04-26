@@ -6,6 +6,7 @@
 const std = @import("std");
 const Formula = @import("../api/formula.zig").Formula;
 const fetch = @import("../net/fetch.zig");
+const telemetry = @import("../telemetry/client.zig");
 
 const CACHE_TMP = @import("../platform/paths.zig").TMP_DIR;
 
@@ -43,9 +44,8 @@ fn printErr(lib_io: std.Io, comptime fmt: []const u8, args: anytype) void {
     std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
 }
 
-pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
-
+pub fn buildFromSource(alloc: std.mem.Allocator, io: std.Io, formula: Formula) !void {
+    const lib_io = io;
     if (formula.source_url.len == 0) return error.NoSourceUrl;
 
     // 1. Download source archive (extension follows URL — .tar.xz, .zip, etc.; #112)
@@ -55,12 +55,22 @@ pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
         CACHE_TMP, formula.name, formula.version, arc_suffix,
     }) catch return error.PathTooLong;
 
-    printOut(lib_io, "==> Downloading source for {s} {s}...\n", .{ formula.name, formula.version });
-    printOut(lib_io, "    {s}\n", .{formula.source_url});
-
     std.Io.Dir.createDirAbsolute(lib_io, CACHE_TMP, .default_dir) catch {};
 
-    fetch.download(alloc, formula.source_url, tarball_path) catch return error.DownloadFailed;
+    const use_cached_archive = formula.source_sha256.len > 0 and fileSha256Matches(lib_io, tarball_path, formula.source_sha256);
+    if (use_cached_archive) {
+        printOut(lib_io, "==> Using cached source for {s} {s}...\n", .{ formula.name, formula.version });
+    } else {
+        std.Io.Dir.deleteFileAbsolute(lib_io, tarball_path) catch {};
+        printOut(lib_io, "==> Downloading source for {s} {s}...\n", .{ formula.name, formula.version });
+        printOut(lib_io, "    {s}\n", .{formula.source_url});
+        var telemetry_event = telemetry.DownloadEvent.start(.formula, formula.name);
+        fetch.download(alloc, formula.source_url, tarball_path) catch {
+            telemetry_event.fail();
+            return error.DownloadFailed;
+        };
+        telemetry_event.succeed(telemetry.fileSize(tarball_path));
+    }
 
     // 2. Verify SHA256
     if (formula.source_sha256.len > 0) {
@@ -113,14 +123,10 @@ pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
             &.{ "unzip", "-q", tarball_path, "-d", build_dir }
         else
             &.{ "tar", "xf", tarball_path, "-C", build_dir };
-        const run = std.process.run(alloc, lib_io, .{
-            .argv = argv,
-            .stdout_limit = .limited(4096),
-            .stderr_limit = .limited(4096),
-        }) catch return error.ExtractFailed;
-        defer alloc.free(run.stdout);
-        defer alloc.free(run.stderr);
-        if (switch (run.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+        runCommand(lib_io, .inherit, argv) catch |err| {
+            printErr(lib_io, "nb: extract command failed: {}\n", .{err});
+            return error.ExtractFailed;
+        };
     }
 
     // 4. Find source root (tarballs often have one top-level directory)
@@ -171,6 +177,13 @@ pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
             try runBuildCmd(alloc, lib_io, src_root, &.{ "make", std.fmt.allocPrint(alloc, "PREFIX={s}", .{keg_path}) catch return error.OutOfMemory, "install" });
         },
         .unknown => {
+            if (formula.install_binaries.len > 0) {
+                try installDeclaredBinaries(alloc, lib_io, src_root, keg_path, formula);
+                printOut(lib_io, "==> Installed declared upstream binaries for {s}\n", .{formula.name});
+                std.Io.Dir.cwd().deleteTree(lib_io, build_dir) catch {};
+                return;
+            }
+
             // No build system — assume pre-built package (common in tap formulas).
             // Copy entire contents into keg (equivalent to Homebrew's `prefix.install Dir["*"]`).
             var found_anything = false;
@@ -228,28 +241,56 @@ pub fn buildFromSource(alloc: std.mem.Allocator, formula: Formula) !void {
     std.Io.Dir.cwd().deleteTree(lib_io, build_dir) catch {};
 }
 
+fn fileSha256Matches(lib_io: std.Io, path: []const u8, expected: []const u8) bool {
+    if (expected.len != 64) return false;
+    var file = std.Io.Dir.openFileAbsolute(lib_io, path, .{}) catch return false;
+    defer file.close(lib_io);
+
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    var buf: [65536]u8 = undefined;
+    var offset: u64 = 0;
+    while (true) {
+        const n = file.readPositional(lib_io, &.{buf[0..]}, offset) catch return false;
+        if (n == 0) break;
+        hasher.update(buf[0..n]);
+        offset += @intCast(n);
+    }
+
+    const digest = hasher.finalResult();
+    const charset = "0123456789abcdef";
+    var hex: [64]u8 = undefined;
+    for (digest, 0..) |byte, idx| {
+        hex[idx * 2] = charset[byte >> 4];
+        hex[idx * 2 + 1] = charset[byte & 0x0f];
+    }
+    return std.mem.eql(u8, &hex, expected);
+}
+
 fn findSourceRoot(alloc: std.mem.Allocator, lib_io: std.Io, dir_path: []const u8) ![]const u8 {
     var dir = try std.Io.Dir.openDirAbsolute(lib_io, dir_path, .{ .iterate = true });
 
-    var first_entry: ?[]const u8 = null;
-    var count: usize = 0;
+    var first_dir: ?[]const u8 = null;
+    var total_entries: usize = 0;
+    var dir_entries: usize = 0;
     var iter = dir.iterate();
     while (iter.next(lib_io) catch null) |entry| {
+        total_entries += 1;
         if (entry.kind == .directory) {
-            count += 1;
-            if (first_entry == null) {
-                first_entry = try alloc.dupe(u8, entry.name);
+            dir_entries += 1;
+            if (first_dir == null) {
+                first_dir = try alloc.dupe(u8, entry.name);
             }
         }
     }
     dir.close(lib_io);
 
-    if (count == 1) {
-        if (first_entry) |name| {
+    if (total_entries == 1 and dir_entries == 1) {
+        if (first_dir) |name| {
+            defer alloc.free(name);
             return std.fmt.allocPrint(alloc, "{s}/{s}", .{ dir_path, name });
         }
     }
-    if (first_entry) |name| alloc.free(name);
+    if (first_dir) |name| alloc.free(name);
     return error.NoSingleRoot;
 }
 
@@ -282,18 +323,55 @@ fn detectBuildSystem(lib_io: std.Io, dir_path: []const u8) BuildSystem {
 }
 
 fn runBuildCmd(alloc: std.mem.Allocator, lib_io: std.Io, cwd: []const u8, argv: []const []const u8) !void {
-    const run = std.process.run(alloc, lib_io, .{
-        .argv = argv,
-        .cwd = .{ .path = cwd },
-        .stdout_limit = .limited(64 * 1024),
-        .stderr_limit = .limited(64 * 1024),
-    }) catch return error.BuildFailed;
-    defer alloc.free(run.stdout);
-    defer alloc.free(run.stderr);
-    if (switch (run.term) { .exited => |c| c != 0, else => true }) {
+    _ = alloc;
+    runCommand(lib_io, .{ .path = cwd }, argv) catch {
         printErr(lib_io, "nb: build command failed:", .{});
         for (argv) |a| printErr(lib_io, " {s}", .{a});
         printErr(lib_io, "\n", .{});
         return error.BuildFailed;
+    };
+}
+
+fn installDeclaredBinaries(
+    alloc: std.mem.Allocator,
+    lib_io: std.Io,
+    src_root: []const u8,
+    keg_path: []const u8,
+    formula: Formula,
+) !void {
+    _ = alloc;
+    var bin_dir_buf: [512]u8 = undefined;
+    const bin_dir = std.fmt.bufPrint(&bin_dir_buf, "{s}/bin", .{keg_path}) catch return error.PathTooLong;
+    std.Io.Dir.createDirAbsolute(lib_io, bin_dir, .default_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return err;
+    };
+
+    for (formula.install_binaries) |binary| {
+        if (binary.len == 0 or binary[0] == '/' or std.mem.indexOf(u8, binary, "..") != null) {
+            return error.InvalidBinaryArtifact;
+        }
+
+        var src_buf: [1024]u8 = undefined;
+        const src_path = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ src_root, binary }) catch return error.PathTooLong;
+        const target_name = std.fs.path.basename(binary);
+        if (target_name.len == 0) return error.InvalidBinaryArtifact;
+
+        var dst_buf: [1024]u8 = undefined;
+        const dst_path = std.fmt.bufPrint(&dst_buf, "{s}/{s}", .{ bin_dir, target_name }) catch return error.PathTooLong;
+
+        std.Io.Dir.copyFileAbsolute(src_path, dst_path, lib_io, .{}) catch return error.InstallBinaryFailed;
+        runCommand(lib_io, .inherit, &.{ "chmod", "+x", dst_path }) catch return error.InstallBinaryFailed;
     }
+}
+
+fn runCommand(lib_io: std.Io, cwd: std.process.Child.Cwd, argv: []const []const u8) !void {
+    var child = try std.process.spawn(lib_io, .{
+        .argv = argv,
+        .cwd = cwd,
+        .stdin = .ignore,
+        .stdout = .ignore,
+        .stderr = .inherit,
+    });
+    const term = try child.wait(lib_io);
+    if (switch (term) { .exited => |code| code != 0, else => true }) return error.CommandFailed;
 }

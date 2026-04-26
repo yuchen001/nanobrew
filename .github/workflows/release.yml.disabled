@@ -1,9 +1,7 @@
 # DISABLED as of v0.1.191 — filename ends in `.disabled` so GitHub Actions
-# ignores it. Release tarballs are currently produced and notarized locally via
-# `scripts/notarize-macos.sh` and uploaded to GitHub Releases by hand, because
-# the Apple signing secrets (APPLE_DEVELOPER_ID_P12, APPLE_APP_SPECIFIC_PASSWORD,
-# etc.) are not provisioned on the repo. To re-enable: restore the secrets,
-# rename this file back to `release.yml`, and `gh workflow enable release.yml`.
+# ignores it. macOS release tarballs are produced, signed, and notarized locally
+# via `scripts/notarize-macos.sh`, then uploaded to GitHub Releases by hand.
+# Do not put Apple signing or notarization credentials in this workflow.
 name: Release
 
 on:
@@ -22,7 +20,7 @@ jobs:
           - arch: arm64
             zig_target: aarch64-macos
           - arch: x86_64
-            zig_target: x86_64-macos
+            zig_target: x86_64-macos.12.0
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -35,43 +33,42 @@ jobs:
       - name: Build
         run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.zig_target }}
 
-      - name: Import signing certificate
-        env:
-          APPLE_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+      - name: Smoke test binary
         run: |
-          echo "$APPLE_CERT_P12" | base64 -d > /tmp/cert.p12
-          security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
-          rm /tmp/cert.p12
-
-      - name: Sign binary
-        run: |
-          codesign --sign "Developer ID Application: Rachit Pradhan (WWP9DLJ27P)" \
-            --options runtime \
-            --timestamp \
-            --force \
-            zig-out/bin/nb
-          codesign --verify --deep --strict zig-out/bin/nb
-
-      - name: Notarize
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: |
-          xcrun notarytool store-credentials "codedb-notary" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD"
-          ditto -c -k --keepParent zig-out/bin/nb nb-notarize.zip
-          xcrun notarytool submit nb-notarize.zip \
-            --keychain-profile "codedb-notary" \
-            --wait
-          rm nb-notarize.zip
+          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then
+            MINOS="$(otool -l zig-out/bin/nb | awk '
+              $1 == "cmd" && $2 == "LC_BUILD_VERSION" { in_build = 1; next }
+              in_build && $1 == "minos" { print $2; exit }
+            ')"
+            case "$MINOS" in
+              10.*|11.*|12.*) ;;
+              *)
+                echo "x86_64 binary must target macOS 12.x or older; got minos '${MINOS:-unknown}'" >&2
+                exit 1
+                ;;
+            esac
+            set +e
+            SMOKE_OUT="$(arch -x86_64 zig-out/bin/nb 2>&1)"
+            SMOKE_STATUS=$?
+            set -e
+            if [[ "$SMOKE_STATUS" != "1" ]]; then
+              echo "x86 smoke test exited with $SMOKE_STATUS, expected 1 from usage path" >&2
+              echo "$SMOKE_OUT" >&2
+              exit 1
+            fi
+            grep -q "nanobrew" <<<"$SMOKE_OUT"
+          else
+            set +e
+            SMOKE_OUT="$(zig-out/bin/nb 2>&1)"
+            SMOKE_STATUS=$?
+            set -e
+            if [[ "$SMOKE_STATUS" != "1" ]]; then
+              echo "smoke test exited with $SMOKE_STATUS, expected 1 from usage path" >&2
+              echo "$SMOKE_OUT" >&2
+              exit 1
+            fi
+            grep -q "nanobrew" <<<"$SMOKE_OUT"
+          fi
 
       - name: Package
         run: |
@@ -140,6 +137,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             artifacts/nb-arm64-apple-darwin.tar.gz
             artifacts/nb-arm64-apple-darwin.tar.gz.sha256
@@ -152,6 +150,7 @@ jobs:
 
   update-formula:
     needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

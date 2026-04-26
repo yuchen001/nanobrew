@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-04-25T00:00:00.000Z",
+  "kind": "formula",
+  "iterations": 1,
+  "cold": true,
+  "rows": [
+    {
+      "token": "fixture-new-formula",
+      "kind": "formula",
+      "upstream_median_ms": 100,
+      "homebrew_median_ms": 180,
+      "delta_ms": 80,
+      "speedup": 1.8,
+      "upstream_runs_ms": [
+        100
+      ],
+      "homebrew_runs_ms": [
+        180
+      ]
+    }
+  ],
+  "skipped": []
+}

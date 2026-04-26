@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "token": "fixture-promotable",
+      "name": "Fixture Promotable",
+      "kind": "cask",
+      "homepage": "https://example.test/fixture-promotable",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/promotable",
+        "verified": true
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "FixturePromote-{version}-arm64.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "FixturePromote-{version}-x64.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Fixture Promotable.app"
+        }
+      ],
+      "resolved": {
+        "tag": "v1.0.0",
+        "version": "1.0.0",
+        "assets": {
+          "macos-arm64": {
+            "url": "https://github.com/fixture/promotable/releases/download/v1.0.0/FixturePromote-1.0.0-arm64.dmg",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "macos-x86_64": {
+            "url": "https://github.com/fixture/promotable/releases/download/v1.0.0/FixturePromote-1.0.0-x64.dmg",
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        }
+      },
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    },
+    {
+      "token": "fixture-promotion-gap",
+      "name": "Fixture Promotion Gap",
+      "kind": "cask",
+      "homepage": "https://example.test/fixture-promotion-gap",
+      "upstream": {
+        "type": "github_release",
+        "repo": "fixture/promotion-gap",
+        "verified": true
+      },
+      "assets": {
+        "macos-arm64": {
+          "pattern": "FixtureGap-{version}-arm64.dmg"
+        },
+        "macos-x86_64": {
+          "pattern": "FixtureGap-{version}-x64.dmg"
+        }
+      },
+      "artifacts": [
+        {
+          "type": "app",
+          "path": "Fixture Promotion Gap.app"
+        }
+      ],
+      "verification": {
+        "sha256": "asset_digest"
+      }
+    }
+  ]
+}

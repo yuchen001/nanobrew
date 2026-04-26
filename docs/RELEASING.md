@@ -18,6 +18,31 @@ https://github.com/justrach/nanobrew/releases/download/v<VERSION>/nb-<arch>-appl
 
 The `update-formula` job runs **after** the release is created, so tag-driven releases keep the formula aligned.
 
+## Beta releases
+
+Use prerelease tags for beta builds:
+
+```bash
+git tag v0.1.193-beta.1
+git push origin v0.1.193-beta.1
+```
+
+Publish the GitHub Release as a **pre-release** and do not update `Formula/nanobrew.rb` for that tag. `nb update` installs from GitHub's latest stable release endpoint, so prereleases are not selected by the self-update install path. The background update banner reads `https://nanobrew.trilok.ai/version`; keep that endpoint pointed at the latest stable version only.
+
+If the release workflow is re-enabled, beta tags must not run the formula-update job. Tags containing a prerelease suffix such as `-beta.1`, `-rc.1`, or any other hyphenated SemVer suffix should create a GitHub prerelease and skip Homebrew formula promotion.
+
+## Safe rollout policy
+
+Regular users should only receive stable binaries and stable registry resolutions.
+
+- Stable binary channel: non-prerelease GitHub Releases only. These are the only releases that `nb update`, the update banner, and `Formula/nanobrew.rb` should promote.
+- Beta binary channel: prerelease GitHub Releases only. These are installed manually from the release page or by an explicit beta command in the future.
+- Stable registry channel: `registry/upstream.json` on `main`. Treat this as production data because released `nb` binaries may fetch it remotely and cache it for six hours.
+- Beta registry channel: a branch or alternate URL passed through `NANOBREW_UPSTREAM_REGISTRY_URL`. Use this for new resolver classes, broad top-N expansion, or records that have not passed install benchmarks.
+- Local/offline channel: `NANOBREW_DISABLE_UPSTREAM_REGISTRY_REMOTE=1` uses only the embedded fallback, and `NANOBREW_DISABLE_UPSTREAM=1` disables upstream registry resolution entirely.
+
+Promotion rule: a record or resolver class can move from beta to stable only after it has deterministic verification, fallback behavior, runtime `nb info` checks, cold install benchmarks, and at least one beta/prerelease soak. If a stable record causes trouble, revert the hosted registry entry first; released clients will fall back after their cache expires or immediately when users set `NANOBREW_DISABLE_UPSTREAM=1`.
+
 ### Manual formula edits
 
 If you edit `Formula/nanobrew.rb` by hand:

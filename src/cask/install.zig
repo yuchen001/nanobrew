@@ -9,19 +9,29 @@ const Artifact = @import("../api/cask.zig").Artifact;
 const DownloadFormat = @import("../api/cask.zig").DownloadFormat;
 const paths = @import("../platform/paths.zig");
 const fetch = @import("../net/fetch.zig");
+const telemetry = @import("../telemetry/client.zig");
 const builtin = @import("builtin");
 
 const PREFIX = paths.PREFIX;
 const CASKROOM_DIR = paths.CASKROOM_DIR;
 const CACHE_TMP = paths.TMP_DIR;
+const ZIP_LIST_STDOUT_LIMIT = 8 * 1024 * 1024;
+const CASK_DOWNLOAD_ATTEMPTS = 3;
+const CASK_DOWNLOAD_RETRY_BASE_MS = 250;
+const CASK_DOWNLOAD_HEADERS = [_]std.http.Header{
+    .{ .name = "User-Agent", .value = "Homebrew/4 (nanobrew)" },
+};
 
-pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
+    const lib_io = io;
 
     if (comptime builtin.os.tag == .linux) {
         std.Io.File.stderr().writeStreamingAll(lib_io, "nb: casks are not supported on Linux yet\n") catch {};
         return error.CaskNotSupported;
     }
+
+    const trace_enabled = caskTraceEnabled();
+    const total_timer = TraceTimer.start(trace_enabled);
 
     // For third-party taps, cask.token may contain slashes (e.g. "indaco/tap/sley").
     // Use only the basename for filesystem paths to avoid creating nested directories.
@@ -31,19 +41,31 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
         cask.token;
 
     // 1. Download artifact
-    const ext: []const u8 = switch (cask.downloadFormat()) {
+    const format = cask.downloadFormat();
+    const ext: []const u8 = switch (format) {
         .dmg => ".dmg",
         .zip => ".zip",
         .pkg => ".pkg",
         .tar_gz => ".tar.gz",
+        .tar_xz => ".tar.xz",
+        .shell_script => ".sh",
+        .binary => "",
         .unknown => ".dmg", // try dmg as default
     };
     var dl_buf: [512]u8 = undefined;
     const dl_path = std.fmt.bufPrint(&dl_buf, "{s}/{s}{s}", .{ CACHE_TMP, safe_token, ext }) catch return error.PathTooLong;
 
-    try downloadArtifact(alloc, cask.url, dl_path, cask);
+    var phase_timer = TraceTimer.start(trace_enabled);
+    var telemetry_event = telemetry.DownloadEvent.start(.cask, cask.token);
+    const downloaded = downloadArtifact(alloc, io, cask.url, dl_path, cask) catch |err| {
+        telemetry_event.fail();
+        return err;
+    };
+    if (downloaded) telemetry_event.succeed(telemetry.fileSize(dl_path));
+    traceCaskPhase(trace_enabled, cask.token, "download", phase_timer.read());
 
     // 2. Create Caskroom entry
+    phase_timer = TraceTimer.start(trace_enabled);
     var caskroom_buf: [512]u8 = undefined;
     const caskroom_path = cask.caskroomPath(&caskroom_buf);
     std.Io.Dir.createDirAbsolute(lib_io, CASKROOM_DIR, .default_dir) catch {};
@@ -51,46 +73,19 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
     const token_dir = std.fmt.bufPrint(&token_dir_buf, "{s}/{s}", .{ CASKROOM_DIR, safe_token }) catch return error.PathTooLong;
     std.Io.Dir.createDirAbsolute(lib_io, token_dir, .default_dir) catch {};
     std.Io.Dir.createDirAbsolute(lib_io, caskroom_path, .default_dir) catch {};
+    traceCaskPhase(trace_enabled, cask.token, "caskroom", phase_timer.read());
 
     // 3. Mount/extract based on format
-    const format = cask.downloadFormat();
     var mount_point_buf: [512]u8 = undefined;
     var mount_point: ?[]const u8 = null;
     var temp_extract_dir: ?[]const u8 = null;
     var temp_extract_buf: [512]u8 = undefined;
 
-    switch (format) {
-        .dmg, .unknown => {
-            // Remove Gatekeeper quarantine from .dmg before mounting
-            if (comptime builtin.os.tag == .macos) {
-                if (std.process.run(alloc, lib_io, .{
-                    .argv = &.{ "xattr", "-dr", "com.apple.quarantine", dl_path },
-                })) |r| {
-                    alloc.free(r.stdout);
-                    alloc.free(r.stderr);
-                } else |_| {}
-            }
-            mount_point = try mountDmg(alloc, dl_path, &mount_point_buf);
-        },
-        .zip => {
-            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
-            std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
-            try extractZip(alloc, dl_path, tmp_dir);
-            temp_extract_dir = tmp_dir;
-        },
-        .tar_gz => {
-            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
-            std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
-            try extractTarGz(alloc, dl_path, tmp_dir);
-            temp_extract_dir = tmp_dir;
-        },
-        .pkg => {}, // standalone, handled directly in artifact processing
-    }
-
     defer {
+        const cleanup_timer = TraceTimer.start(trace_enabled);
         // Cleanup: unmount dmg
         if (mount_point) |mp| {
-            unmountDmg(alloc, mp);
+            unmountDmg(alloc, io, mp);
         }
         // Cleanup: remove temp extract dir
         if (temp_extract_dir) |td| {
@@ -98,6 +93,73 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
         }
         // Cleanup: remove downloaded file
         std.Io.Dir.deleteFileAbsolute(lib_io, dl_path) catch {};
+        traceCaskPhase(trace_enabled, cask.token, "cleanup", cleanup_timer.read());
+        traceCaskPhase(trace_enabled, cask.token, "installer_total", total_timer.read());
+    }
+
+    phase_timer = TraceTimer.start(trace_enabled);
+    if (try installFastCaskArtifact(alloc, lib_io, cask, format, dl_path, caskroom_path)) {
+        traceCaskPhase(trace_enabled, cask.token, "fast_install", phase_timer.read());
+        return;
+    }
+    traceCaskPhase(trace_enabled, cask.token, "fast_probe", phase_timer.read());
+
+    switch (format) {
+        .dmg => {
+            phase_timer = TraceTimer.start(trace_enabled);
+            // Remove Gatekeeper quarantine from .dmg before mounting
+            if (comptime builtin.os.tag == .macos) {
+                clearQuarantineIfPresent(alloc, lib_io, dl_path, false);
+            }
+            mount_point = try mountDmg(alloc, io, dl_path, &mount_point_buf);
+            traceCaskPhase(trace_enabled, cask.token, "mount_dmg", phase_timer.read());
+        },
+        .unknown => {
+            if (comptime builtin.os.tag == .macos) {
+                clearQuarantineIfPresent(alloc, lib_io, dl_path, false);
+            }
+            phase_timer = TraceTimer.start(trace_enabled);
+            mount_point = mountDmg(alloc, io, dl_path, &mount_point_buf) catch null;
+            traceCaskPhase(trace_enabled, cask.token, if (mount_point != null) "mount_dmg" else "probe_dmg", phase_timer.read());
+            if (mount_point == null) {
+                const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
+                std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
+                phase_timer = TraceTimer.start(trace_enabled);
+                extractZip(alloc, io, dl_path, tmp_dir) catch {
+                    std.Io.Dir.cwd().deleteTree(lib_io, tmp_dir) catch {};
+                    return error.UnsupportedArchive;
+                };
+                temp_extract_dir = tmp_dir;
+                traceCaskPhase(trace_enabled, cask.token, "extract_zip", phase_timer.read());
+            }
+        },
+        .zip => {
+            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
+            std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
+            phase_timer = TraceTimer.start(trace_enabled);
+            try extractZip(alloc, io, dl_path, tmp_dir);
+            temp_extract_dir = tmp_dir;
+            traceCaskPhase(trace_enabled, cask.token, "extract_zip", phase_timer.read());
+        },
+        .tar_gz => {
+            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
+            std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
+            phase_timer = TraceTimer.start(trace_enabled);
+            try extractTarGz(alloc, io, dl_path, tmp_dir);
+            temp_extract_dir = tmp_dir;
+            traceCaskPhase(trace_enabled, cask.token, "extract_tar_gz", phase_timer.read());
+        },
+        .tar_xz => {
+            const tmp_dir = std.fmt.bufPrint(&temp_extract_buf, "{s}/{s}-extract", .{ CACHE_TMP, safe_token }) catch return error.PathTooLong;
+            std.Io.Dir.createDirAbsolute(lib_io, tmp_dir, .default_dir) catch {};
+            phase_timer = TraceTimer.start(trace_enabled);
+            try extractTarXz(alloc, io, dl_path, tmp_dir);
+            temp_extract_dir = tmp_dir;
+            traceCaskPhase(trace_enabled, cask.token, "extract_tar_xz", phase_timer.read());
+        },
+        .pkg => {}, // standalone, handled directly in artifact processing
+        .shell_script => {}, // standalone installer script
+        .binary => {}, // direct executable download, handled as a binary artifact
     }
 
     // 4. Process artifacts in order
@@ -105,6 +167,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
 
     var any_artifact_failed = false;
 
+    phase_timer = TraceTimer.start(trace_enabled);
     for (cask.artifacts) |art| {
         switch (art) {
             .app => |app_name| {
@@ -120,7 +183,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                 var src_buf: [1024]u8 = undefined;
                 const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, app_name }) catch continue;
                 var dst_buf: [512]u8 = undefined;
-                const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{app_name}) catch continue;
+                const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{std.fs.path.basename(app_name)}) catch continue;
 
                 // Verify source app exists before attempting copy (#60)
                 std.Io.Dir.accessAbsolute(lib_io, src, .{}) catch {
@@ -160,12 +223,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
 
                 // Remove Gatekeeper quarantine so the app can launch without warning
                 if (comptime builtin.os.tag == .macos) {
-                    if (std.process.run(alloc, lib_io, .{
-                        .argv = &.{ "xattr", "-dr", "com.apple.quarantine", dst },
-                    })) |r| {
-                        alloc.free(r.stdout);
-                        alloc.free(r.stderr);
-                    } else |_| {}
+                    clearQuarantineIfPresent(alloc, lib_io, dst, true);
                 }
             },
             .binary => |bin| {
@@ -184,6 +242,8 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                 if (std.mem.startsWith(u8, bin.source, "$APPDIR")) {
                     // $APPDIR expansion for app-bundled binaries
                     source = std.fmt.bufPrint(&resolved_buf, "/Applications{s}", .{bin.source["$APPDIR".len..]}) catch continue;
+                } else if (std.mem.startsWith(u8, bin.source, "$HOMEBREW_PREFIX/")) {
+                    source = std.fmt.bufPrint(&resolved_buf, "{s}/{s}", .{ PREFIX, bin.source["$HOMEBREW_PREFIX/".len..] }) catch continue;
                 } else if (std.mem.startsWith(u8, bin.source, "/")) {
                     // Absolute path
                     source = bin.source;
@@ -191,33 +251,22 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                     // Relative path — binary is in the extract/mount dir.
                     // Copy to Caskroom, then symlink from there.
                     var src_buf2: [1024]u8 = undefined;
-                    const extract_src = std.fmt.bufPrint(&src_buf2, "{s}/{s}", .{ source_dir, bin.source }) catch continue;
+                    const extract_src = if (format == .binary)
+                        dl_path
+                    else
+                        std.fmt.bufPrint(&src_buf2, "{s}/{s}", .{ source_dir, bin.source }) catch continue;
                     var caskroom_bin_buf: [1024]u8 = undefined;
                     const caskroom_bin = std.fmt.bufPrint(&caskroom_bin_buf, "{s}/{s}", .{ caskroom_path, bin.target }) catch continue;
 
-                    // Copy binary to Caskroom
-                    const cp_result = std.process.run(alloc, lib_io, .{
-                        .argv = &.{ "cp", extract_src, caskroom_bin },
+                    // Copy binary to Caskroom without spawning cp/chmod.
+                    std.Io.Dir.copyFileAbsolute(extract_src, caskroom_bin, lib_io, .{
+                        .permissions = .executable_file,
                     }) catch {
                         var _b: [512]u8 = undefined;
                         const _m = std.fmt.bufPrint(&_b, "nb: failed to copy binary {s}\n", .{bin.source}) catch "nb: failed to copy binary\n";
                         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
                         continue;
                     };
-                    alloc.free(cp_result.stdout);
-                    alloc.free(cp_result.stderr);
-
-                    // Make executable
-                    const chmod_result = std.process.run(alloc, lib_io, .{
-                        .argv = &.{ "chmod", "+x", caskroom_bin },
-                    }) catch {
-                        var _b: [512]u8 = undefined;
-                        const _m = std.fmt.bufPrint(&_b, "nb: failed to chmod binary {s}\n", .{bin.source}) catch "nb: failed to chmod binary\n";
-                        std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
-                        continue;
-                    };
-                    alloc.free(chmod_result.stdout);
-                    alloc.free(chmod_result.stderr);
 
                     source = std.fmt.bufPrint(&resolved_buf, "{s}", .{caskroom_bin}) catch continue;
                 }
@@ -234,7 +283,8 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                 const is_app_path = std.mem.startsWith(u8, source, "/Applications");
                 const is_caskroom_path = std.mem.startsWith(u8, source, paths.CASKROOM_DIR);
                 const is_extract_path = std.mem.startsWith(u8, source, source_dir);
-                if (!is_app_path and !is_caskroom_path and !is_extract_path) {
+                const is_prefix_path = std.mem.startsWith(u8, source, PREFIX);
+                if (!is_app_path and !is_caskroom_path and !is_extract_path and !is_prefix_path) {
                     var _b: [512]u8 = undefined;
                     const _m = std.fmt.bufPrint(&_b, "nb: refusing to symlink binary outside allowed directories: {s}\n", .{bin.source}) catch "nb: refusing to symlink binary\n";
                     std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
@@ -269,12 +319,7 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
 
                 // Remove Gatekeeper quarantine from the .pkg before installing
                 if (comptime builtin.os.tag == .macos) {
-                    if (std.process.run(alloc, lib_io, .{
-                        .argv = &.{ "xattr", "-dr", "com.apple.quarantine", pkg_path },
-                    })) |r| {
-                        alloc.free(r.stdout);
-                        alloc.free(r.stderr);
-                    } else |_| {}
+                    clearQuarantineIfPresent(alloc, lib_io, pkg_path, false);
                 }
 
                 const result = std.process.run(alloc, lib_io, .{
@@ -287,28 +332,73 @@ pub fn installCask(alloc: std.mem.Allocator, cask: Cask) !void {
                 };
                 alloc.free(result.stdout);
                 alloc.free(result.stderr);
-                if (switch (result.term) { .exited => |c| c != 0, else => true }) {
+                if (switch (result.term) {
+                    .exited => |c| c != 0,
+                    else => true,
+                }) {
                     var _b: [512]u8 = undefined;
                     const _m = std.fmt.bufPrint(&_b, "nb: installer failed for {s}\n", .{pkg_name}) catch "nb: installer failed\n";
                     std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
                     any_artifact_failed = true;
                 }
             },
+            .font => |font_path| {
+                if (!safeRelativePath(font_path)) {
+                    writeArtifactWarning(lib_io, "nb: skipping unsafe font artifact\n");
+                    continue;
+                }
+                const home = std.c.getenv("HOME") orelse {
+                    writeArtifactWarning(lib_io, "nb: HOME is not set; skipping font artifact\n");
+                    continue;
+                };
+                const home_slice = std.mem.span(home);
+                var src_buf: [1024]u8 = undefined;
+                const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, font_path }) catch continue;
+                var font_dir_buf: [1024]u8 = undefined;
+                const font_dir = std.fmt.bufPrint(&font_dir_buf, "{s}/Library/Fonts", .{home_slice}) catch continue;
+                std.Io.Dir.createDirAbsolute(lib_io, font_dir, .default_dir) catch {};
+                var dst_buf: [1024]u8 = undefined;
+                const dst = std.fmt.bufPrint(&dst_buf, "{s}/{s}", .{ font_dir, std.fs.path.basename(font_path) }) catch continue;
+                std.Io.Dir.copyFileAbsolute(src, dst, lib_io, .{}) catch {
+                    writeArtifactWarning(lib_io, "nb: failed to install font artifact\n");
+                    any_artifact_failed = true;
+                };
+            },
+            .artifact => |artifact_rule| {
+                copyGenericArtifact(alloc, lib_io, source_dir, artifact_rule.source, artifact_rule.target) catch {
+                    writeArtifactWarning(lib_io, "nb: failed to install artifact\n");
+                    any_artifact_failed = true;
+                };
+            },
+            .suite => |suite| {
+                copyGenericArtifact(alloc, lib_io, source_dir, suite.source, suite.target) catch {
+                    writeArtifactWarning(lib_io, "nb: failed to install suite artifact\n");
+                    any_artifact_failed = true;
+                };
+            },
+            .installer_script => |script| {
+                runInstallerScript(alloc, lib_io, format, dl_path, source_dir, script.executable, script.args) catch {
+                    writeArtifactWarning(lib_io, "nb: installer script failed\n");
+                    any_artifact_failed = true;
+                };
+            },
             .uninstall => {}, // only used during removal
         }
     }
 
+    traceCaskPhase(trace_enabled, cask.token, "artifacts", phase_timer.read());
     if (any_artifact_failed) return error.ArtifactFailed;
 }
 
 pub fn removeCask(
     _: std.mem.Allocator,
+    io: std.Io,
     token: []const u8,
     version: []const u8,
     apps: []const []const u8,
     binaries: []const []const u8,
 ) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    const lib_io = io;
 
     // 1. Delete apps from /Applications/
     for (apps) |app| {
@@ -339,62 +429,115 @@ pub fn removeCask(
     std.Io.Dir.deleteDirAbsolute(lib_io, parent) catch {};
 }
 
-fn downloadArtifact(alloc: std.mem.Allocator, url: []const u8, dest: []const u8, cask: Cask) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest: []const u8, cask: Cask) !bool {
+    const lib_io = io;
+    const use_cache = caskBlobCacheEnabled(cask.sha256);
+
+    if (use_cache) {
+        var cached_buf: [512]u8 = undefined;
+        const cached_path = std.fmt.bufPrint(&cached_buf, "{s}/{s}", .{ paths.BLOBS_DIR, cask.sha256 }) catch return error.PathTooLong;
+        const cache_available = blk: {
+            std.Io.Dir.accessAbsolute(lib_io, cached_path, .{}) catch break :blk false;
+            break :blk true;
+        };
+        if (cache_available) copy_cached: {
+            std.Io.Dir.copyFileAbsolute(cached_path, dest, lib_io, .{}) catch {
+                std.Io.Dir.deleteFileAbsolute(lib_io, cached_path) catch {};
+                break :copy_cached;
+            };
+            return false;
+        }
+    }
 
     // Native HTTP download (no curl dependency)
-    fetch.download(alloc, url, dest) catch return error.DownloadFailed;
+    var client: std.http.Client = .{ .allocator = alloc, .io = io };
+    defer client.deinit();
 
     // Verify SHA256 if available
     if (cask.sha256.len == 0 or std.mem.eql(u8, cask.sha256, "no_check")) {
+        var attempt: usize = 0;
+        while (attempt < CASK_DOWNLOAD_ATTEMPTS) : (attempt += 1) {
+            fetch.downloadWithClientHeaders(&client, url, dest, &CASK_DOWNLOAD_HEADERS) catch |err| {
+                std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
+                if (shouldRetryDownload(err, attempt)) {
+                    writeDownloadRetryWarning(lib_io, cask, attempt);
+                    sleepBeforeDownloadRetry(lib_io, attempt);
+                    continue;
+                }
+                writeDownloadError(lib_io, cask, err);
+                return err;
+            };
+            break;
+        }
         var _b: [512]u8 = undefined;
         const _m = std.fmt.bufPrint(&_b, "nb: warning: skipping SHA256 verification for {s} (no checksum available)\n", .{cask.token}) catch "nb: warning: skipping SHA256 verification\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
-        return;
+        return true;
     }
 
-    verifySha256(alloc, dest, cask.sha256) catch |err| {
-        var _b: [512]u8 = undefined;
-        const _m = std.fmt.bufPrint(&_b, "nb: error: SHA256 verification failed for {s}\n", .{cask.token}) catch "nb: error: SHA256 verification failed\n";
-        std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
-        // Clean up the bad download
-        std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
-        return err;
-    };
-}
-
-fn verifySha256(_: std.mem.Allocator, path: []const u8, expected: []const u8) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
-    var file = std.Io.Dir.openFileAbsolute(lib_io, path, .{}) catch return error.VerifyFailed;
-
-    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
-    var buf: [65536]u8 = undefined;
-    var offset: u64 = 0;
-    while (true) {
-        const bytes_read = file.readPositional(lib_io, &.{buf[0..]}, offset) catch {
-            file.close(lib_io);
-            return error.VerifyFailed;
+    var attempt: usize = 0;
+    while (attempt < CASK_DOWNLOAD_ATTEMPTS) : (attempt += 1) {
+        fetch.downloadWithClientSha256Headers(&client, url, dest, cask.sha256, &CASK_DOWNLOAD_HEADERS) catch |err| {
+            std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
+            if (shouldRetryDownload(err, attempt)) {
+                writeDownloadRetryWarning(lib_io, cask, attempt);
+                sleepBeforeDownloadRetry(lib_io, attempt);
+                continue;
+            }
+            writeDownloadError(lib_io, cask, err);
+            return err;
         };
-        if (bytes_read == 0) break;
-        hasher.update(buf[0..bytes_read]);
-        offset += @intCast(bytes_read);
-    }
-    file.close(lib_io);
-
-    const digest = hasher.finalResult();
-    const charset = "0123456789abcdef";
-    var hex: [64]u8 = undefined;
-    for (digest, 0..) |byte, idx| {
-        hex[idx * 2] = charset[byte >> 4];
-        hex[idx * 2 + 1] = charset[byte & 0x0f];
+        break;
     }
 
-    if (expected.len < 64) return error.VerifyFailed;
-    if (!std.mem.eql(u8, &hex, expected[0..64])) return error.Sha256Mismatch;
+    if (use_cache) {
+        std.Io.Dir.createDirAbsolute(lib_io, paths.BLOBS_DIR, .default_dir) catch {};
+        var cached_buf: [512]u8 = undefined;
+        const cached_path = std.fmt.bufPrint(&cached_buf, "{s}/{s}", .{ paths.BLOBS_DIR, cask.sha256 }) catch return true;
+        std.Io.Dir.copyFileAbsolute(dest, cached_path, lib_io, .{}) catch {};
+    }
+    return true;
 }
 
-fn mountDmg(alloc: std.mem.Allocator, dmg_path: []const u8, out_buf: []u8) ![]const u8 {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+fn shouldRetryDownload(err: anyerror, attempt: usize) bool {
+    return err == error.FetchFailed and attempt + 1 < CASK_DOWNLOAD_ATTEMPTS;
+}
+
+fn sleepBeforeDownloadRetry(io: std.Io, attempt: usize) void {
+    const delay_ms: i64 = @as(i64, @intCast(attempt + 1)) * CASK_DOWNLOAD_RETRY_BASE_MS;
+    std.Io.sleep(io, .fromMilliseconds(delay_ms), .awake) catch {};
+}
+
+fn writeDownloadRetryWarning(io: std.Io, cask: Cask, attempt: usize) void {
+    var _b: [512]u8 = undefined;
+    const _m = std.fmt.bufPrint(
+        &_b,
+        "nb: warning: retrying download for {s} (attempt {d}/{d})\n",
+        .{ cask.token, attempt + 2, CASK_DOWNLOAD_ATTEMPTS },
+    ) catch "nb: warning: retrying download\n";
+    std.Io.File.stderr().writeStreamingAll(io, _m) catch {};
+}
+
+fn writeDownloadError(io: std.Io, cask: Cask, err: anyerror) void {
+    var _b: [512]u8 = undefined;
+    const _m = if (err == error.ChecksumMismatch)
+        std.fmt.bufPrint(&_b, "nb: error: SHA256 verification failed for {s}\n", .{cask.token}) catch "nb: error: SHA256 verification failed\n"
+    else
+        std.fmt.bufPrint(&_b, "nb: error: download failed for {s}\n", .{cask.token}) catch "nb: error: download failed\n";
+    std.Io.File.stderr().writeStreamingAll(io, _m) catch {};
+}
+
+fn caskBlobCacheEnabled(sha256: []const u8) bool {
+    if (std.c.getenv("NANOBREW_DISABLE_CASK_BLOB_CACHE") != null) return false;
+    if (sha256.len != 64) return false;
+    for (sha256) |c| {
+        if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) return false;
+    }
+    return true;
+}
+
+fn mountDmg(alloc: std.mem.Allocator, io: std.Io, dmg_path: []const u8, out_buf: []u8) ![]const u8 {
+    const lib_io = io;
     const result = std.process.run(alloc, lib_io, .{
         .argv = &.{ "hdiutil", "attach", "-nobrowse", "-noautoopen", "-plist", dmg_path },
         .stdout_limit = .limited(64 * 1024),
@@ -402,7 +545,10 @@ fn mountDmg(alloc: std.mem.Allocator, dmg_path: []const u8, out_buf: []u8) ![]co
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
 
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.MountFailed;
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.MountFailed;
 
     // Parse mount point from hdiutil output — look for /Volumes/ path
     if (std.mem.indexOf(u8, result.stdout, "/Volumes/")) |start| {
@@ -423,8 +569,8 @@ fn mountDmg(alloc: std.mem.Allocator, dmg_path: []const u8, out_buf: []u8) ![]co
     return error.MountFailed;
 }
 
-fn unmountDmg(alloc: std.mem.Allocator, mount_point: []const u8) void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+fn unmountDmg(alloc: std.mem.Allocator, io: std.Io, mount_point: []const u8) void {
+    const lib_io = io;
     const result = std.process.run(alloc, lib_io, .{
         .argv = &.{ "hdiutil", "detach", mount_point, "-quiet" },
         .stdout_limit = .limited(1024),
@@ -433,27 +579,513 @@ fn unmountDmg(alloc: std.mem.Allocator, mount_point: []const u8) void {
     alloc.free(result.stderr);
 }
 
-fn extractZip(alloc: std.mem.Allocator, zip_path: []const u8, dest: []const u8) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
-    // Pre-list ZIP contents and check for path traversal
-    const list_result = std.process.run(alloc, lib_io, .{
-        .argv = &.{ "unzip", "-l", zip_path },
-        .stdout_limit = .limited(256 * 1024),
-    }) catch return error.ExtractFailed;
-    defer alloc.free(list_result.stdout);
-    defer alloc.free(list_result.stderr);
+fn installFastCaskArtifact(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    cask: Cask,
+    format: DownloadFormat,
+    archive_path: []const u8,
+    caskroom_path: []const u8,
+) !bool {
+    switch (format) {
+        .zip => {
+            return installFastZipArtifact(alloc, io, cask, archive_path, caskroom_path);
+        },
+        .unknown => {
+            // Some vendor URLs hide a ZIP payload behind extensionless URLs.
+            // Probe the ZIP fast paths before the slower dmg-then-zip fallback.
+            return installFastZipArtifact(alloc, io, cask, archive_path, caskroom_path);
+        },
+        .tar_gz, .tar_xz => {
+            if (singleBinaryArtifact(&cask)) |bin| {
+                installArchivedBinaryDirect(alloc, io, format, archive_path, caskroom_path, bin.source, bin.target) catch |err| switch (err) {
+                    error.UnsafePath => return err,
+                    else => return false,
+                };
+                return true;
+            }
+        },
+        else => {},
+    }
+    return false;
+}
 
-    // Scan listed paths for traversal sequences ("../" or "/..")
-    var lines = std.mem.splitScalar(u8, list_result.stdout, '\n');
-    while (lines.next()) |line| {
-        const trimmed = std.mem.trimEnd(u8, std.mem.trimStart(u8, line, " "), " \r");
-        if (trimmed.len == 0) continue;
-        if (std.mem.indexOf(u8, trimmed, "../") != null or
-            std.mem.indexOf(u8, trimmed, "/..") != null)
-        {
-            return error.UnsafePath;
+fn installFastZipArtifact(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    cask: Cask,
+    archive_path: []const u8,
+    caskroom_path: []const u8,
+) !bool {
+    if (zipAppBundleArtifact(&cask)) |app_name| {
+        installZipAppBundleDirect(alloc, io, &cask, archive_path, app_name) catch |err| switch (err) {
+            error.UnsafePath => return err,
+            else => return false,
+        };
+        return true;
+    }
+    if (fontArtifactsOnly(&cask)) {
+        installZipFontsDirect(alloc, io, &cask, archive_path) catch |err| switch (err) {
+            error.UnsafePath => return err,
+            else => return false,
+        };
+        return true;
+    }
+    if (singleBinaryArtifact(&cask)) |bin| {
+        installArchivedBinaryDirect(alloc, io, .zip, archive_path, caskroom_path, bin.source, bin.target) catch |err| switch (err) {
+            error.UnsafePath => return err,
+            else => return false,
+        };
+        return true;
+    }
+    return false;
+}
+
+fn zipAppBundleArtifact(cask: *const Cask) ?[]const u8 {
+    var found: ?[]const u8 = null;
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .app => |app| {
+                if (found != null) return null;
+                found = app;
+            },
+            .binary => {},
+            .uninstall => {},
+            else => return null,
         }
     }
+    const app_name = found orelse return null;
+    if (std.mem.indexOfScalar(u8, app_name, '/') != null) return null;
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .binary => |bin| {
+                if (!appBundleBinarySource(app_name, bin.source)) return null;
+            },
+            else => {},
+        }
+    }
+    return app_name;
+}
+
+const BinaryArtifact = struct {
+    source: []const u8,
+    target: []const u8,
+};
+
+const TraceTimer = struct {
+    enabled: bool,
+    start_ns: u64,
+
+    fn start(enabled: bool) TraceTimer {
+        return .{
+            .enabled = enabled,
+            .start_ns = if (enabled) traceMonoNs() else 0,
+        };
+    }
+
+    fn read(self: TraceTimer) u64 {
+        if (!self.enabled) return 0;
+        return traceMonoNs() - self.start_ns;
+    }
+};
+
+pub fn caskTraceEnabled() bool {
+    const value = std.c.getenv("NANOBREW_CASK_TRACE") orelse return false;
+    const span = std.mem.span(value);
+    return span.len == 0 or !std.mem.eql(u8, span, "0");
+}
+
+pub fn traceCaskPhase(enabled: bool, token: []const u8, phase: []const u8, elapsed_ns: u64) void {
+    if (!enabled) return;
+    const elapsed_ms = @as(f64, @floatFromInt(elapsed_ns)) / 1_000_000.0;
+    std.debug.print("[nb-cask-trace] token={s} phase={s} ms={d:.2}\n", .{ token, phase, elapsed_ms });
+}
+
+fn traceMonoNs() u64 {
+    var ts: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(.MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
+}
+
+fn singleBinaryArtifact(cask: *const Cask) ?BinaryArtifact {
+    var found: ?BinaryArtifact = null;
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .binary => |bin| {
+                if (found != null) return null;
+                found = .{ .source = bin.source, .target = bin.target };
+            },
+            .uninstall => {},
+            else => return null,
+        }
+    }
+    return found;
+}
+
+fn fontArtifactsOnly(cask: *const Cask) bool {
+    var font_count: usize = 0;
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .font => font_count += 1,
+            .uninstall => {},
+            else => return false,
+        }
+    }
+    return font_count > 0;
+}
+
+fn appBundleBinarySource(app_name: []const u8, source_path: []const u8) bool {
+    const prefix = "$APPDIR/";
+    if (!std.mem.startsWith(u8, source_path, prefix)) return false;
+    const relative = source_path[prefix.len..];
+    if (!safeRelativePath(relative)) return false;
+    if (!std.mem.startsWith(u8, relative, app_name)) return false;
+    return relative.len == app_name.len or relative[app_name.len] == '/';
+}
+
+fn installZipAppBundleDirect(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    cask: *const Cask,
+    zip_path: []const u8,
+    app_name: []const u8,
+) !void {
+    try installZipAppDirect(alloc, io, zip_path, app_name);
+
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .binary => |bin| try linkAppBundleBinary(io, app_name, bin.source, bin.target),
+            else => {},
+        }
+    }
+}
+
+fn installZipAppDirect(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    zip_path: []const u8,
+    app_name: []const u8,
+) !void {
+    if (std.mem.indexOf(u8, app_name, "..") != null or
+        !std.mem.endsWith(u8, app_name, ".app"))
+    {
+        return error.UnsafePath;
+    }
+
+    var dst_buf: [512]u8 = undefined;
+    const dst = std.fmt.bufPrint(&dst_buf, "/Applications/{s}", .{std.fs.path.basename(app_name)}) catch return error.PathTooLong;
+    std.Io.Dir.cwd().deleteTree(io, dst) catch {};
+
+    const pattern = try std.fmt.allocPrint(alloc, "{s}/*", .{app_name});
+    defer alloc.free(pattern);
+    try ensureZipPatternSafe(alloc, io, zip_path, pattern);
+
+    const result = std.process.run(alloc, io, .{
+        .argv = &.{ "unzip", "-o", "-q", zip_path, pattern, "-d", "/Applications" },
+        .stdout_limit = .limited(4096),
+        .stderr_limit = .limited(16 * 1024),
+    }) catch return error.ExtractFailed;
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+    if (switch (result.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return error.ExtractFailed;
+
+    if (comptime builtin.os.tag == .macos) {
+        clearQuarantineIfPresent(alloc, io, dst, true);
+    }
+}
+
+fn installZipFontsDirect(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    cask: *const Cask,
+    zip_path: []const u8,
+) !void {
+    const home = std.c.getenv("HOME") orelse return error.HomeMissing;
+    const home_slice = std.mem.span(home);
+    var font_dir_buf: [1024]u8 = undefined;
+    const font_dir = std.fmt.bufPrint(&font_dir_buf, "{s}/Library/Fonts", .{home_slice}) catch return error.PathTooLong;
+    std.Io.Dir.createDirAbsolute(io, font_dir, .default_dir) catch {};
+
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .font => |font_path| {
+                if (!safeArchiveMemberPath(font_path)) return error.UnsafePath;
+            },
+            else => {},
+        }
+    }
+
+    var argv = try alloc.alloc([]const u8, cask.artifacts.len + 7);
+    defer alloc.free(argv);
+    var idx: usize = 0;
+    argv[idx] = "unzip";
+    idx += 1;
+    argv[idx] = "-j";
+    idx += 1;
+    argv[idx] = "-o";
+    idx += 1;
+    argv[idx] = "-q";
+    idx += 1;
+    argv[idx] = zip_path;
+    idx += 1;
+    for (cask.artifacts) |artifact| {
+        switch (artifact) {
+            .font => |font_path| {
+                argv[idx] = font_path;
+                idx += 1;
+            },
+            else => {},
+        }
+    }
+    argv[idx] = "-d";
+    idx += 1;
+    argv[idx] = font_dir;
+    idx += 1;
+
+    const result = std.process.run(alloc, io, .{
+        .argv = argv[0..idx],
+        .stdout_limit = .limited(4096),
+        .stderr_limit = .limited(16 * 1024),
+    }) catch return error.ExtractFailed;
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+    if (switch (result.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return error.ExtractFailed;
+}
+
+fn linkAppBundleBinary(
+    io: std.Io,
+    app_name: []const u8,
+    source_path: []const u8,
+    target: []const u8,
+) !void {
+    if (!appBundleBinarySource(app_name, source_path) or
+        std.mem.indexOf(u8, target, "..") != null or
+        std.mem.indexOfScalar(u8, target, '/') != null)
+    {
+        return error.UnsafePath;
+    }
+
+    const relative = source_path["$APPDIR/".len..];
+    var source_buf: [1024]u8 = undefined;
+    const source = std.fmt.bufPrint(&source_buf, "/Applications/{s}", .{relative}) catch return error.PathTooLong;
+    var link_buf: [512]u8 = undefined;
+    const link_path = std.fmt.bufPrint(&link_buf, "{s}/bin/{s}", .{ PREFIX, target }) catch return error.PathTooLong;
+    std.Io.Dir.deleteFileAbsolute(io, link_path) catch {};
+    try std.Io.Dir.symLinkAbsolute(io, source, link_path, .{});
+}
+
+fn installArchivedBinaryDirect(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    format: DownloadFormat,
+    archive_path: []const u8,
+    caskroom_path: []const u8,
+    source_path: []const u8,
+    target: []const u8,
+) !void {
+    if (!safeRelativePath(source_path) or
+        !safeArchiveMemberPath(source_path) or
+        std.mem.indexOf(u8, target, "..") != null or
+        std.mem.indexOfScalar(u8, target, '/') != null)
+    {
+        return error.UnsafePath;
+    }
+
+    var caskroom_bin_buf: [1024]u8 = undefined;
+    const caskroom_bin = std.fmt.bufPrint(&caskroom_bin_buf, "{s}/{s}", .{ caskroom_path, target }) catch return error.PathTooLong;
+    std.Io.Dir.deleteFileAbsolute(io, caskroom_bin) catch {};
+    try extractArchiveMemberToFile(alloc, io, format, archive_path, source_path, caskroom_bin);
+
+    var link_buf: [512]u8 = undefined;
+    const link_path = std.fmt.bufPrint(&link_buf, "{s}/bin/{s}", .{ PREFIX, target }) catch return error.PathTooLong;
+    std.Io.Dir.deleteFileAbsolute(io, link_path) catch {};
+    try std.Io.Dir.symLinkAbsolute(io, caskroom_bin, link_path, .{});
+}
+
+fn extractArchiveMemberToFile(
+    _: std.mem.Allocator,
+    io: std.Io,
+    format: DownloadFormat,
+    archive_path: []const u8,
+    member_path: []const u8,
+    dst_path: []const u8,
+) !void {
+    var out = std.Io.Dir.createFileAbsolute(io, dst_path, .{ .permissions = .executable_file }) catch return error.ExtractFailed;
+    defer out.close(io);
+
+    const argv: []const []const u8 = switch (format) {
+        .zip => &.{ "unzip", "-p", archive_path, member_path },
+        .tar_gz => &.{ "tar", "-xOzf", archive_path, member_path },
+        .tar_xz => &.{ "tar", "-xOJf", archive_path, member_path },
+        else => return error.UnsupportedArchive,
+    };
+
+    var child = std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .ignore,
+        .stdout = .{ .file = out },
+        .stderr = .ignore,
+    }) catch return error.ExtractFailed;
+    defer child.kill(io);
+
+    const term = child.wait(io) catch return error.ExtractFailed;
+    if (switch (term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) {
+        std.Io.Dir.deleteFileAbsolute(io, dst_path) catch {};
+        return error.ExtractFailed;
+    }
+}
+
+fn writeArtifactWarning(io: std.Io, message: []const u8) void {
+    std.Io.File.stderr().writeStreamingAll(io, message) catch {};
+}
+
+fn clearQuarantineIfPresent(alloc: std.mem.Allocator, io: std.Io, path: []const u8, recursive: bool) void {
+    if (builtin.os.tag != .macos) return;
+    if (!quarantineClearingEnabled()) return;
+
+    const check = std.process.run(alloc, io, .{
+        .argv = &.{ "xattr", "-p", "com.apple.quarantine", path },
+        .stdout_limit = .limited(1024),
+        .stderr_limit = .limited(1024),
+    }) catch return;
+    defer alloc.free(check.stdout);
+    defer alloc.free(check.stderr);
+    if (switch (check.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return;
+
+    const argv: []const []const u8 = if (recursive)
+        &.{ "xattr", "-dr", "com.apple.quarantine", path }
+    else
+        &.{ "xattr", "-d", "com.apple.quarantine", path };
+    const clear = std.process.run(alloc, io, .{
+        .argv = argv,
+        .stdout_limit = .limited(1024),
+        .stderr_limit = .limited(4096),
+    }) catch return;
+    alloc.free(clear.stdout);
+    alloc.free(clear.stderr);
+}
+
+fn quarantineClearingEnabled() bool {
+    const value = std.c.getenv("NANOBREW_CASK_CLEAR_QUARANTINE") orelse return false;
+    const span = std.mem.span(value);
+    return span.len == 0 or !std.mem.eql(u8, span, "0");
+}
+
+fn safeRelativePath(path: []const u8) bool {
+    return path.len > 0 and
+        !std.mem.startsWith(u8, path, "/") and
+        std.mem.indexOf(u8, path, "..") == null;
+}
+
+fn safeArchiveMemberPath(path: []const u8) bool {
+    return safeRelativePath(path) and
+        std.mem.indexOfAny(u8, path, "*?[\\") == null;
+}
+
+fn expandInstallPath(alloc: std.mem.Allocator, value: []const u8) ![]u8 {
+    if (std.mem.startsWith(u8, value, "$HOMEBREW_PREFIX/")) {
+        return std.fmt.allocPrint(alloc, "{s}/{s}", .{ PREFIX, value["$HOMEBREW_PREFIX/".len..] });
+    }
+    return alloc.dupe(u8, value);
+}
+
+fn parentPath(path: []const u8) []const u8 {
+    return std.fs.path.dirname(path) orelse "/";
+}
+
+fn copyPath(alloc: std.mem.Allocator, io: std.Io, src: []const u8, dst: []const u8) !void {
+    const parent = parentPath(dst);
+    const mkdir = try std.process.run(alloc, io, .{ .argv = &.{ "mkdir", "-p", parent } });
+    defer alloc.free(mkdir.stdout);
+    defer alloc.free(mkdir.stderr);
+    if (switch (mkdir.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.CopyFailed;
+
+    std.Io.Dir.cwd().deleteTree(io, dst) catch {};
+    const cp = try std.process.run(alloc, io, .{ .argv = &.{ "cp", "-R", src, dst } });
+    defer alloc.free(cp.stdout);
+    defer alloc.free(cp.stderr);
+    if (switch (cp.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.CopyFailed;
+}
+
+fn copyGenericArtifact(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    source_dir: []const u8,
+    source_path: []const u8,
+    target_path: []const u8,
+) !void {
+    if (!safeRelativePath(source_path) or std.mem.indexOf(u8, target_path, "..") != null) {
+        return error.UnsafePath;
+    }
+    const expanded_target = try expandInstallPath(alloc, target_path);
+    defer alloc.free(expanded_target);
+    if (!std.mem.startsWith(u8, expanded_target, PREFIX)) return error.UnsafePath;
+
+    var src_buf: [1024]u8 = undefined;
+    const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ source_dir, source_path }) catch return error.PathTooLong;
+    try copyPath(alloc, io, src, expanded_target);
+}
+
+fn runInstallerScript(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    format: DownloadFormat,
+    dl_path: []const u8,
+    source_dir: []const u8,
+    executable: []const u8,
+    args: []const []const u8,
+) !void {
+    if (!safeRelativePath(executable)) return error.UnsafePath;
+    const exe_path = if (format == .shell_script) blk: {
+        const chmod = try std.process.run(alloc, io, .{ .argv = &.{ "chmod", "+x", dl_path } });
+        alloc.free(chmod.stdout);
+        alloc.free(chmod.stderr);
+        break :blk dl_path;
+    } else blk: {
+        var exe_buf: [1024]u8 = undefined;
+        break :blk std.fmt.bufPrint(&exe_buf, "{s}/{s}", .{ source_dir, executable }) catch return error.PathTooLong;
+    };
+
+    var argv = try alloc.alloc([]const u8, args.len + 1);
+    defer alloc.free(argv);
+    argv[0] = exe_path;
+    for (args, 0..) |arg, i| {
+        argv[i + 1] = try expandInstallPath(alloc, arg);
+    }
+    defer {
+        for (argv[1..]) |arg| alloc.free(arg);
+    }
+
+    const result = try std.process.run(alloc, io, .{ .argv = argv });
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.InstallerFailed;
+}
+
+fn extractZip(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, dest: []const u8) !void {
+    const lib_io = io;
+    try ensureZipSafe(alloc, lib_io, zip_path);
 
     // Primary extractor: BSD `unzip`. Fast and ubiquitous.
     const result = std.process.run(alloc, lib_io, .{
@@ -463,7 +1095,10 @@ fn extractZip(alloc: std.mem.Allocator, zip_path: []const u8, dest: []const u8) 
     }) catch return error.ExtractFailed;
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) {
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) {
         // Fallback to Apple's `ditto` on macOS — handles extended attributes,
         // code-signature resources, and zip variants that BSD unzip rejects
         // (seen on some notarized .app zips — issue #224, PureMac).
@@ -475,15 +1110,56 @@ fn extractZip(alloc: std.mem.Allocator, zip_path: []const u8, dest: []const u8) 
             }) catch return error.ExtractFailed;
             defer alloc.free(ditto.stdout);
             defer alloc.free(ditto.stderr);
-            if (switch (ditto.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+            if (switch (ditto.term) {
+                .exited => |c| c != 0,
+                else => true,
+            }) return error.ExtractFailed;
             return;
         }
         return error.ExtractFailed;
     }
 }
 
-fn extractTarGz(alloc: std.mem.Allocator, tar_path: []const u8, dest: []const u8) !void {
-    const lib_io = std.Io.Threaded.global_single_threaded.io();
+fn ensureZipSafe(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8) !void {
+    try ensureZipEntriesSafe(alloc, io, &.{ "unzip", "-Z1", zip_path });
+}
+
+fn ensureZipPatternSafe(alloc: std.mem.Allocator, io: std.Io, zip_path: []const u8, pattern: []const u8) !void {
+    try ensureZipEntriesSafe(alloc, io, &.{ "unzip", "-Z1", zip_path, pattern });
+}
+
+fn ensureZipEntriesSafe(alloc: std.mem.Allocator, io: std.Io, argv: []const []const u8) !void {
+    // Pre-list selected ZIP contents and check for path traversal.
+    const list_result = std.process.run(alloc, io, .{
+        .argv = argv,
+        .stdout_limit = .limited(ZIP_LIST_STDOUT_LIMIT),
+        .stderr_limit = .limited(16 * 1024),
+    }) catch return error.ExtractFailed;
+    defer alloc.free(list_result.stdout);
+    defer alloc.free(list_result.stderr);
+    if (switch (list_result.term) {
+        .exited => |code| code != 0,
+        else => true,
+    }) return error.ExtractFailed;
+
+    var saw_entry = false;
+    var lines = std.mem.splitScalar(u8, list_result.stdout, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \r\t");
+        if (trimmed.len == 0) continue;
+        saw_entry = true;
+        if (std.mem.startsWith(u8, trimmed, "/") or
+            std.mem.indexOf(u8, trimmed, "../") != null or
+            std.mem.indexOf(u8, trimmed, "/..") != null)
+        {
+            return error.UnsafePath;
+        }
+    }
+    if (!saw_entry) return error.ExtractFailed;
+}
+
+fn extractTarGz(alloc: std.mem.Allocator, io: std.Io, tar_path: []const u8, dest: []const u8) !void {
+    const lib_io = io;
     const result = std.process.run(alloc, lib_io, .{
         .argv = &.{ "tar", "-xzf", tar_path, "--no-same-permissions", "-C", dest },
         .stdout_limit = .limited(4096),
@@ -491,5 +1167,23 @@ fn extractTarGz(alloc: std.mem.Allocator, tar_path: []const u8, dest: []const u8
     defer alloc.free(result.stdout);
     defer alloc.free(result.stderr);
 
-    if (switch (result.term) { .exited => |c| c != 0, else => true }) return error.ExtractFailed;
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.ExtractFailed;
+}
+
+fn extractTarXz(alloc: std.mem.Allocator, io: std.Io, tar_path: []const u8, dest: []const u8) !void {
+    const lib_io = io;
+    const result = std.process.run(alloc, lib_io, .{
+        .argv = &.{ "tar", "-xJf", tar_path, "--no-same-permissions", "-C", dest },
+        .stdout_limit = .limited(4096),
+    }) catch return error.ExtractFailed;
+    defer alloc.free(result.stdout);
+    defer alloc.free(result.stderr);
+
+    if (switch (result.term) {
+        .exited => |c| c != 0,
+        else => true,
+    }) return error.ExtractFailed;
 }
