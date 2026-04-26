@@ -15,6 +15,7 @@ pub const STORE_DIR = ROOT ++ "/store";
 /// Post-relocation store
 pub const STORE_RELOCATED_DIR = ROOT ++ "/store-relocated";
 pub const CACHE_DIR = ROOT ++ "/cache";
+pub const CONFIG_DIR = ROOT ++ "/config";
 pub const BLOBS_DIR = CACHE_DIR ++ "/blobs";
 pub const TMP_DIR = CACHE_DIR ++ "/tmp";
 pub const API_CACHE_DIR = CACHE_DIR ++ "/api";

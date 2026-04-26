@@ -56,6 +56,45 @@ pub fn entryPath(sha256: []const u8, buf: []u8) []const u8 {
     return std.fmt.bufPrint(buf, "{s}/{s}", .{ STORE_DIR, sha256 }) catch "";
 }
 
+/// Find the version directory contained in a raw store entry.
+pub fn detectEntryVersion(sha256: []const u8, name: []const u8, version: []const u8, result_buf: *[256]u8) ?[]const u8 {
+    if (!isValidSha256(sha256)) return null;
+
+    var name_dir_buf: [512]u8 = undefined;
+    const name_dir = std.fmt.bufPrint(&name_dir_buf, "{s}/{s}/{s}", .{ STORE_DIR, sha256, name }) catch return null;
+
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var exact_buf: [512]u8 = undefined;
+    const exact = std.fmt.bufPrint(&exact_buf, "{s}/{s}", .{ name_dir, version }) catch return null;
+    if (std.Io.Dir.openDirAbsolute(lib_io, exact, .{})) |d| {
+        var dir = d;
+        dir.close(lib_io);
+        return version;
+    } else |_| {}
+
+    if (std.Io.Dir.openDirAbsolute(lib_io, name_dir, .{ .iterate = true })) |d| {
+        var dir = d;
+        var iter = dir.iterate();
+        while (iter.next(lib_io) catch null) |entry| {
+            if (entry.kind != .directory) continue;
+            if (std.mem.startsWith(u8, entry.name, version)) {
+                if (entry.name.len == version.len or
+                    (entry.name.len > version.len and entry.name[version.len] == '_'))
+                {
+                    if (entry.name.len <= result_buf.len) {
+                        @memcpy(result_buf[0..entry.name.len], entry.name);
+                        dir.close(lib_io);
+                        return result_buf[0..entry.name.len];
+                    }
+                }
+            }
+        }
+        dir.close(lib_io);
+    } else |_| {}
+
+    return null;
+}
+
 /// Remove a store entry (when refcount drops to 0).
 pub fn removeEntry(sha256: []const u8) void {
     if (!isValidSha256(sha256)) return;

@@ -6,6 +6,7 @@
 const std = @import("std");
 const Formula = @import("../api/formula.zig").Formula;
 const fetch = @import("../net/fetch.zig");
+const telemetry = @import("../telemetry/client.zig");
 
 const CACHE_TMP = @import("../platform/paths.zig").TMP_DIR;
 
@@ -63,7 +64,12 @@ pub fn buildFromSource(alloc: std.mem.Allocator, io: std.Io, formula: Formula) !
         std.Io.Dir.deleteFileAbsolute(lib_io, tarball_path) catch {};
         printOut(lib_io, "==> Downloading source for {s} {s}...\n", .{ formula.name, formula.version });
         printOut(lib_io, "    {s}\n", .{formula.source_url});
-        fetch.download(alloc, formula.source_url, tarball_path) catch return error.DownloadFailed;
+        var telemetry_event = telemetry.DownloadEvent.start(.formula, formula.name);
+        fetch.download(alloc, formula.source_url, tarball_path) catch {
+            telemetry_event.fail();
+            return error.DownloadFailed;
+        };
+        telemetry_event.succeed(telemetry.fileSize(tarball_path));
     }
 
     // 2. Verify SHA256

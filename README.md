@@ -102,11 +102,20 @@ curl -fsSL https://nanobrew.trilok.ai | bash
 ```bash
 nb install tree               # install a package
 nb install ffmpeg wget curl   # install multiple at once
+nb install --shims yt-dlp     # expose yt-dlp, keep dependency tools private
 nb remove tree                # uninstall
 nb list                       # see what's installed
 nb info jq                    # show package details
 nb search ripgrep             # search formulas and casks
 ```
+
+### Shimmed Installs
+
+```bash
+nb install --shims yt-dlp
+```
+
+Shimmed installs are an experimental link mode for packages whose dependencies ship command-line tools you do not want exposed globally. The requested formula gets wrapper shims in `/opt/nanobrew/prefix/bin`; dependency executables are kept out of `prefix/bin` and are only added to that wrapper's private `PATH`. This keeps commands like `deno` or `python` available to the requested tool without making those dependency executables first-class shell commands. You can also enable this mode for formula installs with `NANOBREW_SHIMS=1`.
 
 ### Third-Party Taps
 
@@ -172,6 +181,38 @@ nb doctor                     # check for common problems
 nb cleanup                    # remove old caches and orphaned files
 nb cleanup --dry-run          # see what would be removed first
 ```
+
+### Download Telemetry
+
+```bash
+nb telemetry status
+nb telemetry off
+nb telemetry on
+```
+
+nanobrew sends anonymized, best-effort download timing events to `https://backend.trilok.ai/v1/telemetry/system`. This helps prioritize which packages and casks should get native nanobrew support first, based on real download/install demand and slow paths.
+
+The exact event shape is:
+
+```json
+{
+  "schema": 1,
+  "source": "nanobrew",
+  "event": "download",
+  "os": "macos",
+  "arch": "arm64",
+  "ram_gb": 128,
+  "cpu_count": 10,
+  "operation": "download",
+  "target_kind": "formula",
+  "target_name": "uv",
+  "duration_ms": 120,
+  "download_bytes": 33000000,
+  "success": true
+}
+```
+
+It does not send URLs, paths, hostnames, usernames, IPs, user IDs, full package lists, or command history. `target_name` is only a package-like token such as `uv`, `firefox`, or `owner/tap/pkg`. You can opt out with `nb telemetry off`, `NANOBREW_NO_TELEMETRY=1`, or `NANOBREW_TELEMETRY=0`.
 
 ### Dependencies and services
 

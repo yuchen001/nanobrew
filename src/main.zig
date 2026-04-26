@@ -38,6 +38,7 @@ const Command = enum {
     deps,
     services,
     completions,
+    telemetry,
     nuke,
     migrate,
 };
@@ -154,6 +155,7 @@ pub fn main(init: std.process.Init) !void {
         .deps => runDeps(alloc, args[2..]),
         .services => runServices(alloc, args[2..]),
         .completions => runCompletions(args[2..]),
+        .telemetry => runTelemetry(args[2..]),
         .nuke => runNuke(args[2..]),
         .migrate => runMigrate(alloc),
     }
@@ -197,6 +199,7 @@ fn parseCommand(arg: []const u8) ?Command {
         .{ "deps", Command.deps },
         .{ "services", Command.services },
         .{ "service", Command.services },
+        .{ "telemetry", Command.telemetry },
         .{ "completions", Command.completions },
         .{ "nuke", Command.nuke },
         .{ "uninstall-self", Command.nuke },
@@ -230,6 +233,7 @@ fn runInit() void {
         ROOT ++ "/cache/tmp",
         ROOT ++ "/cache/api",
         ROOT ++ "/cache/tokens",
+        paths.CONFIG_DIR,
         ROOT ++ "/db",
         ROOT ++ "/locks",
     };
@@ -398,7 +402,9 @@ fn runLocalRbInstall(alloc: std.mem.Allocator, path: []const u8) void {
 
     var had_error = std.atomic.Value(bool).init(false);
     var phase = std.atomic.Value(u8).init(@intFromEnum(Phase.waiting));
-    fullInstallOne(alloc, f, &had_error, &phase);
+    const local_formulae = [_]nb.formula.Formula{f};
+    const local_requested = [_][]const u8{f.name};
+    fullInstallOne(alloc, f, &had_error, &phase, false, &local_requested, &local_formulae);
 
     if (had_error.load(.acquire)) {
         stderr.print("nb: failed to install '{s}'\n", .{f.name}) catch {};
@@ -423,12 +429,13 @@ fn runLocalRbInstall(alloc: std.mem.Allocator, path: []const u8) void {
 fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
     const stderr = StderrWriter{};
 
-    // Check for --cask, --deb, --repo, --skip-postinst, and --no-verify flags
+    // Check for --cask, --deb, --repo, --skip-postinst, --no-verify, and --shims flags
     var is_cask = false;
     var is_deb = false;
     var repo_spec: ?[]const u8 = null;
     var skip_postinst = false;
     var no_verify = false;
+    var use_shims = shimLinksEnabledByEnv();
     var formulae: std.ArrayList([]const u8) = .empty;
     defer formulae.deinit(alloc);
     var arg_idx: usize = 0;
@@ -447,6 +454,8 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
             skip_postinst = true;
         } else if (std.mem.eql(u8, arg, "--no-verify")) {
             no_verify = true;
+        } else if (std.mem.eql(u8, arg, "--shims") or std.mem.eql(u8, arg, "--shim-links")) {
+            use_shims = true;
         } else if (arg.len > 0 and arg[0] == '-') {
             stderr.print("nb: unknown flag '{s}'\n", .{arg}) catch {};
             std.process.exit(1);
@@ -563,12 +572,9 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
         if (std.Io.Dir.openDirAbsolute(g_io, ver_dir, .{})) |d| {
             var dir = d;
             dir.close(g_io);
-            // Already installed: rerun generic keg repair steps so stale text
-            // placeholders and missing prefix links are healed too.
-            platform.relocate.relocateKeg(alloc, g_io, f.name, actual_ver) catch {};
-            platform.relocate.replaceKegPlaceholders(g_io, f.name, actual_ver);
-            platform.relocate.sealKegBundles(alloc, g_io, f.name, actual_ver);
-            nb.linker.linkKeg(f.name, actual_ver) catch {};
+            if (formulaLinkNeedsRepair(f.name, actual_ver, use_shims, formulae.items)) {
+                linkFormulaKeg(alloc, f.name, actual_ver, use_shims, formulae.items, all_formulae) catch {};
+            }
         } else |_| {
             to_install.append(alloc, f) catch {};
         }
@@ -649,7 +655,7 @@ fn runInstall(alloc: std.mem.Allocator, args: []const []const u8) void {
                 threads.items[0].join();
                 _ = threads.orderedRemove(0);
             }
-            const t = std.Thread.spawn(.{}, fullInstallOne, .{ alloc, f, &had_error, &phases[pi] }) catch {
+            const t = std.Thread.spawn(.{}, fullInstallOne, .{ alloc, f, &had_error, &phases[pi], use_shims, formulae.items, all_formulae }) catch {
                 had_error.store(true, .release);
                 phases[pi].store(@intFromEnum(Phase.failed), .release);
                 continue;
@@ -812,9 +818,109 @@ fn renderProgress(
     stdout.writeStreamingAll(g_io, "\x1b[?25h") catch {};
 }
 
+fn truthyEnvValue(raw_or_null: ?[*:0]u8) bool {
+    const raw = raw_or_null orelse return false;
+    const value = std.mem.span(raw);
+    return std.mem.eql(u8, value, "1") or
+        std.ascii.eqlIgnoreCase(value, "true") or
+        std.ascii.eqlIgnoreCase(value, "yes") or
+        std.ascii.eqlIgnoreCase(value, "on");
+}
+
+fn shimLinksEnabledByEnv() bool {
+    return truthyEnvValue(std.c.getenv("NANOBREW_SHIMS")) or
+        truthyEnvValue(std.c.getenv("NANOBREW_SHIM_LINKS"));
+}
+
+fn tapShortNameLocal(name: []const u8) []const u8 {
+    var last_slash: ?usize = null;
+    for (name, 0..) |c, i| {
+        if (c == '/') last_slash = i;
+    }
+    if (last_slash) |pos| {
+        if (pos + 1 < name.len) return name[pos + 1 ..];
+    }
+    return name;
+}
+
+fn isRequestedFormulaName(name: []const u8, requested: []const []const u8) bool {
+    for (requested) |raw| {
+        if (std.mem.eql(u8, name, raw)) return true;
+        if (std.mem.eql(u8, name, tapShortNameLocal(raw))) return true;
+    }
+    return false;
+}
+
+fn buildShimPathEntries(
+    alloc: std.mem.Allocator,
+    root_name: []const u8,
+    all_formulae: []const nb.formula.Formula,
+) ![]const []const u8 {
+    var entries: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (entries.items) |entry| alloc.free(entry);
+        entries.deinit(alloc);
+    }
+
+    for (all_formulae) |formula| {
+        if (std.mem.eql(u8, formula.name, root_name)) continue;
+        try entries.append(alloc, try std.fmt.allocPrint(alloc, "{s}/opt/{s}/bin", .{ PREFIX, formula.name }));
+        try entries.append(alloc, try std.fmt.allocPrint(alloc, "{s}/opt/{s}/sbin", .{ PREFIX, formula.name }));
+    }
+    return try entries.toOwnedSlice(alloc);
+}
+
+fn freeShimPathEntries(alloc: std.mem.Allocator, entries: []const []const u8) void {
+    for (entries) |entry| alloc.free(entry);
+    alloc.free(entries);
+}
+
+fn linkFormulaKeg(
+    alloc: std.mem.Allocator,
+    name: []const u8,
+    version: []const u8,
+    use_shims: bool,
+    requested: []const []const u8,
+    all_formulae: []const nb.formula.Formula,
+) !void {
+    if (!use_shims) return nb.linker.linkKeg(name, version);
+
+    if (isRequestedFormulaName(name, requested)) {
+        const entries = try buildShimPathEntries(alloc, name, all_formulae);
+        defer freeShimPathEntries(alloc, entries);
+        return nb.linker.linkKegWithOptions(name, version, .{
+            .mode = .shim_root,
+            .shim_path_entries = entries,
+        });
+    }
+
+    return nb.linker.linkKegWithOptions(name, version, .{ .mode = .private_dependency });
+}
+
+fn formulaLinkNeedsRepair(
+    name: []const u8,
+    version: []const u8,
+    use_shims: bool,
+    requested: []const []const u8,
+) bool {
+    if (!use_shims) return nb.linker.needsLinkRepair(name, version, .{});
+    if (isRequestedFormulaName(name, requested)) {
+        return nb.linker.needsLinkRepair(name, version, .{ .mode = .shim_root });
+    }
+    return nb.linker.needsLinkRepair(name, version, .{ .mode = .private_dependency });
+}
+
 /// Full per-package pipeline: download → extract → materialize → relocate → link
 /// Runs in its own thread — no barriers between phases.
-fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *std.atomic.Value(bool), phase: *std.atomic.Value(u8)) void {
+fn fullInstallOne(
+    alloc: std.mem.Allocator,
+    f: nb.formula.Formula,
+    had_error: *std.atomic.Value(bool),
+    phase: *std.atomic.Value(u8),
+    use_shims: bool,
+    requested: []const []const u8,
+    all_formulae: []const nb.formula.Formula,
+) void {
     const stderr = StderrWriter{};
 
     const is_source_build = f.bottle_url.len == 0 and f.source_url.len > 0;
@@ -829,7 +935,7 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
             phase.store(@intFromEnum(Phase.installing), .release);
             nb.store.materializeFromRelocated(source_cache_key, f.name, fv) catch break :fast;
             phase.store(@intFromEnum(Phase.linking), .release);
-            nb.linker.linkKeg(f.name, fv) catch |err| {
+            linkFormulaKeg(alloc, f.name, fv, use_shims, requested, all_formulae) catch |err| {
                 stderr.print("nb: {s}: link failed: {}\n", .{ f.name, err }) catch {};
                 had_error.store(true, .release);
                 phase.store(@intFromEnum(Phase.failed), .release);
@@ -864,7 +970,12 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
         };
 
         if (!fileExists(blob_path)) {
-            nb.downloader.downloadOne(alloc, .{ .url = f.bottleUrl(), .expected_sha256 = f.bottle_sha256 }) catch |err| {
+            nb.downloader.downloadOne(alloc, .{
+                .url = f.bottleUrl(),
+                .expected_sha256 = f.bottle_sha256,
+                .target_kind = .formula,
+                .target_name = f.name,
+            }) catch |err| {
                 stderr.print("nb: {s}: download failed: {}\n", .{ f.name, err }) catch {};
                 had_error.store(true, .release);
                 phase.store(@intFromEnum(Phase.failed), .release);
@@ -888,11 +999,13 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
         fast: {
             if (!nb.store.hasRelocatedEntry(f.bottle_sha256)) break :fast;
             var fv_buf: [256]u8 = undefined;
-            const fv = nb.cellar.detectKegVersion(f.name, f.version, &fv_buf) orelse f.version;
+            const fv = nb.store.detectEntryVersion(f.bottle_sha256, f.name, f.version, &fv_buf) orelse
+                nb.cellar.detectKegVersion(f.name, f.version, &fv_buf) orelse
+                f.version;
             nb.store.materializeFromRelocated(f.bottle_sha256, f.name, fv) catch break :fast;
             // Relocated snapshot found — skip steps 4/4b, go straight to link+post-install
             phase.store(@intFromEnum(Phase.linking), .release);
-            nb.linker.linkKeg(f.name, fv) catch |err| {
+            linkFormulaKeg(alloc, f.name, fv, use_shims, requested, all_formulae) catch |err| {
                 stderr.print("nb: {s}: link failed: {}\n", .{ f.name, err }) catch {};
             };
             nb.postinstall.runPostInstall(alloc, f) catch |err| {
@@ -933,7 +1046,7 @@ fn fullInstallOne(alloc: std.mem.Allocator, f: nb.formula.Formula, had_error: *s
 
     // 5. Link binaries
     phase.store(@intFromEnum(Phase.linking), .release);
-    nb.linker.linkKeg(f.name, actual_ver) catch |err| {
+    linkFormulaKeg(alloc, f.name, actual_ver, use_shims, requested, all_formulae) catch |err| {
         stderr.print("nb: {s}: link failed: {}\n", .{ f.name, err }) catch {};
         had_error.store(true, .release);
         phase.store(@intFromEnum(Phase.failed), .release);
@@ -1956,6 +2069,7 @@ fn runUpdate(alloc: std.mem.Allocator) void {
     };
 
     // Download tarball to temp file (native HTTP with curl/wget fallback)
+    var update_telemetry = nb.telemetry.DownloadEvent.start(.self_update, "nanobrew");
     const download_ok: bool = blk: {
         nb.fetch.download(alloc, tarball_url, tmp_tar) catch {
             // Native download failed; try curl
@@ -2002,9 +2116,11 @@ fn runUpdate(alloc: std.mem.Allocator) void {
         break :blk true;
     };
     if (!download_ok) {
+        update_telemetry.fail();
         stderr.print("nb: update failed: could not download release tarball (tried native HTTP, curl, wget)\n", .{}) catch {};
         std.process.exit(1);
     }
+    update_telemetry.succeed(nb.telemetry.fileSize(tmp_tar));
 
     // Compute SHA256 of downloaded tarball
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
@@ -2315,6 +2431,8 @@ fn printUsage() void {
         \\COMMANDS:
         \\  init                     Create /opt/nanobrew/ directory tree
         \\  install <formula>        Install packages (with full dep resolution)
+        \\  install --shims <formula>
+        \\                           Install with private dependency executables
         \\  install --cask <app>     Install macOS applications
         \\  install --deb <pkg>      Install .deb packages (Linux, replaces apt-get)
         \\  remove <formula>         Uninstall packages
@@ -2342,6 +2460,8 @@ fn printUsage() void {
         \\                           Manage background services
         \\  completions [zsh|bash|fish]
         \\                           Generate shell completions
+        \\  telemetry [status|on|off]
+        \\                           Show or change anonymous download telemetry
         \\  nuke                     Completely uninstall nanobrew and all packages
         \\  migrate                  Import existing Homebrew packages into nanobrew
         \\  help                     Show this help
@@ -3252,6 +3372,46 @@ fn runServices(alloc: std.mem.Allocator, args: []const []const u8) void {
     }
 }
 
+// ── nb telemetry ──
+
+fn runTelemetry(args: []const []const u8) void {
+    const stdout = StdoutWriter{};
+    const stderr = StderrWriter{};
+
+    const subcmd = if (args.len > 0) args[0] else "status";
+    if (std.mem.eql(u8, subcmd, "status")) {
+        const state = if (nb.telemetry.isEnabled()) "on" else "off";
+        stdout.print("Telemetry is {s}.\n", .{state}) catch {};
+        stdout.print("Setting file: {s}\n", .{nb.telemetry.settingPath()}) catch {};
+        stdout.print("Use `nb telemetry off` to opt out or `nb telemetry on` to turn it back on.\n", .{}) catch {};
+        return;
+    }
+
+    if (std.mem.eql(u8, subcmd, "off") or std.mem.eql(u8, subcmd, "disable")) {
+        nb.telemetry.setEnabled(false) catch |err| {
+            stderr.print("nb: failed to disable telemetry: {}\n", .{err}) catch {};
+            stderr.print("nb: try `sudo nb init` if /opt/nanobrew is not writable\n", .{}) catch {};
+            return;
+        };
+        stdout.print("==> Telemetry disabled\n", .{}) catch {};
+        stdout.print("    Stored: {s}\n", .{nb.telemetry.settingPath()}) catch {};
+        return;
+    }
+
+    if (std.mem.eql(u8, subcmd, "on") or std.mem.eql(u8, subcmd, "enable")) {
+        nb.telemetry.setEnabled(true) catch |err| {
+            stderr.print("nb: failed to enable telemetry: {}\n", .{err}) catch {};
+            stderr.print("nb: try `sudo nb init` if /opt/nanobrew is not writable\n", .{}) catch {};
+            return;
+        };
+        stdout.print("==> Telemetry enabled\n", .{}) catch {};
+        stdout.print("    Stored: {s}\n", .{nb.telemetry.settingPath()}) catch {};
+        return;
+    }
+
+    stderr.print("nb: unknown telemetry subcommand '{s}'\nUsage: nb telemetry [status|on|off]\n", .{subcmd}) catch {};
+}
+
 // ── nb completions ──
 
 fn runCompletions(args: []const []const u8) void {
@@ -3288,6 +3448,7 @@ fn runCompletions(args: []const []const u8) void {
             \\    'deps:Show dependency tree'
             \\    'services:Manage services'
             \\    'completions:Generate shell completions'
+            \\    'telemetry:Manage anonymous download telemetry'
             \\    'nuke:Completely uninstall nanobrew'
             \\    'migrate:Import existing Homebrew packages'
             \\    'help:Show help'
@@ -3300,7 +3461,7 @@ fn runCompletions(args: []const []const u8) void {
             \\
             \\  case "$words[2]" in
             \\    install|i)
-            \\      _arguments '--cask[Install a cask]' '--deb[Install a deb package]' '*:formula:' ;;
+            \\      _arguments '--cask[Install a cask]' '--deb[Install a deb package]' '--shims[Use private dependency executable shims]' '*:formula:' ;;
             \\    remove|uninstall|rm)
             \\      _arguments '--cask[Remove a cask]' '--deb[Remove a deb package]' '*:installed package:_nb_installed' ;;
             \\    upgrade)
@@ -3317,6 +3478,8 @@ fn runCompletions(args: []const []const u8) void {
             \\      _describe 'subcommand' subcmds ;;
             \\    completions)
             \\      _arguments '*:shell:(zsh bash fish)' ;;
+            \\    telemetry)
+            \\      _arguments '*:subcommand:(status on off)' ;;
             \\    bundle)
             \\      _arguments '*:subcommand:(dump install)' ;;
             \\    cleanup)
@@ -3336,7 +3499,7 @@ fn runCompletions(args: []const []const u8) void {
     } else if (std.mem.eql(u8, shell, "bash")) {
         stdout.print(
             \\_nb_completions() {{
-            \\  local commands="init install remove list leaves info search where upgrade update doctor cleanup outdated pin unpin rollback bundle deps services completions nuke migrate help"
+            \\  local commands="init install remove list leaves info search where upgrade update doctor cleanup outdated pin unpin rollback bundle deps services completions telemetry nuke migrate help"
             \\  if [[ $COMP_CWORD -eq 1 ]]; then
             \\    COMPREPLY=($(compgen -W "$commands" -- "${{COMP_WORDS[COMP_CWORD]}}"))
             \\  else
@@ -3345,11 +3508,13 @@ fn runCompletions(args: []const []const u8) void {
             \\        local installed="$(nb list 2>/dev/null | awk '{{print $1}}')"
             \\        COMPREPLY=($(compgen -W "$installed" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
             \\      install)
-            \\        COMPREPLY=($(compgen -W "--cask --deb" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
+            \\        COMPREPLY=($(compgen -W "--cask --deb --shims" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
             \\      info)
             \\        COMPREPLY=($(compgen -W "--cask" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
             \\      completions)
             \\        COMPREPLY=($(compgen -W "zsh bash fish" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
+            \\      telemetry)
+            \\        COMPREPLY=($(compgen -W "status on off" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
             \\      services)
             \\        COMPREPLY=($(compgen -W "list start stop restart" -- "${{COMP_WORDS[COMP_CWORD]}}")) ;;
             \\    esac
@@ -3383,14 +3548,17 @@ fn runCompletions(args: []const []const u8) void {
             \\complete -c nb -n '__fish_use_subcommand' -a 'deps' -d 'Show dependency tree'
             \\complete -c nb -n '__fish_use_subcommand' -a 'services' -d 'Manage services'
             \\complete -c nb -n '__fish_use_subcommand' -a 'completions' -d 'Generate shell completions'
+            \\complete -c nb -n '__fish_use_subcommand' -a 'telemetry' -d 'Manage anonymous download telemetry'
             \\complete -c nb -n '__fish_use_subcommand' -a 'nuke' -d 'Completely uninstall nanobrew'
             \\complete -c nb -n '__fish_use_subcommand' -a 'migrate' -d 'Import existing Homebrew packages'
             \\complete -c nb -n '__fish_use_subcommand' -a 'help' -d 'Show help'
             \\complete -c nb -n '__fish_seen_subcommand_from remove uninstall upgrade pin unpin rollback' -a '(nb list 2>/dev/null | awk "{{print \\$1}}")'
             \\complete -c nb -n '__fish_seen_subcommand_from install info' -l cask -d 'Cask mode'
             \\complete -c nb -n '__fish_seen_subcommand_from install' -l deb -d 'Deb mode'
+            \\complete -c nb -n '__fish_seen_subcommand_from install' -l shims -d 'Use private dependency executable shims'
             \\complete -c nb -n '__fish_seen_subcommand_from services' -a 'list start stop restart'
             \\complete -c nb -n '__fish_seen_subcommand_from completions' -a 'zsh bash fish'
+            \\complete -c nb -n '__fish_seen_subcommand_from telemetry' -a 'status on off'
             \\
         , .{}) catch {};
     } else {
@@ -3576,6 +3744,8 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
         const DebDlItem = struct {
             url_storage: [1024]u8,
             url_len: usize,
+            name_storage: [128]u8,
+            name_len: usize,
             sha256: []const u8,
             cache_path_storage: [512]u8,
             cache_path_len: usize,
@@ -3612,6 +3782,9 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
             var item: DebDlItem = undefined;
             @memcpy(item.url_storage[0..dl_url.len], dl_url);
             item.url_len = dl_url.len;
+            const name_len = @min(pkg.name.len, item.name_storage.len);
+            @memcpy(item.name_storage[0..name_len], pkg.name[0..name_len]);
+            item.name_len = name_len;
             item.sha256 = pkg.sha256;
             @memcpy(item.cache_path_storage[0..cache_path.len], cache_path);
             item.cache_path_len = cache_path.len;
@@ -3641,15 +3814,20 @@ fn runDebInstall(alloc: std.mem.Allocator, packages: []const []const u8, repo_sp
                         const item = ctx.items[idx];
                         const url = item.url_storage[0..item.url_len];
                         const dest = item.cache_path_storage[0..item.cache_path_len];
+                        const name = item.name_storage[0..item.name_len];
 
+                        var telemetry_event = nb.telemetry.DownloadEvent.start(.artifact, name);
                         downloadDebWithSha256(&dl_client, url, item.sha256, dest) catch {
                             // Retry once with fresh client (connection may have been reset)
                             var retry_client: std.http.Client = .{ .allocator = ctx.alloc_, .io = std.Io.Threaded.global_single_threaded.io() };
                             defer retry_client.deinit();
                             downloadDebWithSha256(&retry_client, url, item.sha256, dest) catch {
+                                telemetry_event.fail();
                                 ctx.had_error.store(true, .release);
+                                continue;
                             };
                         };
+                        telemetry_event.succeed(nb.telemetry.fileSize(dest));
                     }
                 }
             }.run;

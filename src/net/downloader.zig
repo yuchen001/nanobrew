@@ -13,6 +13,7 @@
 const std = @import("std");
 const store = @import("../store/store.zig");
 const paths = @import("../platform/paths.zig");
+const telemetry = @import("../telemetry/client.zig");
 
 fn milliTimestamp() i64 {
     const lib_io = std.Io.Threaded.global_single_threaded.io();
@@ -27,6 +28,8 @@ const TMP_DIR = paths.TMP_DIR;
 pub const DownloadRequest = struct {
     url: []const u8,
     expected_sha256: []const u8,
+    target_kind: telemetry.TargetKind = .formula,
+    target_name: []const u8 = "",
 };
 
 pub const PackageInfo = struct {
@@ -267,7 +270,12 @@ fn downloadAndExtractOne(
     };
 
     if (!fileExists(blob_path)) {
-        downloadOneWithClient(alloc, client, .{ .url = pkg.url, .expected_sha256 = pkg.sha256 }, preauth_token) catch {
+        downloadOneWithClient(alloc, client, .{
+            .url = pkg.url,
+            .expected_sha256 = pkg.sha256,
+            .target_kind = .formula,
+            .target_name = pkg.name,
+        }, preauth_token) catch {
             had_error.store(true, .release);
             return;
         };
@@ -373,6 +381,8 @@ fn downloadOneWithClient(
     const t_dl = if (bench) milliTimestamp() else @as(i64, 0);
     var dest_path_buf: [512]u8 = undefined;
     const dest_path = std.fmt.bufPrint(&dest_path_buf, "{s}/{s}", .{ BLOBS_DIR, req.expected_sha256 }) catch return error.PathTooLong;
+    var telemetry_event = telemetry.DownloadEvent.start(req.target_kind, req.target_name);
+    errdefer telemetry_event.fail();
 
     // Rewrite bottle URL if NANOBREW_BOTTLE_DOMAIN or HOMEBREW_BOTTLE_DOMAIN is set (#74)
     const bottle_domain: ?[]const u8 = blk: {
@@ -479,6 +489,7 @@ fn downloadOneWithClient(
                 const sha = req.expected_sha256;
                 std.debug.print("[nb-bench] dl {s}…: {d}ms (cached blob)\n", .{ sha[0..@min(8, sha.len)], milliTimestamp() - t_dl });
             }
+            telemetry_event.succeed(telemetry.fileSize(dest_path));
             return;
         }
         return err;
@@ -487,6 +498,7 @@ fn downloadOneWithClient(
         const sha = req.expected_sha256;
         std.debug.print("[nb-bench] dl {s}…: {d}ms\n", .{ sha[0..@min(8, sha.len)], milliTimestamp() - t_dl });
     }
+    telemetry_event.succeed(telemetry.fileSize(dest_path));
 }
 
 /// Public single-download entry point for callers without a persistent client.

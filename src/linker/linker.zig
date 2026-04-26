@@ -27,6 +27,17 @@ const SubdirMapping = struct {
     dest: []const u8,
 };
 
+pub const LinkMode = enum {
+    global,
+    shim_root,
+    private_dependency,
+};
+
+pub const LinkOptions = struct {
+    mode: LinkMode = .global,
+    shim_path_entries: []const []const u8 = &.{},
+};
+
 const subdir_mappings = [_]SubdirMapping{
     .{ .src = "bin", .dest = BIN_DIR },
     .{ .src = "sbin", .dest = BIN_DIR },
@@ -68,6 +79,24 @@ pub fn isConflict(existing_target: []const u8, keg_dir: []const u8) bool {
 
     // Same package name (any version) is not a conflict
     return !std.mem.eql(u8, existing_name, keg_name);
+}
+
+fn isExecutableSubdir(subdir: []const u8) bool {
+    return std.mem.eql(u8, subdir, "bin") or std.mem.eql(u8, subdir, "sbin");
+}
+
+fn symlinkTargetEquals(path: []const u8, expected: []const u8) bool {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const target_n = std.Io.Dir.readLinkAbsolute(lib_io, path, &target_buf) catch return false;
+    return std.mem.eql(u8, target_buf[0..target_n], expected);
+}
+
+fn symlinkTargetStartsWith(path: []const u8, prefix: []const u8) bool {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const target_n = std.Io.Dir.readLinkAbsolute(lib_io, path, &target_buf) catch return false;
+    return std.mem.startsWith(u8, target_buf[0..target_n], prefix);
 }
 
 /// Recursively link files from keg_subdir into prefix_dest, with conflict detection.
@@ -132,6 +161,123 @@ fn linkSubdir(keg_subdir: []const u8, prefix_dest: []const u8, keg_dir: []const 
     }
 }
 
+fn renderShimWrapper(
+    alloc: std.mem.Allocator,
+    actual_bin: []const u8,
+    path_entries: []const []const u8,
+) ![]u8 {
+    var out: std.Io.Writer.Allocating = .init(alloc);
+    errdefer out.deinit();
+    const writer = &out.writer;
+
+    try writer.writeAll(
+        \\#!/bin/sh
+        \\set -eu
+        \\PATH="
+    );
+    for (path_entries, 0..) |entry, i| {
+        if (i > 0) try writer.writeAll(":");
+        try writer.writeAll(entry);
+    }
+    if (path_entries.len > 0) try writer.writeAll(":");
+    try writer.writeAll(
+        \\$PATH"
+        \\export PATH
+        \\exec "
+    );
+    try writer.writeAll(actual_bin);
+    try writer.writeAll(
+        \\" "$@"
+        \\
+    );
+
+    return out.toOwnedSlice() catch error.OutOfMemory;
+}
+
+fn installShimLink(
+    keg_dir: []const u8,
+    source: []const u8,
+    dest: []const u8,
+    entry_name: []const u8,
+    path_entries: []const []const u8,
+) void {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var libexec_dir_buf: [512]u8 = undefined;
+    const libexec_dir = std.fmt.bufPrint(&libexec_dir_buf, "{s}/libexec", .{keg_dir}) catch return;
+    std.Io.Dir.createDirAbsolute(lib_io, libexec_dir, .default_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+
+    var wrapper_dir_buf: [512]u8 = undefined;
+    const wrapper_dir = std.fmt.bufPrint(&wrapper_dir_buf, "{s}/{s}", .{ keg_dir, WRAPPER_DIR }) catch return;
+    std.Io.Dir.createDirAbsolute(lib_io, wrapper_dir, .default_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+
+    var wrapper_path_buf: [1024]u8 = undefined;
+    const wrapper_path = std.fmt.bufPrint(&wrapper_path_buf, "{s}/{s}", .{ wrapper_dir, entry_name }) catch return;
+
+    const alloc = std.heap.smp_allocator;
+    const wrapper_content = renderShimWrapper(alloc, source, path_entries) catch return;
+    defer alloc.free(wrapper_content);
+
+    std.Io.Dir.deleteFileAbsolute(lib_io, wrapper_path) catch {};
+    const wrapper_file = std.Io.Dir.createFileAbsolute(lib_io, wrapper_path, .{ .permissions = .executable_file }) catch return;
+    defer wrapper_file.close(lib_io);
+    wrapper_file.writeStreamingAll(lib_io, wrapper_content) catch return;
+
+    var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+    if (std.Io.Dir.readLinkAbsolute(lib_io, dest, &target_buf)) |target_n| {
+        const existing_target = target_buf[0..target_n];
+        if (isConflict(existing_target, keg_dir) and !std.mem.startsWith(u8, existing_target, keg_dir)) {
+            var msg_buf: [512]u8 = undefined;
+            const msg = std.fmt.bufPrint(&msg_buf, "warning: {s} is already linked by {s}, skipping shim\n", .{
+                entry_name,
+                extractKegName(existing_target),
+            }) catch "warning: conflict detected, skipping shim\n";
+            std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
+            return;
+        }
+        std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
+    } else |_| {
+        std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
+    }
+
+    std.Io.Dir.symLinkAbsolute(lib_io, wrapper_path, dest, .{}) catch |err| {
+        var msg_buf: [512]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "warning: failed to install {s} shim: {}\n", .{ entry_name, err }) catch "warning: failed to install shim\n";
+        std.Io.File.stderr().writeStreamingAll(lib_io, msg) catch {};
+    };
+}
+
+fn linkSubdirAsShims(keg_subdir: []const u8, prefix_dest: []const u8, keg_dir: []const u8, path_entries: []const []const u8) void {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+
+    std.Io.Dir.createDirAbsolute(lib_io, prefix_dest, .default_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+
+    var dir = std.Io.Dir.openDirAbsolute(lib_io, keg_subdir, .{ .iterate = true }) catch return;
+    defer dir.close(lib_io);
+    var iter = dir.iterate();
+
+    while (iter.next(lib_io) catch null) |entry| {
+        var src_buf: [1024]u8 = undefined;
+        const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ keg_subdir, entry.name }) catch continue;
+
+        var dest_buf: [1024]u8 = undefined;
+        const dest = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ prefix_dest, entry.name }) catch continue;
+
+        if (entry.kind == .directory) {
+            linkSubdirAsShims(src, dest, keg_dir, path_entries);
+            continue;
+        }
+
+        if (entry.kind != .file and entry.kind != .sym_link) continue;
+        installShimLink(keg_dir, src, dest, entry.name, path_entries);
+    }
+}
+
 /// Recursively unlink symlinks in prefix_dest that point into keg_subdir,
 /// then remove empty parent directories.
 fn unlinkSubdir(keg_subdir: []const u8, prefix_dest: []const u8) void {
@@ -163,6 +309,29 @@ fn unlinkSubdir(keg_subdir: []const u8, prefix_dest: []const u8) void {
         // Remove if the symlink points into our keg_subdir
         if (std.mem.startsWith(u8, target, keg_subdir)) {
             std.Io.Dir.deleteFileAbsolute(lib_io, dest_path) catch {};
+        }
+    }
+}
+
+fn unlinkShimLinks(keg_dir: []const u8) void {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var wrapper_prefix_buf: [512]u8 = undefined;
+    const wrapper_prefix = std.fmt.bufPrint(&wrapper_prefix_buf, "{s}/{s}", .{ keg_dir, WRAPPER_DIR }) catch return;
+
+    var dir = std.Io.Dir.openDirAbsolute(lib_io, BIN_DIR, .{ .iterate = true }) catch return;
+    defer dir.close(lib_io);
+    var iter = dir.iterate();
+
+    while (iter.next(lib_io) catch null) |entry| {
+        if (entry.kind != .sym_link) continue;
+        var dest_buf: [1024]u8 = undefined;
+        const dest = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ BIN_DIR, entry.name }) catch continue;
+
+        var target_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const target_n = std.Io.Dir.readLinkAbsolute(lib_io, dest, &target_buf) catch continue;
+        const target = target_buf[0..target_n];
+        if (std.mem.startsWith(u8, target, wrapper_prefix)) {
+            std.Io.Dir.deleteFileAbsolute(lib_io, dest) catch {};
         }
     }
 }
@@ -285,17 +454,31 @@ fn removeManagedWrapper(pkg_name: []const u8, keg_dir: []const u8) void {
 
 /// Link a keg's files and create opt/ symlink.
 pub fn linkKeg(name: []const u8, version: []const u8) !void {
+    return linkKegWithOptions(name, version, .{});
+}
+
+pub fn linkKegWithOptions(name: []const u8, version: []const u8, options: LinkOptions) !void {
     const lib_io = std.Io.Threaded.global_single_threaded.io();
     var keg_buf: [512]u8 = undefined;
     const keg_dir = std.fmt.bufPrint(&keg_buf, "{s}/{s}/{s}", .{ CELLAR_DIR, name, version }) catch return error.PathTooLong;
 
+    if (options.mode == .private_dependency) unlinkShimLinks(keg_dir);
+
     for (subdir_mappings) |mapping| {
         var sub_buf: [512]u8 = undefined;
         const keg_subdir = std.fmt.bufPrint(&sub_buf, "{s}/{s}", .{ keg_dir, mapping.src }) catch continue;
-        linkSubdir(keg_subdir, mapping.dest, keg_dir);
+        if (isExecutableSubdir(mapping.src)) {
+            switch (options.mode) {
+                .global => linkSubdir(keg_subdir, mapping.dest, keg_dir),
+                .shim_root => linkSubdirAsShims(keg_subdir, mapping.dest, keg_dir, options.shim_path_entries),
+                .private_dependency => unlinkSubdir(keg_subdir, mapping.dest),
+            }
+        } else {
+            linkSubdir(keg_subdir, mapping.dest, keg_dir);
+        }
     }
 
-    installManagedWrapper(name, keg_dir);
+    if (options.mode == .global) installManagedWrapper(name, keg_dir);
 
     // Create opt/ symlink: prefix/opt/<name> -> Cellar/<name>/<version>
     std.Io.Dir.createDirAbsolute(lib_io, OPT_DIR, .default_dir) catch {};
@@ -309,6 +492,65 @@ pub fn linkKeg(name: []const u8, version: []const u8) !void {
     };
 }
 
+fn executableLinksNeedRepair(keg_subdir: []const u8, prefix_dest: []const u8, keg_dir: []const u8, mode: LinkMode) bool {
+    const lib_io = std.Io.Threaded.global_single_threaded.io();
+    var dir = std.Io.Dir.openDirAbsolute(lib_io, keg_subdir, .{ .iterate = true }) catch return false;
+    defer dir.close(lib_io);
+    var iter = dir.iterate();
+
+    while (iter.next(lib_io) catch null) |entry| {
+        var src_buf: [1024]u8 = undefined;
+        const src = std.fmt.bufPrint(&src_buf, "{s}/{s}", .{ keg_subdir, entry.name }) catch continue;
+
+        var dest_buf: [1024]u8 = undefined;
+        const dest = std.fmt.bufPrint(&dest_buf, "{s}/{s}", .{ prefix_dest, entry.name }) catch continue;
+
+        if (entry.kind == .directory) {
+            if (executableLinksNeedRepair(src, dest, keg_dir, mode)) return true;
+            continue;
+        }
+
+        if (entry.kind != .file and entry.kind != .sym_link) continue;
+
+        switch (mode) {
+            .global => {
+                if (!symlinkTargetEquals(dest, src)) return true;
+            },
+            .shim_root => {
+                var wrapper_path_buf: [1024]u8 = undefined;
+                const wrapper_path = std.fmt.bufPrint(&wrapper_path_buf, "{s}/{s}/{s}", .{ keg_dir, WRAPPER_DIR, entry.name }) catch return true;
+                if (!symlinkTargetEquals(dest, wrapper_path)) return true;
+            },
+            .private_dependency => {
+                if (symlinkTargetStartsWith(dest, keg_dir)) return true;
+            },
+        }
+    }
+
+    return false;
+}
+
+/// Return true when the public links for an installed keg do not match the
+/// requested link mode. This is intentionally much cheaper than a full relink
+/// and is used to keep already-installed `nb install` calls on the fast path.
+pub fn needsLinkRepair(name: []const u8, version: []const u8, options: LinkOptions) bool {
+    var keg_buf: [512]u8 = undefined;
+    const keg_dir = std.fmt.bufPrint(&keg_buf, "{s}/{s}/{s}", .{ CELLAR_DIR, name, version }) catch return true;
+
+    var opt_buf: [512]u8 = undefined;
+    const opt_link = std.fmt.bufPrint(&opt_buf, "{s}/{s}", .{ OPT_DIR, name }) catch return true;
+    if (!symlinkTargetEquals(opt_link, keg_dir)) return true;
+
+    for (subdir_mappings) |mapping| {
+        if (!isExecutableSubdir(mapping.src)) continue;
+        var sub_buf: [512]u8 = undefined;
+        const keg_subdir = std.fmt.bufPrint(&sub_buf, "{s}/{s}", .{ keg_dir, mapping.src }) catch continue;
+        if (executableLinksNeedRepair(keg_subdir, mapping.dest, keg_dir, options.mode)) return true;
+    }
+
+    return false;
+}
+
 /// Unlink a keg's files and remove opt/ symlink.
 pub fn unlinkKeg(name: []const u8, version: []const u8) !void {
     var keg_buf: [512]u8 = undefined;
@@ -320,6 +562,7 @@ pub fn unlinkKeg(name: []const u8, version: []const u8) !void {
         unlinkSubdir(keg_subdir, mapping.dest);
     }
 
+    unlinkShimLinks(keg_dir);
     removeManagedWrapper(name, keg_dir);
 
     // Remove opt/ symlink
@@ -343,4 +586,16 @@ test "renderFortuneWrapper injects default fortunes dir" {
     try std.testing.expect(std.mem.indexOf(u8, script, "default_dir=\"" ++ FORTUNE_DEFAULT_DIR ++ "\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, script, "exec \"/opt/nanobrew/prefix/Cellar/fortune/9708/bin/fortune\" \"$@\" \"" ++ FORTUNE_DEFAULT_DIR ++ "\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, script, "-n|-m") != null);
+}
+
+test "renderShimWrapper prepends private PATH entries and execs actual binary" {
+    const entries = [_][]const u8{
+        "/opt/nanobrew/prefix/opt/deno/bin",
+        "/opt/nanobrew/prefix/opt/python@3.14/bin",
+    };
+    const script = try renderShimWrapper(std.testing.allocator, "/opt/nanobrew/prefix/Cellar/yt-dlp/1.0/bin/yt-dlp", &entries);
+    defer std.testing.allocator.free(script);
+
+    try std.testing.expect(std.mem.indexOf(u8, script, "PATH=\"/opt/nanobrew/prefix/opt/deno/bin:/opt/nanobrew/prefix/opt/python@3.14/bin:$PATH\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, script, "exec \"/opt/nanobrew/prefix/Cellar/yt-dlp/1.0/bin/yt-dlp\" \"$@\"") != null);
 }

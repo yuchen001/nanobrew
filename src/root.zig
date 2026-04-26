@@ -21,6 +21,7 @@ pub const formula = @import("api/formula.zig");
 pub const deps = @import("resolve/deps.zig");
 pub const downloader = @import("net/downloader.zig");
 pub const fetch = @import("net/fetch.zig");
+pub const telemetry = @import("telemetry/client.zig");
 pub const tar = @import("extract/tar.zig");
 pub const native_tar = @import("extract/native_tar.zig");
 pub const blob_cache = @import("store/blob_cache.zig");
@@ -70,6 +71,7 @@ comptime {
     _ = version;
     _ = upstream_registry;
     _ = upstream_github;
+    _ = telemetry;
     _ = tar;
     _ = native_tar;
     _ = @import("platform/copy.zig");

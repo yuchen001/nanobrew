@@ -9,6 +9,7 @@ const Artifact = @import("../api/cask.zig").Artifact;
 const DownloadFormat = @import("../api/cask.zig").DownloadFormat;
 const paths = @import("../platform/paths.zig");
 const fetch = @import("../net/fetch.zig");
+const telemetry = @import("../telemetry/client.zig");
 const builtin = @import("builtin");
 
 const PREFIX = paths.PREFIX;
@@ -55,7 +56,12 @@ pub fn installCask(alloc: std.mem.Allocator, io: std.Io, cask: Cask) !void {
     const dl_path = std.fmt.bufPrint(&dl_buf, "{s}/{s}{s}", .{ CACHE_TMP, safe_token, ext }) catch return error.PathTooLong;
 
     var phase_timer = TraceTimer.start(trace_enabled);
-    try downloadArtifact(alloc, io, cask.url, dl_path, cask);
+    var telemetry_event = telemetry.DownloadEvent.start(.cask, cask.token);
+    const downloaded = downloadArtifact(alloc, io, cask.url, dl_path, cask) catch |err| {
+        telemetry_event.fail();
+        return err;
+    };
+    if (downloaded) telemetry_event.succeed(telemetry.fileSize(dl_path));
     traceCaskPhase(trace_enabled, cask.token, "download", phase_timer.read());
 
     // 2. Create Caskroom entry
@@ -423,7 +429,7 @@ pub fn removeCask(
     std.Io.Dir.deleteDirAbsolute(lib_io, parent) catch {};
 }
 
-fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest: []const u8, cask: Cask) !void {
+fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest: []const u8, cask: Cask) !bool {
     const lib_io = io;
     const use_cache = caskBlobCacheEnabled(cask.sha256);
 
@@ -439,7 +445,7 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
                 std.Io.Dir.deleteFileAbsolute(lib_io, cached_path) catch {};
                 break :copy_cached;
             };
-            return;
+            return false;
         }
     }
 
@@ -466,7 +472,7 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
         var _b: [512]u8 = undefined;
         const _m = std.fmt.bufPrint(&_b, "nb: warning: skipping SHA256 verification for {s} (no checksum available)\n", .{cask.token}) catch "nb: warning: skipping SHA256 verification\n";
         std.Io.File.stderr().writeStreamingAll(lib_io, _m) catch {};
-        return;
+        return true;
     }
 
     var attempt: usize = 0;
@@ -487,9 +493,10 @@ fn downloadArtifact(alloc: std.mem.Allocator, io: std.Io, url: []const u8, dest:
     if (use_cache) {
         std.Io.Dir.createDirAbsolute(lib_io, paths.BLOBS_DIR, .default_dir) catch {};
         var cached_buf: [512]u8 = undefined;
-        const cached_path = std.fmt.bufPrint(&cached_buf, "{s}/{s}", .{ paths.BLOBS_DIR, cask.sha256 }) catch return;
+        const cached_path = std.fmt.bufPrint(&cached_buf, "{s}/{s}", .{ paths.BLOBS_DIR, cask.sha256 }) catch return true;
         std.Io.Dir.copyFileAbsolute(dest, cached_path, lib_io, .{}) catch {};
     }
+    return true;
 }
 
 fn shouldRetryDownload(err: anyerror, attempt: usize) bool {
