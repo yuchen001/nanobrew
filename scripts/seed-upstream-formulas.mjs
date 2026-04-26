@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,6 +63,8 @@ function parseArgs(argv) {
     formulaFile: null,
     includeExisting: false,
     includeDependencies: false,
+    tokens: [],
+    selfTest: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -82,6 +85,12 @@ function parseArgs(argv) {
       opts.includeExisting = true;
     } else if (arg === "--include-dependencies") {
       opts.includeDependencies = true;
+    } else if (arg === "--self-test") {
+      opts.selfTest = true;
+    } else if (arg === "--tokens") {
+      opts.tokens.push(...splitList(argv[++i] ?? ""));
+    } else if (arg.startsWith("--tokens=")) {
+      opts.tokens.push(...splitList(arg.slice("--tokens=".length)));
     } else if (arg === "--registry") {
       opts.registry = argv[++i] ?? "";
     } else if (arg.startsWith("--registry=")) {
@@ -126,6 +135,8 @@ Options:
   --replace                  Replace existing formula records for generated tokens
   --include-existing         Include already-seeded records in printed output
   --include-dependencies     Also seed Homebrew bottle records for dependency closure
+  --self-test                Run offline helper checks and exit
+  --tokens a,b               Seed these tokens instead of scanning analytics rank
   --registry PATH            Registry to update (default: ${DEFAULT_REGISTRY})
   --embedded-registry PATH   Embedded fallback to update (default: ${DEFAULT_EMBEDDED_REGISTRY})
   --analytics-file PATH      Read analytics JSON from disk instead of fetching
@@ -144,6 +155,11 @@ function die(message) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  if (opts.selfTest) {
+    runSelfTest();
+    return;
+  }
+
   const [registry, analytics, formulae] = await Promise.all([
     readJson(opts.registry),
     loadJson(ANALYTICS_URL, opts.analyticsFile),
@@ -156,7 +172,14 @@ async function main() {
   const candidates = [];
   const skipped = [];
 
-  for (const item of (analytics.items ?? []).slice(0, opts.scan)) {
+  const seedItems = opts.tokens.length > 0
+    ? opts.tokens.map((token) => ({
+      formula: token,
+      ...(analyticsByFormula.get(token) ?? {}),
+    }))
+    : (analytics.items ?? []).slice(0, opts.scan);
+
+  for (const item of seedItems) {
     if (candidates.length >= opts.limit) break;
     const token = item.formula;
     if (!token) continue;
@@ -171,30 +194,19 @@ async function main() {
       continue;
     }
 
+    const releaseSeeded = await trySeedReleaseRecord(formula, item);
+    if (releaseSeeded.ok) {
+      candidates.push(releaseSeeded.record);
+      continue;
+    }
+
     const bottleSeeded = seedBottleRecordFromFormula(formula, item);
     if (bottleSeeded.ok) {
       candidates.push(bottleSeeded.record);
       continue;
     }
 
-    const repo = githubRepoForFormula(formula);
-    if (!repo) {
-      skipped.push({ token, reason: `no GitHub upstream repo; ${bottleSeeded.reason}` });
-      continue;
-    }
-
-    const release = await fetchLatestRelease(repo);
-    if (!release.ok) {
-      skipped.push({ token, reason: `${release.reason}; ${bottleSeeded.reason}` });
-      continue;
-    }
-
-    const seeded = await seedRecordFromRelease(formula, item, repo, release.data);
-    if (!seeded.ok) {
-      skipped.push({ token, reason: `${seeded.reason}; ${bottleSeeded.reason}` });
-      continue;
-    }
-    candidates.push(seeded.record);
+    skipped.push({ token, reason: `${releaseSeeded.reason}; ${bottleSeeded.reason}` });
   }
 
   if (opts.includeDependencies) {
@@ -222,6 +234,21 @@ async function main() {
   await writeFile(opts.registry, rendered);
   await writeFile(opts.embeddedRegistry, rendered);
   console.error(`seeded ${candidates.length} formula record(s): ${candidates.map((record) => record.token).join(", ")}`);
+}
+
+async function trySeedReleaseRecord(formula, analyticsItem = null) {
+  const runtimeDependencies = stringArray(formula.dependencies);
+  if (runtimeDependencies.length > 0) {
+    return { ok: false, reason: "runtime dependencies present" };
+  }
+
+  const repo = githubRepoForFormula(formula);
+  if (!repo) return { ok: false, reason: "no GitHub upstream repo" };
+
+  const release = await fetchLatestRelease(repo);
+  if (!release.ok) return release;
+
+  return seedRecordFromRelease(formula, analyticsItem, repo, release.data);
 }
 
 function seedDependencyClosure({ registry, formulaByName, analyticsByFormula, candidates, skipped, replace }) {
@@ -539,6 +566,7 @@ function stripCommonRoot(entries) {
   const roots = new Set(cleaned.map((entry) => entry.split("/")[0]));
   if (roots.size !== 1) return cleaned;
   const [root] = [...roots];
+  if (!cleaned.some((entry) => entry.startsWith(`${root}/`))) return cleaned;
   return cleaned
     .filter((entry) => entry !== root)
     .map((entry) => entry.slice(root.length + 1))
@@ -566,12 +594,25 @@ function chooseBinaryPaths(entries, token) {
   }
   if (selected.length > 0) return [...new Set(selected)];
 
-  if (candidates.length === 1) return [candidates[0]];
   return [];
 }
 
 function basename(path) {
   return path.split("/").filter(Boolean).at(-1) ?? "";
+}
+
+function splitList(value) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function runSelfTest() {
+  assert.deepEqual(stripCommonRoot(["starship"]), ["starship"]);
+  assert.deepEqual(stripCommonRoot(["tool-1.0/", "tool-1.0/bin/tool"]), ["bin/tool"]);
+  assert.deepEqual(chooseBinaryPaths(["starship"], "starship"), ["starship"]);
+  assert.deepEqual(chooseBinaryPaths(["bin/uv", "bin/uvx"], "uv"), ["bin/uv", "bin/uvx"]);
+  assert.deepEqual(chooseBinaryPaths(["yq_darwin_arm64"], "yq"), []);
+  assert.deepEqual(splitList("starship, yq,,uv"), ["starship", "yq", "uv"]);
+  process.stdout.write("upstream formula seeder self-test passed\n");
 }
 
 function numberOrZero(value) {

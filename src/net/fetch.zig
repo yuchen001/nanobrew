@@ -6,6 +6,8 @@
 const std = @import("std");
 const flate = std.compress.flate;
 
+const DOWNLOAD_STREAM_BUFFER_SIZE = 256 * 1024;
+
 /// Fetch a URL and return the response body as an owned slice.
 /// Caller must free the returned slice with `alloc.free()`.
 /// Follows up to 5 redirects. Auto-decompresses gzip. Returns error on non-200 status.
@@ -127,7 +129,7 @@ pub fn downloadWithClientHeaders(client: *std.http.Client, url: []const u8, dest
         req.deinit();
         return error.FetchFailed;
     };
-    var file_writer_buf: [65536]u8 = undefined;
+    var file_writer_buf: [DOWNLOAD_STREAM_BUFFER_SIZE]u8 = undefined;
     var file_writer = file.writer(_dl_io, &file_writer_buf);
     var reader = response.reader(&.{});
 
@@ -194,10 +196,10 @@ pub fn downloadWithClientSha256Headers(
         req.deinit();
         return error.FetchFailed;
     };
-    var file_writer_buf: [65536]u8 = undefined;
+    var file_writer_buf: [DOWNLOAD_STREAM_BUFFER_SIZE]u8 = undefined;
     var file_writer = file.writer(_dl_io, &file_writer_buf);
     var reader = response.reader(&.{});
-    var hash_buf: [65536]u8 = undefined;
+    var hash_buf: [DOWNLOAD_STREAM_BUFFER_SIZE]u8 = undefined;
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     var hashed = reader.hashed(&hasher, &hash_buf);
 

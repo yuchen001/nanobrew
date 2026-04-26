@@ -115,6 +115,10 @@ async function readPromotionCheck() {
   return JSON.parse(stdout);
 }
 
+async function readFormulaSeederSelfTest() {
+  return runNode(["scripts/seed-upstream-formulas.mjs", "--self-test"]);
+}
+
 function assertCoverage(report) {
   assert.equal(report.registry, fixturePath("coverage-registry.json"));
   assert.equal(report.top, 4);
@@ -232,7 +236,12 @@ function assertPromotionCheck(check) {
   assert.equal(check.benchmarks.files[0].rows[0].speedup, 1.8);
 }
 
+function assertFormulaSeederSelfTest(stdout) {
+  assert.equal(stdout.trim(), "upstream formula seeder self-test passed");
+}
+
 async function main() {
+  assertFormulaSeederSelfTest(await readFormulaSeederSelfTest());
   assertCoverage(await readCoverageReport());
   assertGapReport(await readGapReport());
   assertPromotionDatabase(await readPromotionDatabase());
