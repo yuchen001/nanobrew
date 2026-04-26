@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_manager_comparison:
+        description: "Run sandboxed yt-dlp comparison across nanobrew, Homebrew, and zerobrew"
+        required: false
+        type: boolean
+        default: false
       cask_tokens:
         description: "Comma-separated cask tokens for actual install benchmarks"
         required: false
@@ -83,6 +88,7 @@ jobs:
           for script in \
             scripts/bench-upstream-install.mjs \
             scripts/bench-upstream-resolution.mjs \
+            scripts/bench-manager-comparison.mjs \
             scripts/build-upstream-release-db.mjs \
             scripts/discover-github-upstreams.mjs \
             scripts/seed-upstream-casks.mjs \
@@ -210,6 +216,97 @@ jobs:
           path: |
             upstream-install-bench-formula.json
             upstream-promotion-check-with-formula-bench.json
+
+  manager-comparison-benchmark:
+    name: Benchmark yt-dlp across package managers
+    runs-on: macos-14
+    timeout-minutes: 45
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_manager_comparison }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build current nanobrew
+        run: |
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/nb /tmp/nb-current
+
+      - name: Build previous nanobrew release
+        run: |
+          git worktree add --detach /tmp/nanobrew-v0.1.191 v0.1.191
+          cd /tmp/nanobrew-v0.1.191
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/nb /tmp/nb-v0.1.191
+
+      - name: Download pinned zerobrew binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/zerobrew-bin
+          gh release download v0.2.1 \
+            --repo lucasgelfond/zerobrew \
+            --pattern 'zb-darwin-arm64' \
+            --pattern 'SHA256SUMS' \
+            --dir /tmp/zerobrew-bin
+          (cd /tmp/zerobrew-bin && shasum -a 256 -c SHA256SUMS --ignore-missing)
+          chmod +x /tmp/zerobrew-bin/zb-darwin-arm64
+          /tmp/zerobrew-bin/zb-darwin-arm64 --version
+
+      - name: Run sandboxed yt-dlp comparison
+        run: |
+          node scripts/bench-manager-comparison.mjs \
+            --token yt-dlp \
+            --iterations 5 \
+            --nb-current /tmp/nb-current \
+            --nb-previous /tmp/nb-v0.1.191 \
+            --zerobrew /tmp/zerobrew-bin/zb-darwin-arm64 \
+            --zerobrew-root /tmp/zbr \
+            --zerobrew-prefix /tmp/zbp \
+            --allow-opt-reset \
+            --allow-homebrew-reset \
+            --json-out manager-comparison-yt-dlp.json
+
+      - name: Summarize manager comparison
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync("manager-comparison-yt-dlp.json", "utf8"));
+          const lines = [
+            "### yt-dlp package manager comparison",
+            "",
+            "Target reinstall means dependencies and cache/store were primed, then only `yt-dlp` was removed and installed again. No-op means `yt-dlp` was already installed and the install command was run again.",
+            "",
+            "| manager | target reinstall | no-op median | speedup vs current reinstall | speedup vs current no-op |",
+            "|---|---:|---:|---:|---:|",
+            ...result.rows.map((row) => `| ${row.manager} | ${row.target_reinstall_ms}ms | ${row.noop_median_ms}ms | ${fmt(row.current_speedup_target_reinstall)} | ${fmt(row.current_speedup_noop)} |`),
+            "",
+            "Current nanobrew is run as `nb install --shims yt-dlp`; the workflow also smoke-tests that `yt-dlp --version` works and dependency executables such as `deno`/`python3.14` are not exposed in nanobrew's `prefix/bin`.",
+            "",
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          function fmt(value) {
+            return Number.isFinite(value) ? `${value}x` : "";
+          }
+          NODE
+
+      - name: Upload manager comparison artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: manager-comparison-yt-dlp
+          path: manager-comparison-yt-dlp.json
 
   cask-install-benchmark:
     name: Benchmark cask install path
