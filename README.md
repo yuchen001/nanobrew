@@ -38,11 +38,11 @@ If you rely on `post_install` hooks, build-from-source options, or Mac App Store
 
 | Package | Homebrew | zerobrew (cold) | zerobrew (warm) | nanobrew (cold) | nanobrew (warm) |
 |---------|----------|-----------------|-----------------|-----------------|-----------------|
-| **tree** (0 deps) | 4.070s | 1.254s | 0.242s | **0.507s** | **0.009s** |
-| **ffmpeg** (11 deps) | 14.252s | 3.986s | 2.147s | **1.624s** | **0.287s** |
-| **wget** (6 deps) | 3.935s | 5.502s | 0.587s | **3.211s** | **0.027s** |
+| **tree** (0 deps) | 3.874s | 2.145s | 0.214s | **0.840s** | **0.005s** |
+| **ffmpeg** (11 deps) | 17.217s | 4.751s | 2.203s | **1.655s** | **0.016s** |
+| **wget** (6 deps) | 3.449s | 6.328s | 0.527s | **4.152s** | **0.012s** | 3.935s | 5.502s | 0.587s | **3.211s** | **0.027s** |
 
-> Benchmarks on Apple Silicon (GitHub Actions macos-14), 2026-03-23. Auto-updated weekly.
+> Benchmarks on Apple Silicon (GitHub Actions macos-14), 2026-05-04. Auto-updated weekly.
 
 | | nanobrew | zerobrew | Homebrew |
 |---|---------|----------|----------|
