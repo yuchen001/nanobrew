@@ -38,11 +38,11 @@ If you rely on `post_install` hooks, build-from-source options, or Mac App Store
 
 | Package | Homebrew | zerobrew (cold) | zerobrew (warm) | nanobrew (cold) | nanobrew (warm) |
 |---------|----------|-----------------|-----------------|-----------------|-----------------|
-| **tree** (0 deps) | 4.744s | 2.154s | 0.363s | **0.935s** | **0.005s** |
-| **ffmpeg** (11 deps) | 19.713s | 5.853s | 2.446s | **1.911s** | **0.024s** |
-| **wget** (6 deps) | 5.240s | 7.643s | 0.604s | **4.500s** | **0.011s** | 3.986s | 7.467s | 0.588s | **4.562s** | **0.010s** | 3.992s | 8.930s | 0.690s | **4.445s** | **0.012s** | 3.449s | 6.328s | 0.527s | **4.152s** | **0.012s** | 3.935s | 5.502s | 0.587s | **3.211s** | **0.027s** |
+| **tree** (0 deps) | 4.072s | 2.156s | 0.223s | **0.777s** | **0.004s** |
+| **ffmpeg** (11 deps) | 19.051s | 4.724s | 2.421s | **1.666s** | **0.014s** |
+| **wget** (6 deps) | 4.493s | 6.035s | 0.569s | **3.937s** | **0.009s** | 5.240s | 7.643s | 0.604s | **4.500s** | **0.011s** | 3.986s | 7.467s | 0.588s | **4.562s** | **0.010s** | 3.992s | 8.930s | 0.690s | **4.445s** | **0.012s** | 3.449s | 6.328s | 0.527s | **4.152s** | **0.012s** | 3.935s | 5.502s | 0.587s | **3.211s** | **0.027s** |
 
-> Benchmarks on Apple Silicon (GitHub Actions macos-14), 2026-05-25. Auto-updated weekly.
+> Benchmarks on Apple Silicon (GitHub Actions macos-14), 2026-06-01. Auto-updated weekly.
 
 | | nanobrew | zerobrew | Homebrew |
 |---|---------|----------|----------|
